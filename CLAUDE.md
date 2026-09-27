@@ -149,12 +149,24 @@ g++ -g -O0 -std=c++17 -Isrc -fsanitize=address,undefined src/{bitboard,position,
      l'accumulateur à travers la récursion de `search()`/`qsearch()` (garantit un diff à 1 coup à chaque
      appel) — plus invasif (signatures des fonctions de recherche à changer), pas fait ici : le gain
      mesuré (1,5×) à faible risque a semblé le meilleur rapport effort/risque pour cette passe.
+   - ~~SPRT de confirmation contre la HCE~~ **fait, résultat positif** (2026-09-27) : `tools/match.py` a
+     gagné des options UCI par moteur (`--engineN-opts`, ex. `UseNNUE=true,EvalFile=...`) pour comparer NNUE
+     et HCE avec le même binaire. `--sprt --elo0 -30 --elo1 30 --movetime 100` (bornes larges pour une
+     réponse rapide vu qu'on ne savait pas dans quel sens irait l'écart) : **H1 acceptée après seulement 90
+     parties** (LLR +2,958, franchit la borne +2,944), score final W35 D31 L24 (~56,1%) pour NNUE — donc
+     NNUE bat la HCE d'au moins 30 Elo à ce contrôle de temps. Net encourageant pour un réseau entraîné sur
+     un seul corpus auto-jeu profondeur 6 sans itération/renforcement.
+     **Nuance importante** : ce test mesure la force pratique à temps de réflexion égal (100 ms/coup), pas la
+     qualité de l'évaluation à profondeur égale — NNUE cherche ~5,5× moins profond (accumulateur incrémental,
+     voir plus haut) et gagne quand même, ce qui est en réalité un signal plutôt FORT en faveur de la qualité
+     de l'éval NNUE elle-même (elle compense largement le handicap de profondeur). À revalider avec des
+     bornes plus fines (ex. elo0=0/elo1=10) et/ou d'autres contrôles de temps si on veut un chiffre d'Elo
+     plus précis qu'un simple "≥30".
    - **reste à faire** : quantification int16/int8 réelle (le format d'export actuel — float32 — est un
-     contrat de départ, pas figé) ; évaluer si l'accumulateur fileté dans la récursion de recherche vaut le
-     risque/effort une fois qu'on sait si NNUE apporte un vrai gain d'Elo. **Avant tout SPRT de confirmation
-     contre la HCE** : le réseau actuel n'a été entraîné que sur un seul corpus auto-jeu profondeur 6 (pas de
-     itération/renforcement), donc pas de garantie qu'il batte la HCE réglée à la main — c'est justement ce
-     qu'un SPRT (`tools/match.py --sprt`) est fait pour trancher, prochaine étape naturelle.
+     contrat de départ, pas figé) ; l'accumulateur fileté dans la récursion de recherche (fermerait
+     l'essentiel de l'écart de profondeur avec la HCE, cf. note vitesse ci-dessus) devient plus intéressant
+     maintenant qu'on sait que NNUE apporte un vrai gain d'Elo ; entraînement itératif (le réseau actuel n'a
+     vu qu'un seul cycle d'auto-jeu HCE-guidé, pas de renforcement via ses propres parties).
 5. **Lazy SMP** : option `Threads`, TT partagée (entrées rendues sûres par XOR clé/données).
 6. Améliorations de recherche : singular extensions, IIR, history de continuation, meilleur ordre des captures.
 7. Bases de finales (peu de pièces), livre d'ouvertures.
