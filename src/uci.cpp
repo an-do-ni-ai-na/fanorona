@@ -1,6 +1,7 @@
 #include "uci.h"
 
 #include <chrono>
+#include <fstream>
 #include <iostream>
 #include <random>
 #include <sstream>
@@ -192,6 +193,89 @@ void cmd_play(std::istringstream& is) {
     }
 }
 
+// Génère des données d'entraînement NNUE par auto-jeu à profondeur fixe (façon "gensfen") :
+// quelques coups aléatoires en ouverture (diversité), puis coups décidés par Search::think.
+// Chaque position visitée après l'ouverture est enregistrée avec le score de la recherche et,
+// une fois la partie terminée, le résultat final vu du camp au trait à cette position-là
+// (1.0 victoire, 0.5 nulle, 0.0 défaite). Format texte, une ligne par position :
+//   <fen>|<score_cp>|<wdl>
+// Les parties tronquées par le garde-fou de longueur (pas de fin de partie franche) sont
+// jetées : leur résultat ne serait pas fiable comme cible d'entraînement.
+void cmd_gensfen(std::istringstream& is) {
+    uint64_t targetPositions = 100000;
+    int depth = 6;
+    int openingPlies = 8;
+    std::string outPath = "gensfen.txt";
+    std::string tok;
+    while (is >> tok) {
+        if (tok == "count") is >> targetPositions;
+        else if (tok == "depth") is >> depth;
+        else if (tok == "opening-plies") is >> openingPlies;
+        else if (tok == "out") is >> outPath;
+    }
+
+    std::ofstream out(outPath, std::ios::app);
+    if (!out) {
+        std::cout << "info string gensfen: impossible d'ouvrir " << outPath << std::endl;
+        return;
+    }
+
+    struct Sample {
+        std::string fen;
+        Value score;
+        Color stm;
+    };
+
+    std::mt19937_64 rng(std::random_device{}());
+    Search::clear();
+    uint64_t written = 0, games = 0;
+    auto t0 = std::chrono::steady_clock::now();
+
+    while (written < targetPositions) {
+        Game g;
+        Position start;
+        start.set(START_FEN);
+        g.reset(start);
+
+        std::vector<Sample> samples;
+        std::string result = "ongoing";
+        for (int ply = 0; ply <= 400; ++ply) {
+            result = game_status(g);
+            if (result != "ongoing") break;
+
+            if (ply < openingPlies) {
+                MoveList list;
+                generate_moves(g.pos, list);
+                g.play(list.moves[rng() % list.size]);
+            } else {
+                SearchLimits l;
+                l.depth = depth;
+                auto r = Search::think(g.pos, g.history, l, false);
+                samples.push_back({g.pos.fen(), r.score, g.pos.sideToMove});
+                g.play(r.bestMove);
+            }
+        }
+
+        bool finished = result == "white wins" || result == "black wins" || result.rfind("draw", 0) == 0;
+        if (finished) {
+            double whiteResult = result == "white wins" ? 1.0 : result == "black wins" ? 0.0 : 0.5;
+            for (const auto& s : samples) {
+                double wdl = s.stm == WHITE ? whiteResult : 1.0 - whiteResult;
+                out << s.fen << '|' << s.score << '|' << wdl << '\n';
+            }
+            written += samples.size();
+        }
+        ++games;
+        if (games % 20 == 0) {
+            out.flush();
+            auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t0).count();
+            std::cout << "info string gensfen " << written << "/" << targetPositions << " positions, " << games
+                      << " parties, " << (ms > 0 ? written * 1000 / ms : 0) << " pos/s" << std::endl;
+        }
+    }
+    std::cout << "info string gensfen terminé : " << written << " positions -> " << outPath << std::endl;
+}
+
 void print_help() {
     std::cout << ENGINE_NAME << " - commandes :\n"
               << "  uci | isready | ucinewgame | quit\n"
@@ -206,6 +290,7 @@ void print_help() {
               << "  perft N      compte les feuilles à la profondeur N (par coup)\n"
               << "  bench [N]    test de performance (profondeur N, défaut 8)\n"
               << "  play [w|b] [ms]   jouer contre le moteur\n"
+              << "  gensfen [count N] [depth N] [opening-plies N] [out fichier]   génère des données NNUE par auto-jeu\n"
               << "Notation : cases a1..i5 ; chaque étape de capture est suivie de A (approche) ou W (retrait).\n"
               << std::endl;
 }
@@ -290,6 +375,9 @@ void loop(int argc, char* argv[]) {
         } else if (token == "play") {
             join();
             cmd_play(is);
+        } else if (token == "gensfen") {
+            join();
+            cmd_gensfen(is);
         } else if (token == "help") {
             print_help();
         } else if (!token.empty()) {

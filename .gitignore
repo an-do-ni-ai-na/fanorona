@@ -2,3 +2,9 @@
 /fanorona
 /tests/run_tests
 __pycache__/
+.venv/
+/tools/nnue/data/
+/tools/nnue/checkpoints/
+/data/
+/checkpoints/
+*.nnue

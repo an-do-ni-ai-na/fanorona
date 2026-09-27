@@ -1,0 +1,5 @@
+# pip install -r tools/nnue/requirements.txt
+# Pour un CPU sans GPU (cas du homelab, cf. VM fanorona-dev) :
+#   pip install torch --index-url https://download.pytorch.org/whl/cpu
+#   puis pip install -r tools/nnue/requirements.txt
+numpy

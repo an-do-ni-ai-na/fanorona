@@ -11,8 +11,16 @@ make test         # tests : ./tests/run_tests (doit afficher "Tous les tests pas
 make bench        # ./fanorona bench -> "Nodes searched" et NPS
 ./fanorona perft 5                       # doit donner 431830
 ./fanorona "position startpos" ...        # un argument = une commande, puis sortie
-python3 tools/match.py ./fanorona ./fanorona-old --games 20 --movetime 100   # auto-jeu
+python3 tools/match.py ./fanorona ./fanorona-old --games 20 --movetime 100   # auto-jeu, parties fixes
+python3 tools/match.py ./fanorona ./fanorona-old --sprt --elo0 0 --elo1 5 --movetime 100  # auto-jeu, arrêt SPRT
+./fanorona gensfen count 1000000 depth 6 opening-plies 8 out data/gensfen.txt   # données NNUE (auto-jeu)
+python3 tools/nnue/train.py data/gensfen.txt --epochs 20 --out checkpoints/net.pt   # entraînement NNUE (PyTorch, CPU)
 ```
+
+Suivi live (nodes/s, profondeur, eval...) pendant un match/SPRT : `tools/match.py` journalise en JSONL
+(`/var/log/fanorona/<run_id>.jsonl` par défaut, désactivable avec `--no-live-log`), repris par Grafana Alloy
+sur la VM `fanorona-dev` vers Loki/Grafana du homelab (dashboard "Fanorona - Recherche live"). Voir
+`tools/metrics_logger.py`.
 
 Build de débogage avec sanitizers :
 
@@ -31,9 +39,12 @@ g++ -g -O0 -std=c++17 -Isrc -fsanitize=address,undefined src/{bitboard,position,
 | `src/evaluate.*` | évaluation manuelle (HCE), du point de vue du camp au trait |
 | `src/tt.*` | table de transposition, seaux de 2 entrées, générations |
 | `src/search.*` | `Search::think()` : ID, aspiration, PVS, qsearch, NMP, RFP, LMR, killers, historique, temps |
-| `src/uci.*` | boucle de commandes (`position`, `go`, `stop`, `setoption`, `d`, `moves`, `eval`, `status`, `perft`, `bench`, `play`) |
+| `src/uci.*` | boucle de commandes (`position`, `go`, `stop`, `setoption`, `d`, `moves`, `eval`, `status`, `perft`, `bench`, `play`, `gensfen`) |
 | `tests/test_main.cpp` | tests des règles, perft, symétrie, clés, recherche |
-| `tools/match.py` | matchs entre deux binaires |
+| `tools/match.py` | matchs entre deux binaires : parties fixes ou arrêt SPRT (`--sprt`), suivi live optionnel |
+| `tools/sprt.py` | test séquentiel SPRT (LLR gaussien sur le score moyen, cf. fishtest/cutechess-cli) |
+| `tools/metrics_logger.py` | journalisation JSONL des lignes UCI `info` + résultats, pour Grafana/Loki |
+| `tools/nnue/train.py` | entraînement PyTorch du réseau NNUE à partir des données `gensfen` |
 
 ## Conventions et invariants — à respecter
 
@@ -81,13 +92,20 @@ g++ -g -O0 -std=c++17 -Isrc -fsanitize=address,undefined src/{bitboard,position,
 ## Feuille de route (par priorité)
 
 1. **Validation des règles** contre une source de référence (perft publié ou autre implémentation) si disponible.
-2. **Tests SPRT** : étendre `tools/match.py` (ouvertures variées, Elo ± marge, arrêt SPRT, parallélisme).
+2. ~~**Tests SPRT**~~ **fait** (2026-09-27) : `tools/match.py --sprt` (LLR gaussien, `tools/sprt.py`), ouvertures
+   aléatoires déjà existantes, suivi live JSONL. Parallélisme (plusieurs parties en simultané) pas encore fait.
 3. **Texel tuning** : générer des positions d'auto-jeu avec résultats, optimiser les poids de `evaluate.cpp`.
-4. **NNUE** :
-   - générateur de données : commande `gensfen`-like (auto-jeu à faible profondeur, positions calmes, score + résultat) ;
-   - entraînement PyTorch dans `tools/nnue/` : entrées 2 × 45 (pièces du camp au trait / adverses), une couche
-     cachée ~256 (accumulateur), sorties clippées ReLU, quantification int16/int8 ;
-   - inférence C++ incrémentale dans `src/nnue/` (mise à jour de l'accumulateur dans `do_move`), option `UseNNUE`.
+4. **NNUE** — en cours (2026-09-27) :
+   - ~~générateur de données~~ **fait** : `./fanorona gensfen` (auto-jeu, `depth`/`opening-plies`/`count`/`out`),
+     format `<fen>|<score_cp>|<wdl>` (voir `cmd_gensfen` dans `src/uci.cpp`) ;
+   - ~~entraînement PyTorch~~ **fait** : `tools/nnue/train.py`, entrées 2×45, couche cachée 256 ReLU clippé,
+     cible = mélange score de recherche (sigmoïde) / résultat réel ; export binaire float32 provisoire
+     (`export_weights`, non quantifié) ;
+   - **reste à faire** : inférence C++ incrémentale dans `src/nnue/` (accumulateur mis à jour dans `do_move`),
+     quantification int16/int8 réelle (le format d'export actuel est un contrat de départ, pas figé), option
+     UCI `UseNNUE`, et un vrai jeu de données d'entraînement (des millions de positions, pas juste un smoke test).
+     C'est la partie la plus délicate (risque de bug silencieux dans l'éval) : à faire dans une passe dédiée,
+     validée par perft/tests puis un match contre la HCE actuelle avant tout SPRT de confirmation.
 5. **Lazy SMP** : option `Threads`, TT partagée (entrées rendues sûres par XOR clé/données).
 6. Améliorations de recherche : singular extensions, IIR, history de continuation, meilleur ordre des captures.
 7. Bases de finales (peu de pièces), livre d'ouvertures.
