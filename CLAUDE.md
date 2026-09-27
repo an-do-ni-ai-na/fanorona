@@ -186,11 +186,29 @@ g++ -g -O0 -std=c++17 -Isrc -fsanitize=address,undefined src/{bitboard,position,
      côté ou de l'autre (vécu : 1/1000 sur `net_v2`, écart d'1 cp). Pas un bug d'éval (une vraie divergence
      donnerait des écarts systématiques bien plus grands) — `verify.py` tolère maintenant ±1cp par défaut
      (`--tol`).
+   - **Calcul distribué sur 3 nœuds PVE** (2026-09-28) : `gensfen` est embarrassingly parallel, donc on peut
+     répartir sur tout le cluster plutôt qu'un seul hôte. Deux nouveaux LXC légers (Debian 13, juste le
+     binaire C++, pas de Python/PyTorch) : **fanorona-c1** (VMID 3190, pve1, 5 vCPU, 10.10.10.190) et
+     **fanorona-c3** (VMID 3191, pve3, 3 vCPU, 10.10.10.191), `onboot=0` volontaire (nœuds de calcul
+     ponctuels, à démarrer manuellement avant un cycle). Avec fanorona-dev (6 vCPU, pve2), ça fait ~14 vCPU
+     au lieu de 6 pour générer des données. Workflow : cloner/build sur chaque nœud, copier le `.nnue`
+     professeur, lancer `gensfen` en parallèle sur les 3 (setoption NNUE par stdin comme d'habitude),
+     rapatrier les fichiers des LXC vers fanorona-dev (seul hôte avec le venv PyTorch) par `scp`, concaténer,
+     entraîner comme d'habitude. Seule la génération de données est distribuée — l'entraînement PyTorch
+     lui-même reste sur une seule machine (rapide, modèle minuscule, pas besoin de distribuer).
+   - ~~2e cycle de renforcement (`net_v2` -> `gensfen_gen3` -> `net_v3`)~~ **fait** (2026-09-28) : 7,7M
+     positions générées en ~1h40 sur les 3 nœuds (`net_v2` comme professeur), `net_v3` entraîné dessus
+     (val_loss 0,00895, le meilleur des 3 générations), vérifié par `verify.py`. **SPRT net_v3 vs net_v2**
+     (mêmes bornes -30/+30) : H1 acceptée après 343 parties (LLR +3,116), score W120 D115 L108 (~51,75%) —
+     un gain réel mais net_tement plus petit et plus lent à confirmer que net_v2 vs net_v1 (189 parties,
+     marge plus large). **Rendements décroissants confirmés** (pas juste supposés) : chaque cycle de
+     renforcement supplémentaire semble apporter de moins en moins, cohérent avec la théorie (le professeur
+     s'améliore, mais l'écart entre "bon professeur" et "encore meilleur professeur" se réduit).
    - **reste à faire** : quantification int16/int8 réelle (le format d'export actuel — float32 — est un
      contrat de départ, pas figé) ; l'accumulateur fileté dans la récursion de recherche (fermerait
-     l'essentiel de l'écart de profondeur avec la HCE) ; éventuellement un ou plusieurs cycles de
-     renforcement supplémentaires (`net_v2` comme professeur pour générer `gensfen_gen3`, etc. — rendements
-     probablement décroissants, à vérifier plutôt que supposer).
+     l'essentiel de l'écart de profondeur avec la HCE) ; un 4e cycle est possible mais le gain marginal
+     décroissant observé (v2->v3 plus petit que v1->v2) suggère de plutôt investir l'effort ailleurs
+     (quantification, accumulateur) avant de relancer une génération de plus.
 5. **Lazy SMP** : option `Threads`, TT partagée (entrées rendues sûres par XOR clé/données).
 6. Améliorations de recherche : singular extensions, IIR, history de continuation, meilleur ordre des captures.
 7. Bases de finales (peu de pièces), livre d'ouvertures.
