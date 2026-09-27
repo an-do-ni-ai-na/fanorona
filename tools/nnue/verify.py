@@ -5,6 +5,14 @@ modèle de référence en numpy (même formule que le forward PyTorch d'entraîn
 l'encodage des features dans tools/nnue/train.py, ou avec un nouveau réseau exporté — une
 divergence ici veut dire un vrai bug d'éval (silencieux sinon, jamais un crash).
 
+Tolérance par défaut : ±1 centipion. numpy (BLAS) et la boucle C++ naïve n'accumulent pas les
+256 termes de la couche cachée dans le même ordre ; sur une valeur brute tombant à quelques
+1e-4 d'une frontière d'arrondi (X.4996 par ex.), cette différence d'ordre de sommation peut
+suffire à faire arrondir à l'entier voisin d'un côté ou de l'autre. Vécu : 1/1000 sur le réseau
+net_v2 (-3128.4994 -> round()=-3128 côté python, -3129 côté C++). Une VRAIE divergence
+(mauvais encodage own/opp, mauvais ordre des cases...) donnerait des écarts systématiques et
+bien plus grands qu'1 cp, pas un cas isolé à la limite d'un arrondi.
+
 Usage :
     python3 tools/nnue/verify.py checkpoints/net_v1.nnue --samples data/gensfen.txt --n 200
 """
@@ -58,6 +66,7 @@ def main():
     ap.add_argument("--engine", default="./fanorona")
     ap.add_argument("--samples", default=None, help="fichier gensfen (fen|score|wdl) dont on prend les FEN")
     ap.add_argument("--n", type=int, default=50)
+    ap.add_argument("--tol", type=int, default=1, help="tolérance en centipions (bruit d'arrondi flottant)")
     args = ap.parse_args()
 
     if args.samples:
@@ -78,14 +87,14 @@ def main():
         print(f"ERREUR : {len(cpp_scores)} scores C++ reçus pour {len(fens)} positions envoyées")
         sys.exit(1)
 
-    mismatches = [(f, p, c) for f, p, c in zip(fens, ref_scores, cpp_scores) if p != c]
+    mismatches = [(f, p, c) for f, p, c in zip(fens, ref_scores, cpp_scores) if abs(p - c) > args.tol]
     for fen, p, c in mismatches:
-        print(f"DIVERGENCE {fen} : reference={p} c++={c}")
+        print(f"DIVERGENCE {fen} : reference={p} c++={c} (écart {abs(p - c)} > tol {args.tol})")
 
     if mismatches:
         print(f"\n{len(mismatches)}/{len(fens)} divergences -> ÉCHEC")
         sys.exit(1)
-    print(f"{len(fens)}/{len(fens)} positions identiques (référence == c++) -> OK")
+    print(f"{len(fens)}/{len(fens)} positions dans la tolérance (±{args.tol}cp) -> OK")
 
 
 if __name__ == "__main__":
