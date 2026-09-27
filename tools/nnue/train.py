@@ -21,13 +21,12 @@ attendant l'écriture du chargeur C++ (src/nnue/, feuille de route CLAUDE.md) qu
 du vrai format quantifié int16/int8 à ce moment-là.
 """
 import argparse
-import random
 import struct
 from pathlib import Path
 
+import numpy as np
 import torch
 import torch.nn as nn
-from torch.utils.data import DataLoader, Dataset, random_split
 
 SQUARE_NB = 45
 FILE_NB = 9
@@ -60,28 +59,49 @@ def parse_fen_features(fen):
     return (white_sq, black_sq) if us_is_white else (black_sq, white_sq)
 
 
-class SfenDataset(Dataset):
+class SfenDataset:
+    """Pré-encode tout le fichier en deux tableaux numpy contigus (features uint8, cibles
+    float32), une seule fois au chargement. Volontairement PAS un torch.utils.data.Dataset
+    utilisé via DataLoader : pour un jeu de données qui tient entièrement en RAM (quelques
+    Go), le chemin Dataset/DataLoader par défaut rappelle __getitem__ un échantillon à la
+    fois puis collate — mesuré à l'usage sur 10M positions : des dizaines de minutes rien que
+    pour l'overhead Python par-échantillon, largement dominant devant le calcul du réseau
+    lui-même. `iter_batches()` ci-dessous fait un seul slicing numpy vectorisé par batch."""
+
     def __init__(self, path):
-        self.samples = []
+        fens, scores, wdls = [], [], []
         with open(path) as f:
             for line in f:
                 line = line.strip()
                 if not line:
                     continue
                 fen, score, wdl = line.split("|")
-                self.samples.append((fen, float(score), float(wdl)))
+                fens.append(fen)
+                scores.append(float(score))
+                wdls.append(float(wdl))
+
+        n = len(fens)
+        self.features = np.zeros((n, INPUT_SIZE), dtype=np.uint8)
+        for i, fen in enumerate(fens):
+            own_sq, opp_sq = parse_fen_features(fen)
+            self.features[i, own_sq] = 1
+            self.features[i, [SQUARE_NB + s for s in opp_sq]] = 1
+
+        scores_arr = np.asarray(scores, dtype=np.float32)
+        wdls_arr = np.asarray(wdls, dtype=np.float32)
+        probs = 1.0 / (1.0 + np.exp(-scores_arr / SCORE_SCALE))
+        self.targets = (0.5 * (probs + wdls_arr)).astype(np.float32)
 
     def __len__(self):
-        return len(self.samples)
+        return len(self.targets)
 
-    def __getitem__(self, idx):
-        fen, score, wdl = self.samples[idx]
-        own_sq, opp_sq = parse_fen_features(fen)
-        x = torch.zeros(INPUT_SIZE)
-        x[own_sq] = 1.0
-        x[[SQUARE_NB + s for s in opp_sq]] = 1.0
-        target = 0.5 * (torch.sigmoid(torch.tensor(score / SCORE_SCALE)) + wdl)
-        return x, target
+    def iter_batches(self, indices, batch_size):
+        """Un seul gather numpy vectorisé par batch (pas d'appel Python par échantillon)."""
+        for start in range(0, len(indices), batch_size):
+            b = indices[start : start + batch_size]
+            x = torch.from_numpy(self.features[b].astype(np.float32, copy=False))
+            y = torch.from_numpy(self.targets[b])
+            yield x, y
 
 
 class NNUE(nn.Module):
@@ -123,14 +143,14 @@ def main():
     args = ap.parse_args()
 
     torch.manual_seed(args.seed)
-    random.seed(args.seed)
+    rng = np.random.default_rng(args.seed)
 
     dataset = SfenDataset(args.data)
-    n_val = max(1, int(len(dataset) * args.val_split))
-    n_train = len(dataset) - n_val
-    train_set, val_set = random_split(dataset, [n_train, n_val], generator=torch.Generator().manual_seed(args.seed))
-    train_loader = DataLoader(train_set, batch_size=args.batch_size, shuffle=True)
-    val_loader = DataLoader(val_set, batch_size=args.batch_size)
+    n = len(dataset)
+    perm = rng.permutation(n)
+    n_val = max(1, int(n * args.val_split))
+    val_idx, train_idx = perm[:n_val], perm[n_val:]
+    n_train = len(train_idx)
 
     model = NNUE()
     opt = torch.optim.Adam(model.parameters(), lr=args.lr)
@@ -141,8 +161,9 @@ def main():
 
     for epoch in range(1, args.epochs + 1):
         model.train()
+        rng.shuffle(train_idx)
         train_loss = 0.0
-        for x, y in train_loader:
+        for x, y in dataset.iter_batches(train_idx, args.batch_size):
             opt.zero_grad()
             pred = torch.sigmoid(model(x).squeeze(-1))
             loss = loss_fn(pred, y)
@@ -154,12 +175,12 @@ def main():
         model.eval()
         val_loss = 0.0
         with torch.no_grad():
-            for x, y in val_loader:
+            for x, y in dataset.iter_batches(val_idx, args.batch_size):
                 pred = torch.sigmoid(model(x).squeeze(-1))
                 val_loss += loss_fn(pred, y).item() * x.size(0)
         val_loss /= n_val
 
-        print(f"epoch {epoch:3d}  train_loss {train_loss:.5f}  val_loss {val_loss:.5f}")
+        print(f"epoch {epoch:3d}  train_loss {train_loss:.5f}  val_loss {val_loss:.5f}", flush=True)
         torch.save(model.state_dict(), out_path)
 
     if args.export:

@@ -97,15 +97,24 @@ g++ -g -O0 -std=c++17 -Isrc -fsanitize=address,undefined src/{bitboard,position,
 3. **Texel tuning** : générer des positions d'auto-jeu avec résultats, optimiser les poids de `evaluate.cpp`.
 4. **NNUE** — en cours (2026-09-27) :
    - ~~générateur de données~~ **fait** : `./fanorona gensfen` (auto-jeu, `depth`/`opening-plies`/`count`/`out`),
-     format `<fen>|<score_cp>|<wdl>` (voir `cmd_gensfen` dans `src/uci.cpp`) ;
-   - ~~entraînement PyTorch~~ **fait** : `tools/nnue/train.py`, entrées 2×45, couche cachée 256 ReLU clippé,
-     cible = mélange score de recherche (sigmoïde) / résultat réel ; export binaire float32 provisoire
-     (`export_weights`, non quantifié) ;
+     format `<fen>|<score_cp>|<wdl>` (voir `cmd_gensfen` dans `src/uci.cpp`) ; un vrai corpus de 10M positions
+     généré sur fanorona-dev (5 processus en parallèle, depth 6, opening-plies 8, ~25 min, `data/gensfen.txt`,
+     gitignored) ;
+   - ~~entraînement PyTorch~~ **fait, entraîné sur les 10M positions** : `tools/nnue/train.py`, entrées 2×45,
+     couche cachée 256 ReLU clippé, cible = mélange score de recherche (sigmoïde) / résultat réel ; export
+     binaire float32 provisoire (`export_weights`, non quantifié). 15 epochs, val_loss 0.00843 -> 0.00759
+     (converge proprement, `checkpoints/net_v1.nnue`, gitignored — à régénérer, pas commité).
+     **Piège vécu et corrigé** : `SfenDataset` ne doit PAS être un `torch.utils.data.Dataset` consommé via
+     `DataLoader` — à 10M échantillons, `__getitem__` par échantillon (+ collate par défaut) coûte des dizaines
+     de minutes d'overhead Python pur, et `num_workers>0` duplique le dataset en mémoire par worker (comptage
+     de références qui casse le copy-on-write du fork) -> OOM en quelques minutes (vécu deux fois). Fix : tout
+     précalculer en tableaux numpy contigus une fois, puis batcher par slicing numpy direct (`iter_batches`),
+     sans DataLoader. Pense aussi à `flush=True` sur les `print` d'epoch (stdout redirigé vers un fichier =
+     bufferisé par bloc, pas par ligne : sans flush, rien n'apparaît avant la fin du run).
    - **reste à faire** : inférence C++ incrémentale dans `src/nnue/` (accumulateur mis à jour dans `do_move`),
      quantification int16/int8 réelle (le format d'export actuel est un contrat de départ, pas figé), option
-     UCI `UseNNUE`, et un vrai jeu de données d'entraînement (des millions de positions, pas juste un smoke test).
-     C'est la partie la plus délicate (risque de bug silencieux dans l'éval) : à faire dans une passe dédiée,
-     validée par perft/tests puis un match contre la HCE actuelle avant tout SPRT de confirmation.
+     UCI `UseNNUE`. C'est la partie la plus délicate (risque de bug silencieux dans l'éval) : à faire dans une
+     passe dédiée, validée par perft/tests puis un match contre la HCE actuelle avant tout SPRT de confirmation.
 5. **Lazy SMP** : option `Threads`, TT partagée (entrées rendues sûres par XOR clé/données).
 6. Améliorations de recherche : singular extensions, IIR, history de continuation, meilleur ordre des captures.
 7. Bases de finales (peu de pièces), livre d'ouvertures.
