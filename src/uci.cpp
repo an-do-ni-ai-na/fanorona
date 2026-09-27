@@ -12,6 +12,7 @@
 #include "bitboard.h"
 #include "evaluate.h"
 #include "movegen.h"
+#include "nnue.h"
 #include "search.h"
 #include "tt.h"
 
@@ -282,7 +283,7 @@ void print_help() {
               << "  position startpos|fen <fen> [moves m1 m2 ...]\n"
               << "  go [depth N] [movetime ms] [wtime ms btime ms winc ms binc ms movestogo N] [nodes N] [infinite]\n"
               << "  stop\n"
-              << "  setoption name <Hash|MandatoryContinuation|NoCaptureLimit> value <v>\n"
+              << "  setoption name <Hash|MandatoryContinuation|NoCaptureLimit|UseNNUE|EvalFile> value <v>\n"
               << "  d            affiche la position\n"
               << "  moves        liste les coups légaux\n"
               << "  eval         évaluation statique\n"
@@ -326,6 +327,8 @@ void loop(int argc, char* argv[]) {
                       << "option name Hash type spin default 64 min 1 max 16384\n"
                       << "option name MandatoryContinuation type check default false\n"
                       << "option name NoCaptureLimit type spin default 100 min 10 max 10000\n"
+                      << "option name UseNNUE type check default false\n"
+                      << "option name EvalFile type string default <empty>\n"
                       << "uciok" << std::endl;
         } else if (token == "isready") {
             std::cout << "readyok" << std::endl;
@@ -341,7 +344,10 @@ void loop(int argc, char* argv[]) {
             if (name == "Hash") TT.resize(std::stoul(value));
             else if (name == "MandatoryContinuation") Rules::mandatoryContinuation = value == "true";
             else if (name == "NoCaptureLimit") Rules::noCaptureLimit = std::stoi(value);
-            else std::cout << "info string unknown option " << name << std::endl;
+            else if (name == "UseNNUE") NNUE::set_enabled(value == "true");
+            else if (name == "EvalFile") {
+                if (value != "<empty>") NNUE::load(value);
+            } else std::cout << "info string unknown option " << name << std::endl;
         } else if (token == "position") {
             join();
             cmd_position(game, is);

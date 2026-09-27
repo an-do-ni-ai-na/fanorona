@@ -1,6 +1,7 @@
 #include "evaluate.h"
 
 #include "bitboard.h"
+#include "nnue.h"
 
 namespace fanorona {
 
@@ -54,6 +55,8 @@ int side_score(Bitboard us, Bitboard them, Bitboard empty) {
 }  // namespace
 
 Value evaluate(const Position& pos) {
+    if (NNUE::enabled()) return NNUE::evaluate(pos);
+
     Color us = pos.sideToMove;
     Bitboard u = pos.pieces(us), t = pos.pieces(~us), e = pos.empty();
     int nu = popcount(u), nt = popcount(t);
@@ -63,9 +66,7 @@ Value evaluate(const Position& pos) {
     v += (nu - nt) * (44 - nu - nt) * TradeBonus;
     v += Tempo;
 
-    if (v >= VALUE_MATE_IN_MAX_PLY) v = VALUE_MATE_IN_MAX_PLY - 1;
-    if (v <= -VALUE_MATE_IN_MAX_PLY) v = -VALUE_MATE_IN_MAX_PLY + 1;
-    return v;
+    return clamp_eval(v);
 }
 
 }  // namespace fanorona

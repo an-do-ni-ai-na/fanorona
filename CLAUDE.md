@@ -15,7 +15,11 @@ python3 tools/match.py ./fanorona ./fanorona-old --games 20 --movetime 100   # a
 python3 tools/match.py ./fanorona ./fanorona-old --sprt --elo0 0 --elo1 5 --movetime 100  # auto-jeu, arrêt SPRT
 ./fanorona gensfen count 1000000 depth 6 opening-plies 8 out data/gensfen.txt   # données NNUE (auto-jeu)
 python3 tools/nnue/train.py data/gensfen.txt --epochs 20 --out checkpoints/net.pt   # entraînement NNUE (PyTorch, CPU)
+python3 tools/nnue/verify.py checkpoints/net.nnue --samples data/gensfen.txt --n 300   # C++ == référence numpy ?
 ```
+
+Activer NNUE (UCI) : `setoption name EvalFile value checkpoints/net_v1.nnue` puis
+`setoption name UseNNUE value true`. Désactivé par défaut (HCE inchangée).
 
 Suivi live (nodes/s, profondeur, eval...) pendant un match/SPRT : `tools/match.py` journalise en JSONL
 (`/var/log/fanorona/<run_id>.jsonl` par défaut, désactivable avec `--no-live-log`), repris par Grafana Alloy
@@ -25,7 +29,7 @@ sur la VM `fanorona-dev` vers Loki/Grafana du homelab (dashboard "Fanorona - Rec
 Build de débogage avec sanitizers :
 
 ```sh
-g++ -g -O0 -std=c++17 -Isrc -fsanitize=address,undefined src/{bitboard,position,movegen,evaluate,tt,search,uci}.cpp tests/test_main.cpp -o /tmp/t -pthread && /tmp/t
+g++ -g -O0 -std=c++17 -Isrc -fsanitize=address,undefined src/{bitboard,position,movegen,evaluate,nnue,tt,search,uci}.cpp tests/test_main.cpp -o /tmp/t -pthread && /tmp/t
 ```
 
 ## Architecture
@@ -36,7 +40,8 @@ g++ -g -O0 -std=c++17 -Isrc -fsanitize=address,undefined src/{bitboard,position,
 | `src/bitboard.*` | `Neighbor[sq][dir]`, `shift()`, `capture_line()`, `capturers()` (détection rapide des captures) |
 | `src/position.*` | `Position` (32 octets, copy-make), FEN, Zobrist, `Rules` (options de règles) |
 | `src/movegen.*` | `generate_moves()` (tours complets dédupliqués), `generate_detailed()` (avec notation), `parse_move()`, `perft()` |
-| `src/evaluate.*` | évaluation manuelle (HCE), du point de vue du camp au trait |
+| `src/evaluate.*` | évaluation manuelle (HCE), du point de vue du camp au trait ; bascule vers `NNUE::evaluate()` si activé |
+| `src/nnue.*` | inférence NNUE (charge un `.nnue`, forward pass 2×45→256 ReLU clippé→1, PAS ENCORE incrémental) |
 | `src/tt.*` | table de transposition, seaux de 2 entrées, générations |
 | `src/search.*` | `Search::think()` : ID, aspiration, PVS, qsearch, NMP, RFP, LMR, killers, historique, temps |
 | `src/uci.*` | boucle de commandes (`position`, `go`, `stop`, `setoption`, `d`, `moves`, `eval`, `status`, `perft`, `bench`, `play`, `gensfen`) |
@@ -45,6 +50,7 @@ g++ -g -O0 -std=c++17 -Isrc -fsanitize=address,undefined src/{bitboard,position,
 | `tools/sprt.py` | test séquentiel SPRT (LLR gaussien sur le score moyen, cf. fishtest/cutechess-cli) |
 | `tools/metrics_logger.py` | journalisation JSONL des lignes UCI `info` + résultats, pour Grafana/Loki |
 | `tools/nnue/train.py` | entraînement PyTorch du réseau NNUE à partir des données `gensfen` |
+| `tools/nnue/verify.py` | vérifie que `src/nnue.cpp` donne EXACTEMENT le même score qu'une référence numpy |
 
 ## Conventions et invariants — à respecter
 
@@ -111,10 +117,31 @@ g++ -g -O0 -std=c++17 -Isrc -fsanitize=address,undefined src/{bitboard,position,
      précalculer en tableaux numpy contigus une fois, puis batcher par slicing numpy direct (`iter_batches`),
      sans DataLoader. Pense aussi à `flush=True` sur les `print` d'epoch (stdout redirigé vers un fichier =
      bufferisé par bloc, pas par ligne : sans flush, rien n'apparaît avant la fin du run).
-   - **reste à faire** : inférence C++ incrémentale dans `src/nnue/` (accumulateur mis à jour dans `do_move`),
-     quantification int16/int8 réelle (le format d'export actuel est un contrat de départ, pas figé), option
-     UCI `UseNNUE`. C'est la partie la plus délicate (risque de bug silencieux dans l'éval) : à faire dans une
-     passe dédiée, validée par perft/tests puis un match contre la HCE actuelle avant tout SPRT de confirmation.
+   - ~~inférence C++~~ **fait, mais pas encore incrémentale** (2026-09-27) : `src/nnue.*`, option UCI `UseNNUE`
+     + `EvalFile` (défaut désactivé, HCE inchangée). `evaluate()` (src/evaluate.cpp) bascule automatiquement
+     vers `NNUE::evaluate()` si activé — aucun site d'appel à changer. Validé : `make test` + `perft 5`
+     inchangés, build ASan/UBSan propre (y compris sous recherche réelle, `bench`/`go`), et surtout
+     `tools/nnue/verify.py` confirme une correspondance EXACTE (300/300) entre le C++ et une référence numpy
+     réimplémentant le forward pass de `train.py` — c'est la vérification qui compte vraiment ici, un simple
+     "ça compile et ça ne crash pas" n'aurait rien dit sur un bug d'encodage silencieux (ex. inverser
+     own/opp, ou l'ordre des cases). Recalcule tout depuis les bitboards à CHAQUE appel d'`evaluate()` (pas
+     d'accumulateur) : mesuré ~473k nps en bench profondeur 8 avec NNUE contre ~2,5M nps en HCE — net ralenti
+     mais fonctionnel, cohérent avec le choix volontaire de prioriser la justesse avant la vitesse.
+   - **reste à faire** : accumulateur incrémental (mis à jour dans `Position::do_move`, cf. note technique
+     ci-dessous) pour retrouver une vitesse proche de la HCE, puis quantification int16/int8 réelle (le format
+     d'export actuel — float32 — est un contrat de départ, pas figé). Ordre logique avant tout SPRT de
+     confirmation contre la HCE : incrémental d'abord (revalider avec `verify.py` + ASan après, la logique
+     d'accumulation est plus facile à casser que le forward pass complet), *puis* seulement lancer le SPRT —
+     lancer un SPRT sur la version lente actuelle gâcherait juste du temps de calcul pour rien.
+   - **Note technique pour l'accumulateur incrémental** : l'encodage est *relatif* au camp au trait (own/opp,
+     pas figé par couleur), donc un accumulateur unique ne suffit pas — il faut deux accumulateurs, un par
+     perspective de couleur absolue : `accumulator[c] = b1 + W_own @ pieces(c) + W_opp @ pieces(~c)`. En clair
+     `accumulator[c]` est "l'accumulateur tel qu'il serait si c'était le tour de `c`", donc à l'évaluation on
+     lit directement `accumulator[pos.sideToMove]`. Sur un coup joué par `us` (capturant des pièces de
+     `~us`) : dans `accumulator[us]` la pièce qui bouge est "own" (colonnes `W_own`) et les captures sont
+     "opp" (colonnes `W_opp`, à retirer) ; dans `accumulator[~us]` c'est l'inverse (pièce qui bouge = "opp",
+     captures = "own"). Les deux accumulateurs (2×256 flottants/int16) doivent voyager avec `Position` dans le
+     copy-make (comme `byColor`/`key`), pas être recalculés à chaque nœud.
 5. **Lazy SMP** : option `Threads`, TT partagée (entrées rendues sûres par XOR clé/données).
 6. Améliorations de recherche : singular extensions, IIR, history de continuation, meilleur ordre des captures.
 7. Bases de finales (peu de pièces), livre d'ouvertures.
