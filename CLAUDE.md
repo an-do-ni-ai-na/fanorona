@@ -21,6 +21,13 @@ python3 tools/nnue/verify.py checkpoints/net.nnue --samples data/gensfen.txt --n
 Activer NNUE (UCI) : `setoption name EvalFile value checkpoints/net_v1.nnue` puis
 `setoption name UseNNUE value true`. Désactivé par défaut (HCE inchangée).
 
+Entraînement itératif (un réseau sert de "professeur" pour générer le corpus suivant) : activer NNUE
+AVANT `gensfen`, donc par stdin et pas en argument de ligne de commande (sinon impossible d'envoyer le
+`setoption` avant) :
+```sh
+printf 'setoption name EvalFile value checkpoints/net_v1.nnue\nsetoption name UseNNUE value true\ngensfen count 700000 depth 6 opening-plies 8 out data/gen2_1.txt\nquit\n' | ./fanorona
+```
+
 Suivi live (nodes/s, profondeur, eval...) pendant un match/SPRT : `tools/match.py` journalise en JSONL
 (`/var/log/fanorona/<run_id>.jsonl` par défaut, désactivable avec `--no-live-log`), repris par Grafana Alloy
 sur la VM `fanorona-dev` vers Loki/Grafana du homelab (dashboard "Fanorona - Recherche live"). Voir
@@ -162,11 +169,28 @@ g++ -g -O0 -std=c++17 -Isrc -fsanitize=address,undefined src/{bitboard,position,
      de l'éval NNUE elle-même (elle compense largement le handicap de profondeur). À revalider avec des
      bornes plus fines (ex. elo0=0/elo1=10) et/ou d'autres contrôles de temps si on veut un chiffre d'Elo
      plus précis qu'un simple "≥30".
+   - ~~entraînement itératif~~ **fait, résultat positif** (2026-09-27) : `net_v1` (entraîné sur de l'auto-jeu
+     guidé par la HCE) a servi de "professeur" pour générer un DEUXIÈME corpus — `./fanorona gensfen` avec
+     `UseNNUE`/`EvalFile` activés en amont (via stdin, pas en argument de ligne de commande : sinon pas
+     moyen d'envoyer le `setoption` avant `gensfen`) — 5 processus en parallèle, 3,5M positions (`data/
+     gensfen_gen2.txt`, ~87 min à cause du nps plus faible de NNUE). `net_v2` entraîné dessus (mêmes
+     hyperparamètres que v1), vérifié par `verify.py`. **SPRT net_v2 vs net_v1** (mêmes bornes larges
+     -30/+30, `--engine1-opts`/`--engine2-opts` pour charger deux `.nnue` différents sur le même binaire) :
+     H1 acceptée après 189 parties (LLR +3,110), score W75 D52 L62 (~53,4%) pour `net_v2` — un cycle de
+     renforcement suffit déjà à mesurablement dépasser le réseau de départ. Cohérent avec la mécanique
+     attendue : un professeur plus fort (v1, déjà meilleur que la HCE) génère de meilleures données
+     d'entraînement que le professeur HCE original.
+     **Piège rencontré en cours de route** : `tools/nnue/verify.py` comparait par égalité stricte
+     (`p != c`) alors que numpy (BLAS) et la boucle C++ naïve n'accumulent pas les 256 termes dans le même
+     ordre — sur une valeur tombant à ~1e-4 d'une frontière d'arrondi ça peut arrondir différemment d'un
+     côté ou de l'autre (vécu : 1/1000 sur `net_v2`, écart d'1 cp). Pas un bug d'éval (une vraie divergence
+     donnerait des écarts systématiques bien plus grands) — `verify.py` tolère maintenant ±1cp par défaut
+     (`--tol`).
    - **reste à faire** : quantification int16/int8 réelle (le format d'export actuel — float32 — est un
      contrat de départ, pas figé) ; l'accumulateur fileté dans la récursion de recherche (fermerait
-     l'essentiel de l'écart de profondeur avec la HCE, cf. note vitesse ci-dessus) devient plus intéressant
-     maintenant qu'on sait que NNUE apporte un vrai gain d'Elo ; entraînement itératif (le réseau actuel n'a
-     vu qu'un seul cycle d'auto-jeu HCE-guidé, pas de renforcement via ses propres parties).
+     l'essentiel de l'écart de profondeur avec la HCE) ; éventuellement un ou plusieurs cycles de
+     renforcement supplémentaires (`net_v2` comme professeur pour générer `gensfen_gen3`, etc. — rendements
+     probablement décroissants, à vérifier plutôt que supposer).
 5. **Lazy SMP** : option `Threads`, TT partagée (entrées rendues sûres par XOR clé/données).
 6. Améliorations de recherche : singular extensions, IIR, history de continuation, meilleur ordre des captures.
 7. Bases de finales (peu de pièces), livre d'ouvertures.
