@@ -117,31 +117,44 @@ g++ -g -O0 -std=c++17 -Isrc -fsanitize=address,undefined src/{bitboard,position,
      précalculer en tableaux numpy contigus une fois, puis batcher par slicing numpy direct (`iter_batches`),
      sans DataLoader. Pense aussi à `flush=True` sur les `print` d'epoch (stdout redirigé vers un fichier =
      bufferisé par bloc, pas par ligne : sans flush, rien n'apparaît avant la fin du run).
-   - ~~inférence C++~~ **fait, mais pas encore incrémentale** (2026-09-27) : `src/nnue.*`, option UCI `UseNNUE`
-     + `EvalFile` (défaut désactivé, HCE inchangée). `evaluate()` (src/evaluate.cpp) bascule automatiquement
-     vers `NNUE::evaluate()` si activé — aucun site d'appel à changer. Validé : `make test` + `perft 5`
-     inchangés, build ASan/UBSan propre (y compris sous recherche réelle, `bench`/`go`), et surtout
-     `tools/nnue/verify.py` confirme une correspondance EXACTE (300/300) entre le C++ et une référence numpy
-     réimplémentant le forward pass de `train.py` — c'est la vérification qui compte vraiment ici, un simple
-     "ça compile et ça ne crash pas" n'aurait rien dit sur un bug d'encodage silencieux (ex. inverser
-     own/opp, ou l'ordre des cases). Recalcule tout depuis les bitboards à CHAQUE appel d'`evaluate()` (pas
-     d'accumulateur) : mesuré ~473k nps en bench profondeur 8 avec NNUE contre ~2,5M nps en HCE — net ralenti
-     mais fonctionnel, cohérent avec le choix volontaire de prioriser la justesse avant la vitesse.
-   - **reste à faire** : accumulateur incrémental (mis à jour dans `Position::do_move`, cf. note technique
-     ci-dessous) pour retrouver une vitesse proche de la HCE, puis quantification int16/int8 réelle (le format
-     d'export actuel — float32 — est un contrat de départ, pas figé). Ordre logique avant tout SPRT de
-     confirmation contre la HCE : incrémental d'abord (revalider avec `verify.py` + ASan après, la logique
-     d'accumulation est plus facile à casser que le forward pass complet), *puis* seulement lancer le SPRT —
-     lancer un SPRT sur la version lente actuelle gâcherait juste du temps de calcul pour rien.
-   - **Note technique pour l'accumulateur incrémental** : l'encodage est *relatif* au camp au trait (own/opp,
-     pas figé par couleur), donc un accumulateur unique ne suffit pas — il faut deux accumulateurs, un par
-     perspective de couleur absolue : `accumulator[c] = b1 + W_own @ pieces(c) + W_opp @ pieces(~c)`. En clair
-     `accumulator[c]` est "l'accumulateur tel qu'il serait si c'était le tour de `c`", donc à l'évaluation on
-     lit directement `accumulator[pos.sideToMove]`. Sur un coup joué par `us` (capturant des pièces de
-     `~us`) : dans `accumulator[us]` la pièce qui bouge est "own" (colonnes `W_own`) et les captures sont
-     "opp" (colonnes `W_opp`, à retirer) ; dans `accumulator[~us]` c'est l'inverse (pièce qui bouge = "opp",
-     captures = "own"). Les deux accumulateurs (2×256 flottants/int16) doivent voyager avec `Position` dans le
-     copy-make (comme `byColor`/`key`), pas être recalculés à chaque nœud.
+   - ~~inférence C++~~ **fait** (2026-09-27) : `src/nnue.*`, option UCI `UseNNUE` + `EvalFile` (défaut
+     désactivé, HCE inchangée). `evaluate()` (src/evaluate.cpp) bascule automatiquement vers
+     `NNUE::evaluate()` si activé — aucun site d'appel à changer.
+   - ~~accumulateur incrémental~~ **fait, mais PAS comme prévu initialement ci-dessus** (2026-09-27) :
+     surtout NE PAS mettre les accumulateurs dans `Position` (l'idée de départ) — `Position` est copiée à
+     chaque nœud, y compris par `perft`/le movegen qui n'utilisent jamais NNUE ; l'alourdir de ~2×256
+     flottants aurait cassé la vitesse de perft pour tout le monde, NNUE actif ou non. À la place :
+     `NNUE::evaluate(pos)` garde la signature `evaluate(const Position&)` inchangée et maintient en interne
+     (état global dans nnue.cpp) le DERNIER accumulateur calculé ; à chaque appel, diff XOR entre les
+     bitboards de `pos` et ceux du dernier appel pour ne mettre à jour que les cases qui ont changé (un coup,
+     même une chaîne de captures, est une modification atomique des bitboards — le diff reconstruit
+     exactement ce qui a changé sans avoir besoin de connaître "le coup"). Toujours deux accumulateurs, un
+     par perspective de couleur absolue : `accum[c] = b1 + W_own @ pieces(c) + W_opp @ pieces(~c)` (voir le
+     commentaire détaillé dans `nnue.cpp` pour le détail own/opp par accumulateur). Zéro changement à
+     `Position`, au copy-make, à `search.cpp` ou au movegen : risque totalement isolé à `nnue.cpp`.
+     **Limite connue** : cache global, pas thread-safe — à revoir si Lazy SMP (point 5) est implémenté.
+   - **Validation** : `make test` + `perft 5` inchangés (HCE non touchée), build ASan/UBSan propre y compris
+     sous recherche réelle (`bench`/`go`, avec `ucinewgame` pour exercer la remise à zéro du cache) et
+     `tools/nnue/verify.py` confirme une correspondance EXACTE (1000/1000) entre le C++ et une référence
+     numpy qui réimplémente le forward pass de `train.py` SANS aucune logique incrémentale (donc un bug de
+     diff/cache aurait divergé) — c'est la vérification qui compte vraiment, un simple "ça compile et ça ne
+     crash pas" n'aurait rien dit sur un bug d'encodage ou de cache silencieux.
+   - **Vitesse mesurée** (bench profondeur 8, comparaison directe A/B sur le même run) : ~450-470k nps avec
+     l'accumulateur incrémental contre ~280-300k nps en forçant un recalcul complet à chaque appel — un vrai
+     gain d'environ 1,5×, mais nettement moins que le "quasi gratuit" espéré. Raison : l'ordre de visite des
+     nœuds en alpha-bêta n'est pas une simple marche DFS où deux appels `evaluate()` consécutifs sont presque
+     toujours à 1 coup d'écart (contrairement à un accumulateur façon Stockfish poussé/dépilé en même temps
+     que la recherche elle-même) — le diff est donc souvent plus grand qu'entre deux positions vraiment
+     adjacentes. Reste ~5,5× plus lent que la HCE (2,5M nps). Pour aller plus loin il faudrait vraiment fileter
+     l'accumulateur à travers la récursion de `search()`/`qsearch()` (garantit un diff à 1 coup à chaque
+     appel) — plus invasif (signatures des fonctions de recherche à changer), pas fait ici : le gain
+     mesuré (1,5×) à faible risque a semblé le meilleur rapport effort/risque pour cette passe.
+   - **reste à faire** : quantification int16/int8 réelle (le format d'export actuel — float32 — est un
+     contrat de départ, pas figé) ; évaluer si l'accumulateur fileté dans la récursion de recherche vaut le
+     risque/effort une fois qu'on sait si NNUE apporte un vrai gain d'Elo. **Avant tout SPRT de confirmation
+     contre la HCE** : le réseau actuel n'a été entraîné que sur un seul corpus auto-jeu profondeur 6 (pas de
+     itération/renforcement), donc pas de garantie qu'il batte la HCE réglée à la main — c'est justement ce
+     qu'un SPRT (`tools/match.py --sprt`) est fait pour trancher, prochaine étape naturelle.
 5. **Lazy SMP** : option `Threads`, TT partagée (entrées rendues sûres par XOR clé/données).
 6. Améliorations de recherche : singular extensions, IIR, history de continuation, meilleur ordre des captures.
 7. Bases de finales (peu de pièces), livre d'ouvertures.

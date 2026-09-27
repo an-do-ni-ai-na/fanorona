@@ -335,6 +335,7 @@ void loop(int argc, char* argv[]) {
         } else if (token == "ucinewgame") {
             join();
             Search::clear();
+            NNUE::new_game();
         } else if (token == "setoption") {
             join();
             std::string name, value, t;

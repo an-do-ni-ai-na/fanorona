@@ -15,10 +15,15 @@ bool load(const std::string& path);
 bool enabled();
 void set_enabled(bool on);
 
+// Invalide l'accumulateur mis en cache (voir evaluate() ci-dessous). Pas obligatoire pour la
+// justesse (le cache se corrige tout seul par diff quelle que soit sa fraîcheur), mais appelé
+// depuis "ucinewgame" par hygiène, comme Search::clear().
+void new_game();
+
 // Évaluation NNUE, à utiliser à la place de evaluate() quand enabled() est vrai (voir
-// evaluate.cpp). Recalcule tout depuis les bitboards à chaque appel : pas encore incrémental
-// (l'accumulateur incrémental mis à jour dans Position::do_move est un travail séparé, cf.
-// feuille de route CLAUDE.md — celui-ci n'affecte que la vitesse, pas la justesse).
+// evaluate.cpp). Maintient un accumulateur incrémental (dernier calculé, mis à jour par diff
+// XOR des bitboards à chaque appel plutôt que recalculé — voir le commentaire détaillé dans
+// nnue.cpp) : pas de paramètre supplémentaire, pas de changement à Position ni au copy-make.
 Value evaluate(const Position& pos);
 
 }  // namespace fanorona::NNUE

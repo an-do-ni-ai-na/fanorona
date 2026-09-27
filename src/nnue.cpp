@@ -25,9 +25,85 @@ std::vector<float> g_b1;  // [hidden]
 std::vector<float> g_w2;  // [hidden]        (= nn.Linear(hidden, 1).weight, une seule ligne)
 float g_b2 = 0.0f;
 
+// Accumulateur incrémental : accum[c] = b1 + W_own @ pieces(c) + W_opp @ pieces(~c), c'est-à-
+// dire "la pré-activation telle qu'elle serait si c'était le tour de c". À l'évaluation, on
+// lit directement accum[pos.sideToMove]. Pas d'accumulateur par nœud de recherche façon
+// StateInfo (Position est copy-make, sans do/undo explicite) : à la place, on garde le DERNIER
+// accum calculé et on le met à jour par diff XOR des bitboards à chaque appel — un coup
+// (même une chaîne de captures) est une modification atomique des bitboards, donc le diff
+// reconstruit exactement les cases qui ont changé, sans avoir besoin de connaître "le coup"
+// lui-même. Coût proportionnel à la taille du diff : quasi gratuit entre deux positions
+// adjacentes dans l'arbre de recherche (cas courant), dégrade proprement vers un coût
+// équivalent au recalcul complet si les deux positions n'ont rien en commun (rare, ex. premier
+// appel, ou saut entre branches très éloignées).
+// Note : état global, donc PAS thread-safe. À revoir (un cache par thread) si Lazy SMP
+// (feuille de route CLAUDE.md, point 5) est implémenté un jour.
+struct AccumCache {
+    bool valid = false;
+    Bitboard byColor[COLOR_NB] = {0, 0};
+    std::vector<float> acc[COLOR_NB];
+};
+AccumCache g_cache;
+
 bool read_exact(std::ifstream& f, void* dst, size_t bytes) {
     f.read(reinterpret_cast<char*>(dst), std::streamsize(bytes));
     return bool(f) && size_t(f.gcount()) == bytes;
+}
+
+// Ajoute (sign=+1) ou retire (sign=-1) la contribution de la colonne `col` (0..89) de W_own à
+// l'accumulateur `acc`.
+void add_col(std::vector<float>& acc, int col, float sign) {
+    for (int i = 0; i < g_hidden; ++i) acc[size_t(i)] += sign * g_w1[size_t(i) * INPUT_SIZE + col];
+}
+
+void recompute_from(const Position& pos) {
+    g_cache.acc[WHITE].assign(g_b1.begin(), g_b1.end());
+    g_cache.acc[BLACK].assign(g_b1.begin(), g_b1.end());
+    for (Bitboard b = pos.pieces(WHITE); b;) {
+        int sq = pop_lsb(b);
+        add_col(g_cache.acc[WHITE], sq, 1.0f);              // blanc = "own" dans accum[WHITE]
+        add_col(g_cache.acc[BLACK], SQUARE_NB + sq, 1.0f);  // blanc = "opp" dans accum[BLACK]
+    }
+    for (Bitboard b = pos.pieces(BLACK); b;) {
+        int sq = pop_lsb(b);
+        add_col(g_cache.acc[BLACK], sq, 1.0f);              // noir = "own" dans accum[BLACK]
+        add_col(g_cache.acc[WHITE], SQUARE_NB + sq, 1.0f);  // noir = "opp" dans accum[WHITE]
+    }
+    g_cache.byColor[WHITE] = pos.pieces(WHITE);
+    g_cache.byColor[BLACK] = pos.pieces(BLACK);
+    g_cache.valid = true;
+}
+
+void update_incremental(const Position& pos) {
+    Bitboard newWhite = pos.pieces(WHITE), newBlack = pos.pieces(BLACK);
+    Bitboard addedWhite = newWhite & ~g_cache.byColor[WHITE];
+    Bitboard removedWhite = g_cache.byColor[WHITE] & ~newWhite;
+    Bitboard addedBlack = newBlack & ~g_cache.byColor[BLACK];
+    Bitboard removedBlack = g_cache.byColor[BLACK] & ~newBlack;
+
+    for (Bitboard b = addedWhite; b;) {
+        int sq = pop_lsb(b);
+        add_col(g_cache.acc[WHITE], sq, 1.0f);
+        add_col(g_cache.acc[BLACK], SQUARE_NB + sq, 1.0f);
+    }
+    for (Bitboard b = removedWhite; b;) {
+        int sq = pop_lsb(b);
+        add_col(g_cache.acc[WHITE], sq, -1.0f);
+        add_col(g_cache.acc[BLACK], SQUARE_NB + sq, -1.0f);
+    }
+    for (Bitboard b = addedBlack; b;) {
+        int sq = pop_lsb(b);
+        add_col(g_cache.acc[BLACK], sq, 1.0f);
+        add_col(g_cache.acc[WHITE], SQUARE_NB + sq, 1.0f);
+    }
+    for (Bitboard b = removedBlack; b;) {
+        int sq = pop_lsb(b);
+        add_col(g_cache.acc[BLACK], sq, -1.0f);
+        add_col(g_cache.acc[WHITE], SQUARE_NB + sq, -1.0f);
+    }
+
+    g_cache.byColor[WHITE] = newWhite;
+    g_cache.byColor[BLACK] = newBlack;
 }
 
 }  // namespace
@@ -67,31 +143,23 @@ bool load(const std::string& path) {
     g_w2 = std::move(w2);
     g_b2 = b2;
     g_loaded = true;
+    g_cache.valid = false;  // les poids ont changé, l'accumulateur mis en cache ne vaut plus rien
     std::cout << "info string nnue: " << path << " chargé (hidden=" << hidden << ")" << std::endl;
     return true;
 }
 
 bool enabled() { return g_loaded && g_wantEnabled; }
 void set_enabled(bool on) { g_wantEnabled = on; }
+void new_game() { g_cache.valid = false; }
 
 Value evaluate(const Position& pos) {
-    Color us = pos.sideToMove;
-    Bitboard own = pos.pieces(us), opp = pos.pieces(~us);
+    if (!g_cache.valid) recompute_from(pos);
+    else update_incremental(pos);
 
-    std::vector<float> h(g_b1);  // copie : h[i] = biais initial
-
-    for (Bitboard b = own; b;) {
-        int sq = pop_lsb(b);
-        for (int i = 0; i < g_hidden; ++i) h[size_t(i)] += g_w1[size_t(i) * INPUT_SIZE + sq];
-    }
-    for (Bitboard b = opp; b;) {
-        int sq = pop_lsb(b);
-        for (int i = 0; i < g_hidden; ++i) h[size_t(i)] += g_w1[size_t(i) * INPUT_SIZE + SQUARE_NB + sq];
-    }
-
+    const std::vector<float>& acc = g_cache.acc[pos.sideToMove];
     double out = double(g_b2);
     for (int i = 0; i < g_hidden; ++i) {
-        float a = h[size_t(i)] < 0.0f ? 0.0f : (h[size_t(i)] > 1.0f ? 1.0f : h[size_t(i)]);  // ClippedReLU [0,1]
+        float a = acc[size_t(i)] < 0.0f ? 0.0f : (acc[size_t(i)] > 1.0f ? 1.0f : acc[size_t(i)]);  // ClippedReLU
         out += double(g_w2[size_t(i)]) * double(a);
     }
 
