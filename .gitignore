@@ -1,0 +1,4 @@
+*.o
+/fanorona
+/tests/run_tests
+__pycache__/
