@@ -7,6 +7,10 @@ Mode parties fixes :
 Mode SPRT (arrêt séquentiel dès que l'écart d'Elo est statistiquement tranché) :
     python3 tools/match.py ./fanorona ./fanorona-old --sprt --elo0 0 --elo1 5 --movetime 100
 
+NNUE contre HCE (même binaire, NNUE est une option UCI à l'exécution) :
+    python3 tools/match.py ./fanorona ./fanorona --sprt --elo0 0 --elo1 10 --movetime 100 \
+        --engine1-opts "UseNNUE=true,EvalFile=checkpoints/net_v1.nnue"
+
 Les parties démarrent depuis des ouvertures aléatoires (quelques coups au hasard, jouées par
 paires pour que chaque moteur ait les deux couleurs). Les lignes UCI "info" de chaque moteur
 sont journalisées en JSONL (/var/log/fanorona/<run_id>.jsonl par défaut) pour suivi live via
@@ -20,13 +24,24 @@ from metrics_logger import MetricsLogger, new_run_id
 from sprt import Sprt
 
 
+def parse_opts(spec):
+    """"Name1=Value1,Name2=Value2" -> [(Name1, Value1), (Name2, Value2)]. Sert à activer NNUE
+    (UseNNUE=true,EvalFile=checkpoints/net.nnue) sur un binaire qui, par défaut, joue en HCE :
+    NNUE est une option UCI à l'exécution, pas un binaire séparé."""
+    if not spec:
+        return []
+    return [tuple(kv.split("=", 1)) for kv in spec.split(",")]
+
+
 class Engine:
-    def __init__(self, path, name, metrics):
+    def __init__(self, path, name, metrics, options=None):
         self.name = name
         self.metrics = metrics
         self.p = subprocess.Popen([path], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True, bufsize=1)
         self.send("uci")
         self.wait("uciok")
+        for opt_name, value in options or []:
+            self.send(f"setoption name {opt_name} value {value}")
 
     def send(self, cmd):
         self.p.stdin.write(cmd + "\n")
@@ -179,6 +194,8 @@ def main():
     ap.add_argument("--max-games", type=int, default=None, help="garde-fou : arrêt même sans conclusion (SPRT)")
     ap.add_argument("--no-live-log", action="store_true", help="désactive la journalisation JSONL live")
     ap.add_argument("--run-id", default=None, help="identifiant de run pour le suivi live (auto par défaut)")
+    ap.add_argument("--engine1-opts", default=None, help="options UCI engine1, ex. UseNNUE=true,EvalFile=net.nnue")
+    ap.add_argument("--engine2-opts", default=None, help="options UCI engine2, même format")
     args = ap.parse_args()
 
     run_type = "sprt" if args.sprt else "match"
@@ -192,8 +209,8 @@ def main():
         print(f"suivi live : run_id={metrics.run_id}")
 
     rng = random.Random(args.seed)
-    e1 = Engine(args.engine1, "engine1", metrics)
-    e2 = Engine(args.engine2, "engine2", metrics)
+    e1 = Engine(args.engine1, "engine1", metrics, options=parse_opts(args.engine1_opts))
+    e2 = Engine(args.engine2, "engine2", metrics, options=parse_opts(args.engine2_opts))
     ref = Engine(args.engine1, "referee", metrics)
     try:
         if args.sprt:
