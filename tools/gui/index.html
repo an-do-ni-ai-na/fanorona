@@ -1,0 +1,669 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fanorona</title>
+<style>
+:root {
+  --bg: #f4f1ea; --panel: #fffdf8; --text: #26221c; --muted: #7a7164; --border: #e2dbcd;
+  --wood: #d9b07a; --wood-2: #c99a5f; --line: #5b3e1e; --point: #5b3e1e;
+  --white-piece: #fbf8f1; --white-edge: #9d9380; --black-piece: #2a2622; --black-edge: #000;
+  --accent: #1f7a5a; --accent-soft: rgba(31,122,90,.18); --approach: #d9480f; --withdraw: #1c64d4;
+  --last: rgba(255,214,10,.55); --danger: #b42318;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #17150f; --panel: #211e17; --text: #ece6d9; --muted: #a39a89; --border: #373126;
+    --wood: #b98d57; --wood-2: #a47946; --line: #3b2812; --point: #3b2812;
+    --accent: #3fbf8f; --accent-soft: rgba(63,191,143,.22); --approach: #ff7a3d; --withdraw: #5b9bff;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text);
+  font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+header { display: flex; align-items: baseline; gap: 12px; padding: 16px 20px 0; max-width: 1280px; margin: 0 auto; }
+header h1 { margin: 0; font-size: 22px; letter-spacing: .02em; }
+header span { color: var(--muted); font-size: 13px; }
+main { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 20px; padding: 16px 20px 24px;
+  max-width: 1280px; margin: 0 auto; }
+@media (max-width: 900px) { main { grid-template-columns: 1fr; padding: 12px 16px; } header { padding: 12px 16px 0; } }
+
+.board-wrap { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 14px; }
+.statusbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 34px;
+  margin-bottom: 10px; flex-wrap: wrap; }
+.turn { display: flex; align-items: center; gap: 8px; font-weight: 600; }
+.dot { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--white-edge); }
+.dot.B { background: var(--black-piece); border-color: var(--black-edge); }
+.dot.W { background: var(--white-piece); }
+.hint-text { color: var(--muted); font-size: 13px; }
+.choice { display: none; gap: 8px; }
+.choice.show { display: flex; }
+svg#board { width: 100%; height: auto; display: block; user-select: none; touch-action: manipulation; }
+.board-bg { fill: var(--wood); }
+.board-frame { fill: none; stroke: var(--wood-2); stroke-width: 10; }
+.ln { stroke: var(--line); stroke-width: 3; stroke-linecap: round; }
+.pt { fill: var(--point); }
+.coord { fill: var(--line); font: 600 18px system-ui, sans-serif; opacity: .7; }
+.hit { fill: transparent; cursor: pointer; }
+.target { fill: var(--accent); opacity: .85; pointer-events: none; }
+.last { fill: var(--last); pointer-events: none; }
+.sel-ring { fill: none; stroke: var(--accent); stroke-width: 6; pointer-events: none; }
+.cap-ring { fill: none; stroke-width: 6; stroke-dasharray: 8 6; pointer-events: none; }
+.cap-ring.A { stroke: var(--approach); } .cap-ring.W { stroke: var(--withdraw); }
+.path { fill: none; stroke: var(--accent); stroke-width: 7; stroke-linecap: round; stroke-linejoin: round; opacity: .75;
+  pointer-events: none; }
+.path.hint { stroke: var(--withdraw); stroke-dasharray: 14 10; }
+.visited { fill: var(--accent); opacity: .5; pointer-events: none; }
+.piece { transition: transform .28s ease, opacity .28s ease; pointer-events: none; }
+.piece.gone { opacity: 0; }
+.piece .body-W { fill: var(--white-piece); stroke: var(--white-edge); stroke-width: 2.5; }
+.piece .body-B { fill: var(--black-piece); stroke: var(--black-edge); stroke-width: 2.5; }
+.piece .shine { fill: #fff; opacity: .18; }
+.piece .inner-W { fill: none; stroke: #d8cfbe; stroke-width: 2; }
+.piece .inner-B { fill: none; stroke: #4a443c; stroke-width: 2; }
+
+aside { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.card { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 14px; }
+.card h2 { margin: 0 0 10px; font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+label.row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 8px 0; }
+select, button { font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--border);
+  border-radius: 8px; padding: 6px 10px; }
+select { min-width: 150px; }
+button { cursor: pointer; }
+button:hover:not(:disabled) { border-color: var(--accent); }
+button:disabled { opacity: .45; cursor: default; }
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+button.A { border-color: var(--approach); color: var(--approach); }
+button.W { border-color: var(--withdraw); color: var(--withdraw); }
+.btns { display: flex; flex-wrap: wrap; gap: 8px; }
+.evalbar { position: relative; height: 22px; border-radius: 6px; overflow: hidden; background: var(--black-piece);
+  border: 1px solid var(--border); }
+.evalbar .w { position: absolute; inset: 0 auto 0 0; background: var(--white-piece); transition: width .4s ease; width: 50%; }
+.evalbar .lbl { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  font: 600 12px ui-monospace, monospace; color: #888; mix-blend-mode: difference; }
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 10px; }
+.stat { background: var(--bg); border-radius: 8px; padding: 6px 8px; }
+.stat b { display: block; font: 600 15px ui-monospace, monospace; }
+.stat small { color: var(--muted); font-size: 11px; }
+.pv { margin-top: 8px; font: 12px ui-monospace, monospace; color: var(--muted); overflow-wrap: anywhere; }
+.thinking { height: 3px; background: var(--border); border-radius: 2px; overflow: hidden; margin-top: 10px; visibility: hidden; }
+.thinking.on { visibility: visible; }
+.thinking i { display: block; height: 100%; width: 0; background: var(--accent); }
+.moves { max-height: 260px; overflow-y: auto; font: 13px ui-monospace, monospace; }
+.moves table { width: 100%; border-collapse: collapse; }
+.moves td { padding: 3px 6px; overflow-wrap: anywhere; }
+.moves td:first-child { color: var(--muted); width: 36px; }
+.moves tr:nth-child(odd) { background: var(--bg); }
+.moves .cur { color: var(--accent); font-weight: 700; }
+.fen { font: 11px ui-monospace, monospace; color: var(--muted); overflow-wrap: anywhere; margin-top: 8px; cursor: copy; }
+.banner { display: none; padding: 10px 12px; border-radius: 10px; background: var(--accent-soft); font-weight: 600; margin-bottom: 10px; }
+.banner.show { display: block; }
+.err { color: var(--danger); font-size: 13px; min-height: 1em; }
+.counts { display: flex; gap: 14px; font-weight: 600; }
+.counts span { display: flex; align-items: center; gap: 6px; }
+</style>
+</head>
+<body>
+<header><h1>Fanorona</h1><span id="engineName">Fanorona-Engine</span></header>
+<main>
+  <section class="board-wrap">
+    <div class="banner" id="banner"></div>
+    <div class="statusbar">
+      <div class="turn"><span class="dot W" id="turnDot"></span><span id="turnText">Blancs au trait</span></div>
+      <div class="choice" id="aw">
+        <button class="A" id="chooseA">Approche</button>
+        <button class="W" id="chooseW">Retrait</button>
+      </div>
+      <button id="stopChain" style="display:none">Arrêter la capture</button>
+      <div class="counts"><span><span class="dot W"></span><b id="cntW">22</b></span><span><span class="dot B"></span><b id="cntB">22</b></span></div>
+    </div>
+    <svg id="board" viewBox="0 0 920 520" aria-label="Plateau de Fanorona"></svg>
+    <div class="hint-text" id="help">Cliquez une pièce, puis la case d'arrivée. Pendant une chaîne de captures, continuez à cliquer ou arrêtez-vous. Échap annule.</div>
+    <div class="err" id="err"></div>
+  </section>
+
+  <aside>
+    <div class="card">
+      <h2>Partie</h2>
+      <label class="row">Mode
+        <select id="mode">
+          <option value="W">Vous (Blancs) contre moteur</option>
+          <option value="B">Vous (Noirs) contre moteur</option>
+          <option value="HH">Deux joueurs</option>
+          <option value="EE">Moteur contre moteur</option>
+        </select></label>
+      <label class="row">Temps de réflexion
+        <select id="movetime">
+          <option value="200">0,2 s</option><option value="500">0,5 s</option>
+          <option value="1000" selected>1 s</option><option value="2000">2 s</option>
+          <option value="5000">5 s</option><option value="10000">10 s</option><option value="30000">30 s</option>
+        </select></label>
+      <label class="row">Évaluation
+        <select id="net"><option value="">Manuelle (HCE)</option></select></label>
+      <label class="row">Variante
+        <select id="variant">
+          <option value="free">Arrêt de chaîne libre</option>
+          <option value="mandatory">Continuation obligatoire</option>
+        </select></label>
+      <div class="btns" style="margin-top:12px">
+        <button class="primary" id="newGame">Nouvelle partie</button>
+        <button id="undo">Annuler le coup</button>
+        <button id="hint">Indice</button>
+        <button id="flip">Retourner</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Moteur</h2>
+      <div class="evalbar"><div class="w" id="evalW"></div><div class="lbl" id="evalLbl">0.00</div></div>
+      <div class="stats">
+        <div class="stat"><b id="sDepth">–</b><small>profondeur</small></div>
+        <div class="stat"><b id="sNodes">–</b><small>nœuds</small></div>
+        <div class="stat"><b id="sNps">–</b><small>nœuds/s</small></div>
+      </div>
+      <div class="pv" id="pv"></div>
+      <div class="thinking" id="thinking"><i id="thinkBar"></i></div>
+    </div>
+
+    <div class="card">
+      <h2>Coups</h2>
+      <div class="moves" id="moves"><table><tbody></tbody></table></div>
+      <div class="fen" id="fen" title="Cliquer pour copier la FEN"></div>
+    </div>
+  </aside>
+</main>
+
+<script>
+"use strict";
+// ---------- Géométrie : sq = y*9 + x, x = a..i, y = rangée 1..5 (voir CLAUDE.md) ----------
+const W = 9, H = 5, S = 100, M = 60, NS = "http://www.w3.org/2000/svg";
+const FILES = "abcdefghi";
+const sqName = s => FILES[s % W] + (Math.floor(s / W) + 1);
+const sqOf = n => (n.charCodeAt(0) - 97) + (n.charCodeAt(1) - 49) * W;
+const xy = s => [s % W, Math.floor(s / W)];
+const inside = (x, y) => x >= 0 && x < W && y >= 0 && y < H;
+const other = c => (c === "W" ? "B" : "W");
+
+// ---------- État ----------
+let cfg = { mode: "W", movetime: 1000, net: "", variant: "free" };
+let game = { moves: [], fen: null, legal: [], status: "ongoing", side: "W" };
+let base = [];          // plateau de la position courante : tableau de 45 {id, c} | null
+let view = [];          // plateau affiché (base + étapes en cours de saisie)
+let chosen = null;      // saisie en cours : {from, steps:[{to, kind}]}
+let pendingAW = null;   // choix approche/retrait en attente : {to, lines:{A:[...], W:[...]}}
+let lastMove = null;    // {path:[sq...]} du dernier coup joué
+let hintMove = null;
+let flipped = false;
+let busy = false;       // requête moteur en cours
+let epoch = 0;          // invalide les réponses moteur périmées (annulation, nouvelle partie)
+let nextId = 1;
+let lastInfo = null;
+
+const $ = id => document.getElementById(id);
+
+// ---------- Notation ----------
+function parseMove(str) {
+  const re = /([a-i][1-5])([AW]?)/g;
+  let m, sqs = [];
+  while ((m = re.exec(str))) sqs.push({ sq: sqOf(m[1]), kind: m[2] });
+  return { str, from: sqs[0].sq, steps: sqs.slice(1).map(p => ({ to: p.sq, kind: p.kind })) };
+}
+const moveString = (from, steps) => sqName(from) + steps.map(s => sqName(s.to) + s.kind).join("");
+
+function parseFen(fen) {
+  const [rows, side] = fen.split(" ");
+  const b = new Array(W * H).fill(null);
+  rows.split("/").forEach((row, i) => {
+    const y = H - 1 - i;
+    let x = 0;
+    for (const ch of row) {
+      if (/\d/.test(ch)) x += +ch;
+      else { b[y * W + x] = ch; x++; }
+    }
+  });
+  return { board: b, side };
+}
+
+// Ligne de pièces capturées par une étape (approche : devant l'arrivée ; retrait : derrière le départ).
+function captureLine(board, from, to, kind) {
+  if (!kind) return [];
+  const [fx, fy] = xy(from), [tx, ty] = xy(to);
+  const dx = tx - fx, dy = ty - fy;
+  const mover = board[from] ? board[from].c : null;
+  let x, y, sx, sy;
+  if (kind === "A") { x = tx + dx; y = ty + dy; sx = dx; sy = dy; }
+  else { x = fx - dx; y = fy - dy; sx = -dx; sy = -dy; }
+  const out = [];
+  while (inside(x, y)) {
+    const p = board[y * W + x];
+    if (!p || p.c === mover) break;
+    out.push(y * W + x);
+    x += sx; y += sy;
+  }
+  return out;
+}
+
+function applyStep(board, from, to, kind) {
+  const b = board.slice();
+  for (const c of captureLine(board, from, to, kind)) b[c] = null;
+  b[to] = b[from]; b[from] = null;
+  return b;
+}
+
+// ---------- Rendu SVG ----------
+const svg = $("board");
+const pieceEls = new Map();
+let layers = {};
+
+function pos(s) {
+  let [x, y] = xy(s);
+  if (flipped) { x = W - 1 - x; y = H - 1 - y; }
+  return [M + x * S, M + (H - 1 - y) * S];
+}
+function el(tag, attrs, parent) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+
+function buildBoard() {
+  svg.innerHTML = "";
+  pieceEls.clear();
+  el("rect", { x: 8, y: 8, width: 904, height: 504, rx: 22, class: "board-bg" }, svg);
+  el("rect", { x: 8, y: 8, width: 904, height: 504, rx: 22, class: "board-frame" }, svg);
+  const lines = el("g", {}, svg);
+  const seg = (a, b) => { const [x1, y1] = pos(a), [x2, y2] = pos(b); el("line", { x1, y1, x2, y2, class: "ln" }, lines); };
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const s = y * W + x;
+    if (x + 1 < W) seg(s, s + 1);
+    if (y + 1 < H) seg(s, s + W);
+    if ((x + y) % 2 === 0) {           // points forts : diagonales
+      if (x + 1 < W && y + 1 < H) seg(s, s + W + 1);
+      if (x + 1 < W && y - 1 >= 0) seg(s, s - W + 1);
+    }
+  }
+  const coords = el("g", {}, svg);
+  for (let x = 0; x < W; x++) {
+    const [px] = pos(x);
+    el("text", { x: px, y: 510, class: "coord", "text-anchor": "middle" }, coords).textContent = FILES[x];
+  }
+  for (let y = 0; y < H; y++) {
+    const [, py] = pos(y * W);
+    el("text", { x: 20, y: py + 6, class: "coord", "text-anchor": "middle" }, coords).textContent = y + 1;
+  }
+  layers.marks = el("g", {}, svg);
+  for (let s = 0; s < W * H; s++) { const [cx, cy] = pos(s); el("circle", { cx, cy, r: 6, class: "pt" }, layers.marks); }
+  layers.under = el("g", {}, svg);
+  layers.pieces = el("g", {}, svg);
+  layers.over = el("g", {}, svg);
+  layers.hits = el("g", {}, svg);
+  for (let s = 0; s < W * H; s++) {
+    const [cx, cy] = pos(s);
+    const h = el("circle", { cx, cy, r: 48, class: "hit" }, layers.hits);
+    h.addEventListener("click", () => onSquare(s));
+  }
+}
+
+function makePiece(p) {
+  const g = el("g", { class: "piece" });
+  el("circle", { r: 33, class: "body-" + p.c }, g);
+  el("circle", { r: 22, class: "inner-" + p.c }, g);
+  el("ellipse", { cx: -9, cy: -12, rx: 12, ry: 7, class: "shine" }, g);
+  return g;
+}
+
+function render() {
+  // Pièces : réconciliation par identifiant pour animer les déplacements.
+  const seen = new Set();
+  view.forEach((p, s) => {
+    if (!p) return;
+    seen.add(p.id);
+    const [cx, cy] = pos(s);
+    let g = pieceEls.get(p.id);
+    if (!g) {
+      g = makePiece(p);
+      g.style.transform = `translate(${cx}px, ${cy}px)`;
+      layers.pieces.appendChild(g);
+      pieceEls.set(p.id, g);
+    } else g.style.transform = `translate(${cx}px, ${cy}px)`;
+  });
+  for (const [id, g] of pieceEls) if (!seen.has(id)) {
+    pieceEls.delete(id);
+    g.classList.add("gone");
+    setTimeout(() => g.remove(), 320);
+  }
+
+  layers.under.innerHTML = "";
+  layers.over.innerHTML = "";
+  if (lastMove && !chosen) {
+    for (const s of lastMove.path) { const [cx, cy] = pos(s); el("circle", { cx, cy, r: 40, class: "last" }, layers.under); }
+  }
+  if (hintMove && !chosen) drawPath(hintMove.path, "path hint");
+  if (chosen) {
+    const path = [chosen.from, ...chosen.steps.map(s => s.to)];
+    path.slice(0, -1).forEach(s => { const [cx, cy] = pos(s); el("circle", { cx, cy, r: 12, class: "visited" }, layers.under); });
+    if (path.length > 1) drawPath(path, "path");
+    const [cx, cy] = pos(path[path.length - 1]);
+    el("circle", { cx, cy, r: 40, class: "sel-ring" }, layers.over);
+    if (pendingAW) {
+      for (const k of ["A", "W"]) for (const s of pendingAW.lines[k]) {
+        const [x, y] = pos(s); el("circle", { cx: x, cy: y, r: 41, class: "cap-ring " + k }, layers.over);
+      }
+    } else {
+      for (const t of nextTargets().keys()) { const [x, y] = pos(t); el("circle", { cx: x, cy: y, r: 13, class: "target" }, layers.over); }
+    }
+  }
+  updateControls();
+}
+
+function drawPath(path, cls) {
+  const pts = path.map(s => pos(s).join(",")).join(" ");
+  el("polyline", { points: pts, class: cls }, layers.over);
+}
+
+// ---------- Saisie d'un coup ----------
+const humanTurn = () => game.status === "ongoing" && !busy &&
+  (cfg.mode === "HH" || (cfg.mode !== "EE" && cfg.mode === game.side));
+
+function candidates() {
+  return game.legal.map(parseMove).filter(m => m.from === chosen.from &&
+    chosen.steps.every((st, i) => m.steps[i] && m.steps[i].to === st.to && m.steps[i].kind === st.kind));
+}
+function nextTargets() {
+  const n = chosen.steps.length, map = new Map();
+  for (const m of candidates()) if (m.steps.length > n) {
+    const st = m.steps[n];
+    if (!map.has(st.to)) map.set(st.to, new Set());
+    map.get(st.to).add(st.kind);
+  }
+  return map;
+}
+const exactMove = () => candidates().find(m => m.steps.length === chosen.steps.length);
+const curSquare = () => chosen.steps.length ? chosen.steps[chosen.steps.length - 1].to : chosen.from;
+
+function resetInput() {
+  chosen = null; pendingAW = null; view = base.slice();
+}
+
+function onSquare(s) {
+  $("err").textContent = "";
+  if (!humanTurn()) return;
+  if (pendingAW) {                       // clic sur une pièce d'une des deux lignes de capture
+    for (const k of ["A", "W"]) if (pendingAW.lines[k].includes(s)) return chooseKind(k);
+    return;
+  }
+  const p = view[s];
+  if (chosen && chosen.steps.length === 0 && s === chosen.from) { resetInput(); return render(); }
+  if (chosen && chosen.steps.length > 0 && s === curSquare()) {   // re-cliquer la pièce = arrêter la chaîne
+    if (exactMove()) return commit(exactMove());
+    return;
+  }
+  if (chosen) {
+    const kinds = nextTargets().get(s);
+    if (kinds) return stepTo(s, kinds);
+  }
+  if ((!chosen || chosen.steps.length === 0) && p && p.c === game.side) {
+    if (game.legal.some(m => parseMove(m).from === s)) { resetInput(); chosen = { from: s, steps: [] }; }
+    else $("err").textContent = game.legal.some(m => /[AW]/.test(m))
+      ? "Capture obligatoire : cette pièce ne peut pas capturer." : "Cette pièce ne peut pas bouger.";
+    render();
+  }
+}
+
+function stepTo(to, kinds) {
+  if (kinds.size > 1) {
+    const from = curSquare();
+    pendingAW = { to, lines: { A: captureLine(view, from, to, "A"), W: captureLine(view, from, to, "W") } };
+    return render();
+  }
+  addStep(to, [...kinds][0]);
+}
+function chooseKind(k) { const to = pendingAW.to; pendingAW = null; addStep(to, k); }
+
+function addStep(to, kind) {
+  view = applyStep(view, curSquare(), to, kind);
+  chosen.steps.push({ to, kind });
+  const exact = exactMove(), more = nextTargets().size > 0;
+  if (exact && !more) return commit(exact);
+  render();
+}
+
+async function commit(m) {
+  const path = [m.from, ...m.steps.map(s => s.to)];
+  base = view.slice();
+  chosen = null; pendingAW = null; hintMove = null;
+  lastMove = { path };
+  render();
+  await playMove(m.str);
+}
+
+// ---------- Dialogue avec le serveur ----------
+async function api(path, body) {
+  const r = await fetch(path, { method: body ? "POST" : "GET", headers: { "Content-Type": "application/json" },
+    body: body ? JSON.stringify(body) : undefined });
+  const j = await r.json();
+  if (!r.ok) throw new Error(j.error || r.statusText);
+  return j;
+}
+
+function setState(st) {
+  game.fen = st.fen; game.legal = st.legal; game.status = st.status;
+  const { board, side } = parseFen(st.fen);
+  game.side = side === "w" ? "W" : "B";
+  // Garder les identifiants si le plateau calculé localement correspond (animations), sinon reconstruire.
+  const same = base.length === board.length && board.every((c, i) => (c || null) === (base[i] ? base[i].c : null));
+  if (!same) base = board.map(c => (c ? { id: nextId++, c } : null));
+  view = base.slice();
+  save();
+}
+
+async function playMove(str) {
+  const my = ++epoch;
+  busy = true; updateControls();
+  try {
+    const st = await api("/api/state", { moves: [...game.moves, str], variant: cfg.variant });
+    if (my !== epoch) return;
+    game.moves.push(str);
+    setState(st);
+  } catch (e) { $("err").textContent = e.message; await refresh(); }
+  finally { if (my === epoch) busy = false; }
+  render();
+  maybeEngine();
+}
+
+async function refresh() {
+  const st = await api("/api/state", { moves: game.moves, variant: cfg.variant });
+  setState(st);
+  resetInput();
+  render();
+}
+
+function engineTurn() {
+  return game.status === "ongoing" && (cfg.mode === "EE" || (cfg.mode !== "HH" && cfg.mode !== game.side));
+}
+
+async function maybeEngine() {
+  if (!engineTurn() || busy) return;
+  const my = ++epoch;
+  busy = true; startThinking(); updateControls();
+  try {
+    const r = await api("/api/go", { moves: game.moves, variant: cfg.variant, movetime: cfg.movetime, net: cfg.net || null });
+    if (my !== epoch) return;
+    showInfo(r.info, game.side);
+    await animate(parseMove(r.bestmove));
+    if (my !== epoch) return;
+    game.moves.push(r.bestmove);
+    setState(r.state);
+    busy = false;
+  } catch (e) { if (my === epoch) { $("err").textContent = e.message; busy = false; } }
+  finally { stopThinking(); }
+  if (my !== epoch) return;
+  render();
+  if (cfg.mode === "EE") setTimeout(maybeEngine, 350);
+}
+
+async function animate(m) {
+  const path = [m.from];
+  let b = base.slice(), cur = m.from;
+  for (const st of m.steps) {
+    b = applyStep(b, cur, st.to, st.kind);
+    cur = st.to; path.push(cur);
+    view = b; lastMove = { path: path.slice() };
+    render();
+    await new Promise(r => setTimeout(r, 380));
+  }
+  base = b;
+}
+
+async function hint() {
+  if (!humanTurn()) return;
+  const my = ++epoch;
+  busy = true; startThinking(); updateControls();
+  try {
+    const r = await api("/api/go", { moves: game.moves, variant: cfg.variant, movetime: cfg.movetime, net: cfg.net || null });
+    if (my !== epoch) return;
+    showInfo(r.info, game.side);
+    const m = parseMove(r.bestmove);
+    hintMove = { path: [m.from, ...m.steps.map(s => s.to)] };
+    $("err").textContent = "Suggestion : " + r.bestmove;
+  } catch (e) { if (my === epoch) $("err").textContent = e.message; }
+  finally { stopThinking(); if (my === epoch) busy = false; }
+  resetInput(); render();
+}
+
+// ---------- Panneau ----------
+let thinkTimer = null;
+function startThinking() {
+  const bar = $("thinkBar"), t0 = performance.now();
+  $("thinking").classList.add("on");
+  clearInterval(thinkTimer);
+  thinkTimer = setInterval(() => { bar.style.width = Math.min(100, (performance.now() - t0) / cfg.movetime * 100) + "%"; }, 50);
+}
+function stopThinking() { clearInterval(thinkTimer); $("thinking").classList.remove("on"); $("thinkBar").style.width = "0"; }
+
+const fmt = n => n >= 1e6 ? (n / 1e6).toFixed(1) + "M" : n >= 1e3 ? (n / 1e3).toFixed(0) + "k" : String(n);
+function showInfo(info, side) {
+  lastInfo = info;
+  if (!info || !info.score) return;
+  $("sDepth").textContent = info.depth ?? "–";
+  $("sNodes").textContent = info.nodes != null ? fmt(info.nodes) : "–";
+  $("sNps").textContent = info.nps != null ? fmt(info.nps) : "–";
+  $("pv").textContent = info.pv && info.pv.length ? "Variante : " + info.pv.join(" ") : "";
+  // Score du point de vue du camp au trait -> ramené au point de vue des Blancs.
+  const sgn = side === "W" ? 1 : -1, v = info.score.value * sgn;
+  let pct, lbl;
+  if (info.score.type === "mate") { pct = v > 0 ? 100 : 0; lbl = (v > 0 ? "+" : "-") + "M" + Math.abs(v); }
+  else { pct = 100 / (1 + Math.exp(-v / 250)); lbl = (v >= 0 ? "+" : "") + (v / 100).toFixed(2); }
+  $("evalW").style.width = pct + "%";
+  $("evalLbl").textContent = lbl;
+}
+
+const STATUS = { "white wins": "Les Blancs gagnent", "black wins": "Les Noirs gagnent",
+  "draw (no-capture limit)": "Nulle (limite de coups sans capture)", "draw (threefold repetition)": "Nulle (triple répétition)" };
+
+function updateControls() {
+  const over = game.status !== "ongoing";
+  $("turnDot").className = "dot " + game.side;
+  let t = (game.side === "W" ? "Blancs" : "Noirs") + " au trait";
+  if (busy && engineTurn()) t = "Le moteur réfléchit…";
+  else if (humanTurn() && cfg.mode !== "HH") t = "À vous de jouer";
+  $("turnText").textContent = over ? "Partie terminée" : t;
+  $("banner").textContent = over ? (STATUS[game.status] || game.status) : "";
+  $("banner").classList.toggle("show", over);
+  $("aw").classList.toggle("show", !!pendingAW);
+  $("stopChain").style.display = chosen && chosen.steps.length && !pendingAW && exactMove() ? "" : "none";
+  $("undo").disabled = busy || game.moves.length === 0 || cfg.mode === "EE";
+  $("hint").disabled = !humanTurn();
+  let w = 0, b = 0;
+  for (const p of view) if (p) p.c === "W" ? w++ : b++;
+  $("cntW").textContent = w; $("cntB").textContent = b;
+  $("fen").textContent = game.fen || "";
+  const tb = $("moves").querySelector("tbody");
+  let html = "";
+  for (let i = 0; i < game.moves.length; i += 2) {
+    const cur = j => (j === game.moves.length - 1 ? ' class="cur"' : "");
+    html += `<tr><td>${i / 2 + 1}.</td><td${cur(i)}>${game.moves[i]}</td><td${cur(i + 1)}>${game.moves[i + 1] || ""}</td></tr>`;
+  }
+  if (tb.innerHTML !== html) { tb.innerHTML = html; $("moves").scrollTop = 1e9; }
+}
+
+// ---------- Actions ----------
+async function newGame() {
+  epoch++; busy = false; stopThinking();
+  readCfg();
+  game.moves = []; lastMove = null; hintMove = null; base = [];
+  flipped = cfg.mode === "B";
+  buildBoard();
+  $("err").textContent = "";
+  $("evalW").style.width = "50%"; $("evalLbl").textContent = "0.00";
+  ["sDepth", "sNodes", "sNps"].forEach(i => ($(i).textContent = "–")); $("pv").textContent = "";
+  try { await refresh(); } catch (e) { $("err").textContent = e.message; }
+  maybeEngine();
+}
+
+async function undo() {
+  if (busy || !game.moves.length) return;
+  epoch++;
+  let n = 1;
+  if (cfg.mode === "W" || cfg.mode === "B") {
+    // revenir au dernier trait du joueur humain
+    const humanSide = cfg.mode;
+    n = 0;
+    do { n++; } while (n < game.moves.length && ((game.moves.length - n) % 2 === 0 ? "W" : "B") !== humanSide);
+    if (((game.moves.length - n) % 2 === 0 ? "W" : "B") !== humanSide) n = game.moves.length;
+  }
+  game.moves.splice(game.moves.length - n, n);
+  lastMove = null; hintMove = null; base = [];
+  try { await refresh(); } catch (e) { $("err").textContent = e.message; }
+  maybeEngine();
+}
+
+function readCfg() {
+  cfg.mode = $("mode").value; cfg.movetime = +$("movetime").value; cfg.net = $("net").value; cfg.variant = $("variant").value;
+}
+
+function save() {
+  try { localStorage.setItem("fanorona-gui", JSON.stringify({ cfg, moves: game.moves, flipped })); } catch (e) {}
+}
+
+$("newGame").onclick = newGame;
+$("undo").onclick = undo;
+$("hint").onclick = hint;
+$("flip").onclick = () => { flipped = !flipped; buildBoard(); render(); save(); };
+$("chooseA").onclick = () => pendingAW && chooseKind("A");
+$("chooseW").onclick = () => pendingAW && chooseKind("W");
+$("stopChain").onclick = () => chosen && exactMove() && commit(exactMove());
+$("movetime").onchange = $("net").onchange = () => { readCfg(); save(); };
+$("mode").onchange = () => { readCfg(); save(); render(); if (!busy) maybeEngine(); };
+$("variant").onchange = () => { $("err").textContent = "La variante s'applique à la prochaine partie."; };
+$("fen").onclick = () => { try { navigator.clipboard.writeText(game.fen); $("err").textContent = "FEN copiée."; } catch (e) {} };
+document.addEventListener("keydown", e => { if (e.key === "Escape" && chosen) { resetInput(); render(); } });
+svg.addEventListener("contextmenu", e => { if (chosen) { e.preventDefault(); resetInput(); render(); } });
+
+(async function init() {
+  try {
+    const c = await api("/api/config");
+    for (const n of c.nets) { const o = document.createElement("option"); o.value = n; o.textContent = "NNUE " + n; $("net").appendChild(o); }
+    if (c.defaultNet) $("net").value = c.defaultNet;
+  } catch (e) { $("err").textContent = "Serveur injoignable : " + e.message; }
+  let saved = null;
+  try { saved = JSON.parse(localStorage.getItem("fanorona-gui")); } catch (e) {}
+  if (saved && saved.cfg) {
+    for (const k of ["mode", "movetime", "net", "variant"]) {
+      const sel = $(k), v = String(saved.cfg[k] ?? "");
+      if ([...sel.options].some(o => o.value === v)) sel.value = v;
+    }
+  }
+  readCfg();
+  if (saved && Array.isArray(saved.moves) && saved.moves.length) {
+    game.moves = saved.moves; flipped = !!saved.flipped;
+    buildBoard();
+    try { await refresh(); maybeEngine(); return; } catch (e) { game.moves = []; }
+  }
+  newGame();
+})();
+</script>
+</body>
+</html>

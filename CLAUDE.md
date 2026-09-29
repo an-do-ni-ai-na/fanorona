@@ -18,6 +18,10 @@ python3 tools/nnue/train.py data/gensfen.txt --epochs 20 --out checkpoints/net.p
 python3 tools/nnue/verify.py checkpoints/net.nnue --samples data/gensfen.txt --n 300   # C++ == référence numpy ?
 ```
 
+Interface web de jeu : `python3 tools/gui/server.py --port 8090` (stdlib seule). Sur fanorona-dev elle tourne
+en service systemd `fanorona-gui` (port 8090) et utilise le binaire `./fanorona` et `checkpoints/*.nnue` du dépôt
+tels quels : un `make` est pris en compte à la requête suivante, sans redémarrage.
+
 Activer NNUE (UCI) : `setoption name EvalFile value checkpoints/net_v1.nnue` puis
 `setoption name UseNNUE value true`. Désactivé par défaut (HCE inchangée).
 
@@ -55,6 +59,8 @@ g++ -g -O0 -std=c++17 -Isrc -fsanitize=address,undefined src/{bitboard,position,
 | `tests/test_main.cpp` | tests des règles, perft, symétrie, clés, recherche |
 | `tools/match.py` | matchs entre deux binaires : parties fixes ou arrêt SPRT (`--sprt`), suivi live optionnel |
 | `tools/sprt.py` | test séquentiel SPRT (LLR gaussien sur le score moyen, cf. fishtest/cutechess-cli) |
+| `tools/gui/server.py` | interface web : sert `index.html` + API JSON (`/api/state`, `/api/go`), un processus moteur par requête |
+| `tools/gui/index.html` | plateau SVG, saisie des chaînes de captures, choix approche/retrait (la logique de capture JS ne sert qu'à l'animation, le moteur valide) |
 | `tools/metrics_logger.py` | journalisation JSONL des lignes UCI `info` + résultats, pour Grafana/Loki |
 | `tools/nnue/train.py` | entraînement PyTorch du réseau NNUE à partir des données `gensfen` |
 | `tools/nnue/verify.py` | vérifie que `src/nnue.cpp` donne EXACTEMENT le même score qu'une référence numpy |
@@ -76,6 +82,7 @@ g++ -g -O0 -std=c++17 -Isrc -fsanitize=address,undefined src/{bitboard,position,
 - **Scores** : centi-pions du point de vue du camp au trait ; `mate_in(ply)` / `mated_in(ply)` ; conversion
   `value_to_tt` / `value_from_tt` obligatoire pour les scores de mat dans la TT.
 - **Historique de répétition** : `Search::think()` reçoit les clés de la partie, la dernière = position racine.
+- **GUI** : ne jamais fermer stdin du moteur avant `bestmove` (fin de stdin = `quit` = arrêt immédiat de la recherche).
 - Commentaires en français, identifiants en anglais, style Stockfish (clang-format Google, largeur 120).
 
 ## Valeurs de référence (régressions)

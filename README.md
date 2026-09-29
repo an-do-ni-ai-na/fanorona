@@ -29,6 +29,20 @@ Ou jouer directement contre le moteur :
 ./fanorona "play w 2000"     # vous avez les blancs, 2 s de réflexion par coup
 ```
 
+### Interface web
+
+```sh
+python3 tools/gui/server.py --port 8090    # puis http://localhost:8090/
+```
+
+Plateau cliquable pour jouer contre le moteur (Blancs ou Noirs), à deux, ou regarder le moteur jouer
+contre lui-même. Choix du temps de réflexion, de l'évaluation (HCE ou un réseau `checkpoints/*.nnue`) et de
+la variante (`MandatoryContinuation`), indice, annulation, évaluation et variante principale en direct.
+Saisie : cliquer la pièce puis chaque case d'arrivée ; si un déplacement permet approche **et** retrait,
+cliquer la pièce à capturer (ou le bouton correspondant) ; « Arrêter la capture » (ou re-cliquer la pièce)
+termine une chaîne. Aucune dépendance Python : le serveur lance un processus `./fanorona` éphémère par
+requête (`position startpos moves ...`), le moteur reste seul juge des règles.
+
 ### Commandes
 
 | Commande | Rôle |
