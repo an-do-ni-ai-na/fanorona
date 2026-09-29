@@ -12,14 +12,17 @@ tourner en parallèle sans session à gérer.
     python3 tools/gui/server.py --engine ./fanorona --nets checkpoints --port 8090
 
 API :
-    GET  /api/config                       -> réseaux NNUE disponibles, limites
+    GET  /api/config                       -> réseaux NNUE disponibles, niveaux, limites
     POST /api/state {moves, variant}       -> fen, coups légaux, statut
-    POST /api/go    {moves, variant, movetime, net}  -> meilleur coup + infos de recherche, puis nouvel état
+    POST /api/go    {moves, variant, movetime, net, level}  -> coup du moteur + infos de recherche, puis nouvel état
+                                           (level 1..6, 6 = pleine force ; les indices utilisent toujours 6)
 """
 
 import argparse
 import json
+import math
 import os
+import random
 import re
 import subprocess
 import threading
@@ -102,50 +105,129 @@ def parse_info(line):
     return info
 
 
+# Niveaux de difficulté. Le moteur n'a pas d'option de force : on l'affaiblit depuis l'extérieur.
+#   "sample" : chaque coup légal est évalué par une recherche courte (profondeur `depth`), puis tiré au sort
+#              avec une probabilité softmax exp(score / temp) — façon "Skill Level" de Stockfish : les bons coups
+#              restent favoris, mais les erreurs sont possibles et d'autant plus graves que `temp` est grand ;
+#   "depth"  : recherche normale plafonnée en profondeur (et par le temps choisi) ;
+#   "full"   : recherche normale au temps choisi.
+LEVELS = {
+    1: {"name": "Débutant", "mode": "sample", "depth": 1, "temp": 250},
+    2: {"name": "Facile", "mode": "sample", "depth": 2, "temp": 120},
+    3: {"name": "Intermédiaire", "mode": "sample", "depth": 3, "temp": 50},
+    4: {"name": "Confirmé", "mode": "depth", "depth": 4},
+    5: {"name": "Expert", "mode": "depth", "depth": 5},
+    6: {"name": "Maître", "mode": "full"},
+}
+MATE_CP = 10000
+
+
+class Engine:
+    """Processus moteur interactif. stdin doit rester ouvert jusqu'au bestmove : une fin de stdin vaut "quit",
+    qui arrête la recherche en cours."""
+
+    def __init__(self, timeout):
+        self.p = subprocess.Popen([args.engine], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True,
+                                  bufsize=1, cwd=args.cwd)
+        self.timer = threading.Timer(timeout, self.p.kill)
+        self.timer.start()
+
+    def send(self, cmds):
+        self.p.stdin.write("\n".join(cmds) + "\n")
+        self.p.stdin.flush()
+
+    def go(self, cmds):
+        """Envoie des commandes se terminant par un `go`, renvoie (bestmove, dernière ligne info)."""
+        self.send(cmds)
+        last = {}
+        for line in self.p.stdout:
+            if line.startswith("info string illegal move") or (line.startswith("info string nnue:")
+                                                               and "chargé" not in line):
+                raise EngineError(line.strip()[len("info string "):])
+            if line.startswith("info depth"):
+                last = parse_info(line)
+            elif line.startswith("bestmove"):
+                return line.split()[1], last
+        raise EngineError("pas de réponse du moteur (délai dépassé)")
+
+    def close(self):
+        self.timer.cancel()
+        try:
+            self.p.stdin.write("quit\n")
+            self.p.stdin.close()
+            self.p.wait(timeout=5)
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+        if self.p.poll() is None:
+            self.p.kill()
+
+
+def score_cp(info):
+    """Score d'une ligne info en centipions (mats ramenés à ±MATE_CP, plus proche = plus grand)."""
+    sc = info.get("score")
+    if not sc:
+        return 0
+    if sc["type"] == "mate":
+        v = sc["value"]
+        return MATE_CP - abs(v) if v > 0 else -MATE_CP + abs(v)
+    return sc["value"]
+
+
+def sample_move(eng, req, legal, lv):
+    """Évalue chaque coup légal (point de vue du camp qui joue) puis en tire un au sort (softmax)."""
+    base = preamble(req)
+    pos_cmd = base[-1] + ("" if req.get("moves") else " moves")
+    scored = []
+    for m in legal:
+        best, info = eng.go(base[:-1] + [f"{pos_cmd} {m}", f"go depth {lv['depth']}"])
+        # Après le coup, c'est l'adversaire qui a le trait : on inverse. Pas de coup pour lui = il a perdu
+        # (ou nulle détectée : score 0 sans ligne info).
+        s = MATE_CP - 1 if best == "(none)" else -score_cp(info)
+        scored.append((s, m, info))
+    top = max(s for s, _, _ in scored)
+    weights = [math.exp((s - top) / lv["temp"]) for s, _, _ in scored]
+    s, m, info = random.choices(scored, weights=weights)[0]
+    info = dict(info, score={"type": "cp", "value": s}, pv=[m])
+    if abs(s) >= MATE_CP - 100:  # mat en N coups (déjà en coups, pas en demi-coups : cf. score_cp)
+        info["score"] = {"type": "mate", "value": (MATE_CP - abs(s)) * (1 if s > 0 else -1)}
+    info["candidates"] = len(scored)
+    return m, info
+
+
 def search(req):
     movetime = max(50, min(int(req.get("movetime", 1000)), MAX_MOVETIME))
-    cmds = []
+    level = LEVELS.get(int(req.get("level", 6)))
+    if level is None:
+        raise EngineError("niveau inconnu")
+    opts = []
     net = req.get("net")
     if net:
         nets = available_nets()
         if net not in nets:
             raise EngineError(f"réseau inconnu : {net}")
-        cmds += [f"setoption name EvalFile value {nets[net]}", "setoption name UseNNUE value true"]
-    cmds += preamble(req) + [f"go movetime {movetime}"]
+        opts += [f"setoption name EvalFile value {nets[net]}", "setoption name UseNNUE value true"]
+
+    legal = get_state(req)["legal"] if level["mode"] == "sample" else None
+    if legal is not None and len(legal) == 1:
+        level = LEVELS[6]  # coup forcé : inutile de tirer au sort
+        movetime = 50
 
     if not search_slots.acquire(timeout=movetime / 1000 + 30):
         raise EngineError("moteur occupé, réessayez")
     try:
-        # stdin doit rester ouvert jusqu'au bestmove : une fin de stdin vaut "quit", qui arrête la recherche.
-        p = subprocess.Popen([args.engine], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True, bufsize=1,
-                             cwd=args.cwd)
-        timer = threading.Timer(movetime / 1000 + 15, p.kill)
-        timer.start()
+        eng = Engine(timeout=movetime / 1000 + 30)
         try:
-            p.stdin.write("\n".join(cmds) + "\n")
-            p.stdin.flush()
-            last, best = {}, None
-            for line in p.stdout:
-                if line.startswith("info string illegal move") or (line.startswith("info string nnue:")
-                                                                   and "chargé" not in line):
-                    raise EngineError(line.strip()[len("info string "):])
-                if line.startswith("info depth"):
-                    last = parse_info(line)
-                elif line.startswith("bestmove"):
-                    best = line.split()[1]
-                    break
-            if best is None:
-                raise EngineError("pas de réponse du moteur (délai dépassé)")
-            p.stdin.write("quit\n")
-            p.stdin.close()
-            p.wait(timeout=5)
+            eng.send(opts)
+            if level["mode"] == "sample" and legal:
+                best, info = sample_move(eng, req, legal, level)
+            else:
+                go = f"go movetime {movetime}" + (f" depth {level['depth']}" if level["mode"] == "depth" else "")
+                best, info = eng.go(preamble(req) + [go])
         finally:
-            timer.cancel()
-            if p.poll() is None:
-                p.kill()
+            eng.close()
     finally:
         search_slots.release()
-    return {"bestmove": best, "info": last}
+    return {"bestmove": best, "info": info}
 
 
 def available_nets():
@@ -183,7 +265,9 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/api/config":
             nets = list(available_nets())
             default = "net_v3" if "net_v3" in nets else (nets[-1] if nets else None)
-            self.send_json(200, {"nets": nets, "defaultNet": default, "maxMovetime": MAX_MOVETIME})
+            self.send_json(200, {"nets": nets, "defaultNet": default, "maxMovetime": MAX_MOVETIME,
+                                 "levels": [{"id": k, "name": v["name"], "timed": v["mode"] != "sample"}
+                                            for k, v in LEVELS.items()]})
         else:
             self.send_json(404, {"error": "introuvable"})
 

@@ -133,6 +133,8 @@ button.W { border-color: var(--withdraw); color: var(--withdraw); }
           <option value="HH">Deux joueurs</option>
           <option value="EE">Moteur contre moteur</option>
         </select></label>
+      <label class="row">Niveau
+        <select id="level"><option value="6">Maître</option></select></label>
       <label class="row">Temps de réflexion
         <select id="movetime">
           <option value="200">0,2 s</option><option value="500">0,5 s</option>
@@ -186,7 +188,8 @@ const inside = (x, y) => x >= 0 && x < W && y >= 0 && y < H;
 const other = c => (c === "W" ? "B" : "W");
 
 // ---------- État ----------
-let cfg = { mode: "W", movetime: 1000, net: "", variant: "free" };
+let cfg = { mode: "W", level: 6, movetime: 1000, net: "", variant: "free" };
+let levels = [];
 let game = { moves: [], fen: null, legal: [], status: "ongoing", side: "W" };
 let base = [];          // plateau de la position courante : tableau de 45 {id, c} | null
 let view = [];          // plateau affiché (base + étapes en cours de saisie)
@@ -489,7 +492,8 @@ async function maybeEngine() {
   const my = ++epoch;
   busy = true; startThinking(); updateControls();
   try {
-    const r = await api("/api/go", { moves: game.moves, variant: cfg.variant, movetime: cfg.movetime, net: cfg.net || null });
+    const r = await api("/api/go", { moves: game.moves, variant: cfg.variant, movetime: cfg.movetime, net: cfg.net || null,
+      level: cfg.level });
     if (my !== epoch) return;
     showInfo(r.info, game.side);
     await animate(parseMove(r.bestmove));
@@ -550,7 +554,8 @@ function showInfo(info, side) {
   $("sDepth").textContent = info.depth ?? "–";
   $("sNodes").textContent = info.nodes != null ? fmt(info.nodes) : "–";
   $("sNps").textContent = info.nps != null ? fmt(info.nps) : "–";
-  $("pv").textContent = info.pv && info.pv.length ? "Variante : " + info.pv.join(" ") : "";
+  $("pv").textContent = info.candidates ? `Coup tiré au sort parmi ${info.candidates} (niveau ${levelName()})`
+    : info.pv && info.pv.length ? "Variante : " + info.pv.join(" ") : "";
   // Score du point de vue du camp au trait -> ramené au point de vue des Blancs.
   const sgn = side === "W" ? 1 : -1, v = info.score.value * sgn;
   let pct, lbl;
@@ -620,7 +625,16 @@ async function undo() {
   maybeEngine();
 }
 
+const levelName = () => (levels.find(l => l.id === cfg.level) || {}).name || cfg.level;
+function syncTimeSelect() {
+  const lv = levels.find(l => l.id === cfg.level);
+  // Aux niveaux faibles, la force vient de la profondeur et du tirage, pas du temps (sauf pour l'indice).
+  $("movetime").title = lv && !lv.timed ? "Sans effet à ce niveau, sauf pour l'indice" : "";
+  $("movetime").style.opacity = lv && !lv.timed ? ".55" : "";
+}
+
 function readCfg() {
+  cfg.level = +$("level").value;
   cfg.mode = $("mode").value; cfg.movetime = +$("movetime").value; cfg.net = $("net").value; cfg.variant = $("variant").value;
 }
 
@@ -635,7 +649,7 @@ $("flip").onclick = () => { flipped = !flipped; buildBoard(); render(); save(); 
 $("chooseA").onclick = () => pendingAW && chooseKind("A");
 $("chooseW").onclick = () => pendingAW && chooseKind("W");
 $("stopChain").onclick = () => chosen && exactMove() && commit(exactMove());
-$("movetime").onchange = $("net").onchange = () => { readCfg(); save(); };
+$("movetime").onchange = $("net").onchange = $("level").onchange = () => { readCfg(); syncTimeSelect(); save(); };
 $("mode").onchange = () => { readCfg(); save(); render(); if (!busy) maybeEngine(); };
 $("variant").onchange = () => { $("err").textContent = "La variante s'applique à la prochaine partie."; };
 $("fen").onclick = () => { try { navigator.clipboard.writeText(game.fen); $("err").textContent = "FEN copiée."; } catch (e) {} };
@@ -647,16 +661,22 @@ svg.addEventListener("contextmenu", e => { if (chosen) { e.preventDefault(); res
     const c = await api("/api/config");
     for (const n of c.nets) { const o = document.createElement("option"); o.value = n; o.textContent = "NNUE " + n; $("net").appendChild(o); }
     if (c.defaultNet) $("net").value = c.defaultNet;
+    if (c.levels) {
+      levels = c.levels;
+      $("level").innerHTML = levels.map(l => `<option value="${l.id}">${l.id} – ${l.name}</option>`).join("");
+      $("level").value = "4";
+    }
   } catch (e) { $("err").textContent = "Serveur injoignable : " + e.message; }
   let saved = null;
   try { saved = JSON.parse(localStorage.getItem("fanorona-gui")); } catch (e) {}
   if (saved && saved.cfg) {
-    for (const k of ["mode", "movetime", "net", "variant"]) {
+    for (const k of ["mode", "level", "movetime", "net", "variant"]) {
       const sel = $(k), v = String(saved.cfg[k] ?? "");
       if ([...sel.options].some(o => o.value === v)) sel.value = v;
     }
   }
   readCfg();
+  syncTimeSelect();
   if (saved && Array.isArray(saved.moves) && saved.moves.length) {
     game.moves = saved.moves; flipped = !!saved.flipped;
     buildBoard();

@@ -36,7 +36,8 @@ python3 tools/gui/server.py --port 8090    # puis http://localhost:8090/
 ```
 
 Plateau cliquable pour jouer contre le moteur (Blancs ou Noirs), à deux, ou regarder le moteur jouer
-contre lui-même. Choix du temps de réflexion, de l'évaluation (HCE ou un réseau `checkpoints/*.nnue`) et de
+contre lui-même. Six niveaux de difficulté (1–3 : chaque coup légal est évalué par une recherche courte
+puis tiré au sort, les bons coups restant favoris ; 4–5 : profondeur plafonnée ; 6 : pleine force). Choix du temps de réflexion, de l'évaluation (HCE ou un réseau `checkpoints/*.nnue`) et de
 la variante (`MandatoryContinuation`), indice, annulation, évaluation et variante principale en direct.
 Saisie : cliquer la pièce puis chaque case d'arrivée ; si un déplacement permet approche **et** retrait,
 cliquer la pièce à capturer (ou le bouton correspondant) ; « Arrêter la capture » (ou re-cliquer la pièce)
