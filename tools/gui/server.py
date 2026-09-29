@@ -16,6 +16,7 @@ API :
     POST /api/state {moves, variant}       -> fen, coups légaux, statut
     POST /api/go    {moves, variant, movetime, net, level}  -> coup du moteur + infos de recherche, puis nouvel état
                                            (level 1..6, 6 = pleine force ; les indices utilisent toujours 6)
+    POST /api/eval  {moves, plies, depth, net, variant}  -> analyse : score + meilleur coup après moves[:ply]
 """
 
 import argparse
@@ -230,6 +231,49 @@ def search(req):
     return {"bestmove": best, "info": info}
 
 
+MAX_EVAL_BATCH = 16
+
+
+def evaluate_plies(req):
+    """Analyse d'une partie : pour chaque demi-coup demandé, évalue la position obtenue après `moves[:ply]`
+    (recherche à profondeur fixe). Scores du point de vue du camp au trait, comme en UCI."""
+    moves = check_moves(req.get("moves", []))
+    plies = req.get("plies", [])
+    if not isinstance(plies, list) or not 0 < len(plies) <= MAX_EVAL_BATCH:
+        raise EngineError(f"entre 1 et {MAX_EVAL_BATCH} positions par requête")
+    if any(not isinstance(k, int) or not 0 <= k <= len(moves) for k in plies):
+        raise EngineError("demi-coup hors de la partie")
+    depth = max(1, min(int(req.get("depth", 6)), 12))
+    opts = []
+    net = req.get("net")
+    if net:
+        nets = available_nets()
+        if net not in nets:
+            raise EngineError(f"réseau inconnu : {net}")
+        opts += [f"setoption name EvalFile value {nets[net]}", "setoption name UseNNUE value true"]
+    if req.get("variant") == "mandatory":
+        opts.append("setoption name MandatoryContinuation value true")
+
+    if not search_slots.acquire(timeout=60):
+        raise EngineError("moteur occupé, réessayez")
+    out = []
+    try:
+        eng = Engine(timeout=60 + 10 * len(plies))
+        try:
+            eng.send(opts)
+            for k in plies:
+                pos = "position startpos" + (" moves " + " ".join(moves[:k]) if k else "")
+                # "ucinewgame" : chaque position est analysée sans dépendre de la précédente (TT vidée).
+                best, info = eng.go(["ucinewgame", pos, f"go depth {depth}"])
+                out.append({"ply": k, "best": None if best == "(none)" else best, "score": info.get("score"),
+                            "depth": info.get("depth"), "pv": info.get("pv", [])})
+        finally:
+            eng.close()
+    finally:
+        search_slots.release()
+    return {"evals": out}
+
+
 def available_nets():
     d = Path(args.nets)
     if not d.is_dir():
@@ -279,6 +323,8 @@ class Handler(BaseHTTPRequestHandler):
             req = json.loads(self.rfile.read(n) or b"{}")
             if self.path == "/api/state":
                 self.send_json(200, get_state(req))
+            elif self.path == "/api/eval":
+                self.send_json(200, evaluate_plies(req))
             elif self.path == "/api/go":
                 res = search(req)
                 res["state"] = get_state({**req, "moves": req.get("moves", []) + [res["bestmove"]]})

@@ -59,8 +59,8 @@ g++ -g -O0 -std=c++17 -Isrc -fsanitize=address,undefined src/{bitboard,position,
 | `tests/test_main.cpp` | tests des règles, perft, symétrie, clés, recherche |
 | `tools/match.py` | matchs entre deux binaires : parties fixes ou arrêt SPRT (`--sprt`), suivi live optionnel |
 | `tools/sprt.py` | test séquentiel SPRT (LLR gaussien sur le score moyen, cf. fishtest/cutechess-cli) |
-| `tools/gui/server.py` | interface web : sert `index.html` + API JSON (`/api/state`, `/api/go`), un processus moteur par requête ; niveaux de difficulté `LEVELS` (affaiblissement externe, le moteur n'a pas d'option de force) |
-| `tools/gui/index.html` | plateau SVG, saisie des chaînes de captures, choix approche/retrait (la logique de capture JS ne sert qu'à l'animation, le moteur valide) |
+| `tools/gui/server.py` | interface web : sert `index.html` + API JSON (`/api/state`, `/api/go`, `/api/eval` pour l'analyse), un processus moteur par requête ; niveaux de difficulté `LEVELS` (affaiblissement externe, le moteur n'a pas d'option de force) |
+| `tools/gui/index.html` | page unique façon lichess : plateau SVG (clic/glisser), pendules, coups navigables, analyse d'après-partie. `positions[k]` est rejoué localement avec des identifiants de pièces stables (animations) ; la logique de capture JS ne sert qu'à l'affichage, le moteur valide |
 | `tools/metrics_logger.py` | journalisation JSONL des lignes UCI `info` + résultats, pour Grafana/Loki |
 | `tools/nnue/train.py` | entraînement PyTorch du réseau NNUE à partir des données `gensfen` |
 | `tools/nnue/verify.py` | vérifie que `src/nnue.cpp` donne EXACTEMENT le même score qu'une référence numpy |
