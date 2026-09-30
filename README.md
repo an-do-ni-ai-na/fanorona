@@ -36,7 +36,9 @@ python3 tools/gui/server.py --port 8090    # puis http://localhost:8090/
 ```
 
 Interface inspirée de lichess : pendules (cadences 1+0 à 30+0 ou illimité), cartes des joueurs, liste des
-coups navigable (flèches du clavier, Origine/Fin), glisser-déposer ou clic, sons, thème sombre/clair. On joue
+coups navigable (flèches du clavier, Origine/Fin), glisser-déposer ou clic, sons. Menu Apparence : thèmes
+Papier (clair), Ardoise (sombre) et Veille (nuit, éventuellement automatique de 22 h à 7 h), plateau bois ou granite
+(charte graphique : `tools/gui/CHARTE.md`). On joue
 contre le moteur (six niveaux, voir ci-dessous), à deux sur le même écran, ou on regarde le moteur jouer contre
 lui-même ; reprise de coup, indice, abandon, revanche. En fin de partie, « Analyser » évalue chaque position
 (`/api/eval`) : courbe d'avantage, imprécisions `?!`, erreurs `?` et gaffes `??` (perte de chances de gain

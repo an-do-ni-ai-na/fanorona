@@ -61,6 +61,7 @@ g++ -g -O0 -std=c++17 -Isrc -fsanitize=address,undefined src/{bitboard,position,
 | `tools/sprt.py` | test séquentiel SPRT (LLR gaussien sur le score moyen, cf. fishtest/cutechess-cli) |
 | `tools/gui/server.py` | interface web : sert `index.html` + API JSON (`/api/state`, `/api/go`, `/api/eval` pour l'analyse), un processus moteur par requête ; niveaux de difficulté `LEVELS` (affaiblissement externe, le moteur n'a pas d'option de force) |
 | `tools/gui/index.html` | page unique façon lichess : plateau SVG (clic/glisser), pendules, coups navigables, analyse d'après-partie. `positions[k]` est rejoué localement avec des identifiants de pièces stables (animations) ; la logique de capture JS ne sert qu'à l'affichage, le moteur valide |
+| `tools/gui/CHARTE.md` | charte graphique (typographie, palettes des 3 thèmes, plateaux bois/granite) : tout passe par les variables CSS de `:root` |
 | `tools/metrics_logger.py` | journalisation JSONL des lignes UCI `info` + résultats, pour Grafana/Loki |
 | `tools/nnue/train.py` | entraînement PyTorch du réseau NNUE à partir des données `gensfen` |
 | `tools/nnue/verify.py` | vérifie que `src/nnue.cpp` donne EXACTEMENT le même score qu'une référence numpy |
