@@ -251,6 +251,23 @@ details.panel[open] > summary { margin-bottom: 10px; }
 .map .dot.s2 { background: color-mix(in srgb, var(--accent) 55%, transparent); border-color: var(--accent); }
 .map .dot.s3 { background: var(--accent); border-color: var(--accent); }
 .map .dot.cur { outline: 2px solid var(--info); outline-offset: 2px; }
+body.retro #contBox, body.puzzle #contBox, body.learning #contBox { display: none; }
+.cont-head { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--muted); margin-bottom: 8px; }
+.cont-head .spacer { flex: 1; }
+.cont-head > span:nth-child(2) { white-space: nowrap; }
+.cont-head .chips { flex-wrap: nowrap; gap: 4px; }
+.cont-head .chips button { padding: 1px 9px; font-size: 12px; min-height: 0; }
+.cont-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); animation: pulse 1.2s ease-in-out infinite; }
+.cont-dot.off { animation: none; background: var(--border); }
+@keyframes pulse { 50% { opacity: .25; } }
+.cont-lines { display: flex; flex-direction: column; gap: 6px; }
+.cont-line { display: flex; gap: 8px; align-items: baseline; font: 12.5px/1.45 var(--font-mono); color: var(--text); min-width: 0; }
+.cont-line .sc { flex: none; min-width: 52px; text-align: center; font-weight: 600; padding: 1px 6px; border-radius: 4px; background: var(--surface-2); color: var(--strong); }
+.cont-line .sc.w { background: #f4efe4; color: #1f1b16; } .cont-line .sc.b { background: #221d19; color: #f4efe4; }
+.cont-line .mv { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cont-note { font-size: 13px; color: var(--muted); }
+.path.cont { stroke: var(--hl-best); stroke-dasharray: none; }
+.path.cont.k2 { opacity: .55; stroke-width: 7; } .path.cont.k3 { opacity: .35; stroke-width: 6; }
 body.retro #metaBox, body.retro #engineBox, body.retro #analysisBox, body.retro #actions { display: none; }
 body.puzzle #metaBox, body.puzzle #engineBox, body.puzzle #analysisBox, body.puzzle #actions { display: none; }
 .prating { display: flex; align-items: baseline; gap: 10px; }
@@ -557,6 +574,11 @@ dialog::backdrop { background: rgba(10, 8, 6, .55); backdrop-filter: blur(2px); 
       <div class="status hidden" id="metaStatus"></div>
     </section>
 
+    <section class="box panel" id="contBox">
+      <h3><span data-i18n="cont_title">Analyse en continu</span>
+        <label class="switch" title="Activer l'analyse en continu" data-i18n-title="cont_toggle"><input type="checkbox" id="contToggle"></label></h3>
+      <div id="contBody"></div>
+    </section>
     <details class="box panel" id="engineBox">
       <summary><h3><span data-i18n="engine_details">Détails du moteur</span> <span id="engineState"></span></h3></summary>
       <div class="kv">
@@ -981,7 +1003,14 @@ function renderBoard() {
     [m.from, ...m.steps.map(s => s.to)].forEach(s => hl(s, "last"));
   }
   if (telo() && !chosen && !anim) { const wl = teloWinLine(shownBoard()); if (wl) drawPath(wl, "path"); }
-  if (!chosen && !anim) {
+  const cl = contLinesHere();
+  if (cl && !chosen && !anim) {  // analyse en continu : flèches des meilleures lignes (la plus nette = la meilleure)
+    cl.slice(0, 3).reverse().forEach((l, i, a) => {
+      if (!l.pv || !l.pv.length) return;
+      const m = parseMove(l.pv[0]);
+      drawPath([m.from, ...m.steps.map(st => st.to)], "path cont k" + (a.length - i));
+    });
+  } else if (!chosen && !anim) {
     const best = analysis && analysis.evals[viewPly] && analysis.evals[viewPly].best;
     if (best && (over() || !live())) { const m = parseMove(best); drawPath([m.from, ...m.steps.map(s => s.to)], "path best"); }
     else if (hintMove && live()) drawPath(hintMove, "path hint");
@@ -1371,9 +1400,11 @@ function judgment(i) {               // appréciation du coup i (1..n), façon l
 }
 function renderGauge() {
   let s = null;
-  if (analysis && analysis.evals[viewPly]) s = evalAt(viewPly);
+  const cl = contLinesHere();
+  if (cl && cl[0] && cl[0].score) s = whiteScore(cl[0].score, sideAt(viewPly));
+  else if (analysis && analysis.evals[viewPly]) s = evalAt(viewPly);
   else if (liveInfo && liveInfo.score && live()) s = whiteScore(liveInfo.score, liveInfo.side);
-  const show = cfg.showEval || (analysis && analysis.evals.some(Boolean));
+  const show = cfg.showEval || (analysis && analysis.evals.some(Boolean)) || !!cl;
   $("gauge").classList.toggle("hidden", !show);
   $("gauge").classList.toggle("flip", flipped);
   $("gaugeW").style.height = ((s ? s.wc : 0) + 1) * 50 + "%";
@@ -1599,7 +1630,7 @@ function flash(msg) {
 
 function render() {
   renderBoard(); renderUsers(); renderClocks(); renderMoves(); renderActions(); renderMeta(); renderEngine(); renderGauge(); renderAnalysis();
-  renderLearn(); renderRetro(); renderPuzzle();
+  renderLearn(); renderRetro(); renderPuzzle(); renderCont(); syncCont();
   $("showEval").checked = cfg.showEval;
 }
 
@@ -2300,6 +2331,77 @@ async function openArchived(id) {
 
 $("histMore").onclick = () => { histOffset += 25; loadHistList(true); };
 for (const id of ["hfProfile", "hfGame", "hfMode", "hfOutcome"]) $(id).onchange = () => { histOffset = 0; loadHistList(false); };
+
+// =====================================================================================================
+// Analyse en continu (façon lichess) : le moteur cherche sans fin sur la position affichée et renvoie ses
+// meilleures lignes (MultiPV). Une session serveur par onglet : changer de position relance l'analyse (la
+// précédente est arrêtée aussitôt), la page interroge toutes les 500 ms, le serveur coupe après 2 min ou si
+// l'onglet ne demande plus rien. Indisponible pendant une partie en cours contre l'ordinateur.
+// =====================================================================================================
+const cont = { sid: "s" + Math.random().toString(36).slice(2) + Date.now().toString(36), key: null, data: null, gen: 0,
+  timer: null, deb: null, running: false };
+const contAvailable = () => !learn && !puzzle && !retro && !((cfg.mode === "computer" || cfg.mode === "auto") && !over());
+const contReq = () => ({ sid: cont.sid, moves: game.moves.slice(0, viewPly), ...rulesReq(), net: cfg.net || null, multipv: cfg.contMpv || 3 });
+function contLinesHere() {
+  return cfg.contOn && contAvailable() && cont.data && cont.key === JSON.stringify(contReq()) && cont.data.lines.length ? cont.data.lines : null;
+}
+function stopCont() {
+  clearTimeout(cont.deb); clearInterval(cont.timer); cont.timer = null; cont.gen++;
+  if (cont.running) api(`/api/analyse/${cont.sid}/stop`, {}).catch(() => {});
+  cont.running = false; cont.key = null; cont.data = null;
+}
+function syncCont() {
+  if (!cfg.contOn || !contAvailable()) { if (cont.running || cont.key) stopCont(); return; }
+  const key = JSON.stringify(contReq());
+  if (key === cont.key) return;
+  cont.key = key; cont.data = null;
+  clearTimeout(cont.deb); clearInterval(cont.timer);
+  const gen = ++cont.gen;
+  cont.deb = setTimeout(async () => {  // petite attente : la navigation rapide (flèches) ne lance pas dix moteurs
+    try { await api("/api/analyse", contReq()); } catch (e) { if (gen === cont.gen) { cont.data = { lines: [], depth: 0, done: true, reason: e.message }; renderCont(); } return; }
+    if (gen !== cont.gen) return;
+    cont.running = true;
+    cont.timer = setInterval(async () => {
+      let d;
+      try { d = await api(`/api/analyse/${cont.sid}`); } catch (e) { return; }
+      if (gen !== cont.gen) return;
+      const changed = !cont.data || d.depth !== cont.data.depth || d.done !== cont.data.done || d.lines.length !== cont.data.lines.length;
+      cont.data = d;
+      if (d.done) {
+        clearInterval(cont.timer); cont.running = false;
+        if (d.reason === "busy") { cont.key = null; setTimeout(() => render(), 3000); }  // créneaux pris : on retente
+      }
+      if (changed) { renderBoard(); renderGauge(); renderCont(); }
+    }, 500);
+  }, 250);
+}
+function renderCont() {
+  $("contToggle").checked = !!cfg.contOn;
+  const body = $("contBody");
+  if (!cfg.contOn) { body.innerHTML = ""; return; }
+  if (!contAvailable()) { body.innerHTML = `<div class="cont-note">${t(learn || puzzle || retro ? "cont_off_mode" : "cont_off_game")}</div>`; return; }
+  const d = cont.data, mpv = cfg.contMpv || 3;
+  const chips = `<div class="chips" title="${t("cont_lines")}">${[1, 2, 3].map(n => `<button data-mpv="${n}" class="${n === mpv ? "on" : ""}">${n}</button>`).join("")}</div>`;
+  let lines;
+  if (!d || (!d.lines.length && !d.done)) lines = `<div class="cont-note">${t("cont_starting")}</div>`;
+  else if (d.reason === "busy") lines = `<div class="cont-note">${t("cont_busy")}</div>`;
+  else if (!d.lines.length) lines = `<div class="cont-note">${t("cont_none")}</div>`;
+  else lines = `<div class="cont-lines">${d.lines.map(l => {
+    const sc = l.score ? whiteScore(l.score, sideAt(viewPly)) : null;
+    const cls = sc ? (sc.cp > 0 ? "w" : sc.cp < 0 ? "b" : "") : "";
+    return `<div class="cont-line"><span class="sc ${cls}">${sc ? sc.label : "–"}</span><span class="mv">${(l.pv || []).slice(0, 8).map(hyphenate).join(" ")}</span></div>`;
+  }).join("")}</div>`;
+  const running = d && !d.done;
+  const nps = d && d.lines[0] && d.lines[0].nps ? " · " + fmtN(d.lines[0].nps) + " n/s" : "";
+  const html = `<div class="cont-head"><span class="cont-dot ${running ? "" : "off"}"></span>
+      <span>${d && d.depth ? t("cont_depth", { n: d.depth }) + nps : ""}</span><span class="spacer"></span>${chips}</div>${lines}` +
+    (d && d.done && d.reason === "time" ? `<div class="cont-note" style="margin-top:6px">${t("cont_time")}</div>` : "");
+  if (body.dataset.html === html) return;
+  body.innerHTML = html; body.dataset.html = html;
+  for (const b of body.querySelectorAll("[data-mpv]")) b.onclick = () => { cfg.contMpv = +b.dataset.mpv; save(); render(); };
+}
+$("contToggle").onchange = e => { cfg.contOn = e.target.checked; save(); render(); };
+document.addEventListener("visibilitychange", () => { if (document.hidden && cont.running) stopCont(); else if (!document.hidden) render(); });
 
 // =====================================================================================================
 // Pages : accueil, jouer (plateau), puzzles et apprendre (plateau + panneau), parties (historique).

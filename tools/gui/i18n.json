@@ -305,7 +305,17 @@
     "hist_guest": "Invité",
     "hist_profile": "Profil",
     "engine_details": "Détails du moteur",
-    "at_move": "au trait"
+    "at_move": "au trait",
+    "cont_title": "Analyse en continu",
+    "cont_lines": "Lignes",
+    "cont_depth": "prof. {n}",
+    "cont_off_game": "Indisponible pendant une partie contre l'ordinateur : terminez-la ou passez en partie à deux.",
+    "cont_off_mode": "Indisponible dans ce mode.",
+    "cont_starting": "Démarrage du moteur…",
+    "cont_time": "Arrêtée après 2 minutes : changez de position pour relancer.",
+    "cont_busy": "Moteur occupé, nouvel essai dans un instant…",
+    "cont_none": "Aucun coup possible.",
+    "cont_toggle": "Activer l'analyse en continu"
   },
   "mg": {
     "lang_name": "Malagasy",
@@ -612,6 +622,16 @@
     "hist_guest": "Vahiny",
     "hist_profile": "Mombamomba",
     "engine_details": "Antsipirian'ny motera",
-    "at_move": "anjarany"
+    "at_move": "anjarany",
+    "cont_title": "Famakafakana mitohy",
+    "cont_lines": "Andalana",
+    "cont_depth": "halalina {n}",
+    "cont_off_game": "Tsy azo atao mandritra ny lalao amin'ny solosaina : vitao aloha na lalao mpilalao roa.",
+    "cont_off_mode": "Tsy azo atao amin'ity fomba ity.",
+    "cont_starting": "Manomboka ny motera…",
+    "cont_time": "Nijanona taorian'ny 2 minitra : ovay ny toerana raha hanohy.",
+    "cont_busy": "Sahirana ny motera, handramana indray…",
+    "cont_none": "Tsy misy dia azo atao.",
+    "cont_toggle": "Alefaso ny famakafakana mitohy"
   }
 }

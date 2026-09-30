@@ -21,6 +21,8 @@ API :
     POST /api/games {partie}              -> enregistre une partie terminée ; GET/DELETE /api/games/<id>
     POST /api/games/<id>/analysis {depth, evals}  -> ajoute l'analyse ; GET /api/games/stats -> bilan
     (liste et bilan : ?profile=<id> ou ?profile=guest)
+    POST /api/analyse {sid, moves, game, …, multipv}  -> analyse en continu (remplace celle de la session) ;
+    GET /api/analyse/<sid> -> {depth, lines} ; POST /api/analyse/<sid>/stop
     GET/POST /api/profiles ; GET/POST/DELETE /api/profiles/<id> ; POST /api/profiles/<id>/{puzzle,learn,import}
 """
 
@@ -140,6 +142,9 @@ def parse_info(line):
         k = t[i]
         if k in ("depth", "seldepth", "nodes", "nps", "time", "hashfull"):
             info[k] = int(t[i + 1])
+            i += 2
+        elif k == "multipv":
+            info["multipv"] = int(t[i + 1])
             i += 2
         elif k == "score":
             info["score"] = {"type": t[i + 1], "value": int(t[i + 2])}
@@ -594,6 +599,115 @@ def import_progress(pid, req):
         return profile_row(con, pid)
 
 
+# ---------------------------------------------------------------------------------------------------------
+# Analyse en continu : une session par onglet (identifiant choisi par la page). Démarrer une analyse remplace
+# celle de la session ; la page interroge l'état toutes les ~0,5 s ; sans interrogation pendant ANA_IDLE s, ou
+# après ANA_MAX s, l'analyse s'arrête (le moteur reçoit "stop"). Chaque analyse occupe un créneau de recherche.
+# ---------------------------------------------------------------------------------------------------------
+ANA_MAX, ANA_IDLE = 120, 6
+analyses, analyses_lock = {}, threading.Lock()
+
+
+class Analysis:
+    def __init__(self, sid, req):
+        self.sid, self.req = sid, req
+        self.lines, self.depth, self.done, self.reason = {}, 0, False, ""
+        self.last_poll = self.started = time.time()
+        self.eng = None
+        self.lock = threading.Lock()
+        threading.Thread(target=self.run, daemon=True).start()
+
+    def run(self):
+        if not search_slots.acquire(timeout=5):
+            self.done, self.reason = True, "busy"
+            return
+        try:
+            mpv = max(1, min(int(self.req.get("multipv", 3)), 5))
+            opts = net_options(self.req) + [f"setoption name MultiPV value {mpv}"]
+            self.eng = Engine(timeout=ANA_MAX + 15)
+            self.eng.send(opts + preamble(self.req) + ["go infinite"])
+            for line in self.eng.p.stdout:
+                if line.startswith("info string illegal move"):
+                    self.reason = "illegal"
+                    break
+                if line.startswith("info depth"):
+                    info = parse_info(line)
+                    k = info.get("multipv", 1)
+                    with self.lock:
+                        if info.get("depth", 0) > self.depth:
+                            # nouvelle profondeur : les lignes au-delà du nombre trouvé à cette profondeur disparaissent
+                            self.lines = {kk: v for kk, v in self.lines.items() if kk <= k}
+                            self.depth = info["depth"]
+                        self.lines[k] = info
+                elif line.startswith("bestmove"):
+                    break
+        except (OSError, ValueError, EngineError) as e:
+            self.reason = str(e)
+        finally:
+            if self.eng:
+                self.eng.close()
+            search_slots.release()
+            self.done = True
+
+    def stop(self, reason="stopped"):
+        if not self.done and self.eng and self.eng.p.poll() is None:
+            self.reason = self.reason or reason
+            try:
+                self.eng.send(["stop"])
+            except OSError:
+                pass
+
+    def state(self):
+        self.last_poll = time.time()
+        with self.lock:
+            lines = [self.lines[k] for k in sorted(self.lines)]
+        return {"sid": self.sid, "depth": self.depth, "lines": lines, "done": self.done, "reason": self.reason,
+                "elapsed": round(time.time() - self.started, 1)}
+
+
+def analysis_janitor():
+    while True:
+        time.sleep(2)
+        now = time.time()
+        with analyses_lock:
+            for sid, a in list(analyses.items()):
+                if now - a.last_poll > ANA_IDLE:
+                    a.stop("idle")
+                elif now - a.started > ANA_MAX:
+                    a.stop("time")
+                if a.done and now - a.last_poll > 60:
+                    del analyses[sid]
+
+
+def start_analysis(req):
+    sid = str(req.get("sid", ""))[:40]
+    if not sid:
+        raise EngineError("session manquante")
+    check_moves(req.get("moves", []))
+    with analyses_lock:
+        old = analyses.get(sid)
+        if old:
+            old.stop("replaced")
+        a = analyses[sid] = Analysis(sid, req)
+    return a.state()
+
+
+def poll_analysis(sid):
+    with analyses_lock:
+        a = analyses.get(sid)
+    if not a:
+        raise EngineError("analyse inconnue")
+    return a.state()
+
+
+def stop_analysis(sid):
+    with analyses_lock:
+        a = analyses.get(sid)
+    if a:
+        a.stop("user")
+    return {"stopped": sid}
+
+
 def available_nets():
     d = Path(args.nets)
     if not d.is_dir():
@@ -619,6 +733,11 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         path, _, query = self.path.partition("?")
+        if path.startswith("/api/analyse/"):
+            try:
+                return self.send_json(200, poll_analysis(path.split("/")[3]))
+            except EngineError as e:
+                return self.send_json(400, {"error": str(e)})
         if path.startswith("/api/profiles"):
             try:
                 if path == "/api/profiles":
@@ -674,6 +793,10 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json(200, save_game(req))
             elif self.path.startswith("/api/games/") and self.path.endswith("/analysis"):
                 self.send_json(200, update_analysis(int(self.path.split("/")[3]), req))
+            elif self.path == "/api/analyse":
+                self.send_json(200, start_analysis(req))
+            elif self.path.startswith("/api/analyse/") and self.path.endswith("/stop"):
+                self.send_json(200, stop_analysis(self.path.split("/")[3]))
             elif self.path == "/api/profiles":
                 self.send_json(200, create_profile(req))
             elif self.path.startswith("/api/profiles/"):
@@ -719,6 +842,7 @@ def main():
     args.cwd = str(root)
     search_slots = threading.BoundedSemaphore(args.max_searches)
     init_db()
+    threading.Thread(target=analysis_janitor, daemon=True).start()
     print(f"Fanorona GUI sur http://{args.host}:{args.port}/ (moteur {args.engine})", flush=True)
     ThreadingHTTPServer((args.host, args.port), Handler).serve_forever()
 
