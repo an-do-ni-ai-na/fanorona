@@ -24,6 +24,21 @@ void init() {
 }
 }  // namespace Zobrist
 
+std::string start_fen() {
+    const char* board = Rules::variant == Variant::Dimy ? "BBBBB/BBBBB/BW1BW/WWWWW/WWWWW"
+                                                          : "BBBBBBBBB/BBBBBBBBB/BWBW1BWBW/WWWWWWWWW/WWWWWWWWW";
+    return std::string(board) + (Rules::vela == BLACK ? " b 0 1" : " w 0 1");
+}
+
+int start_pieces() { return Rules::variant == Variant::Dimy ? 24 : 44; }
+
+void set_variant(Variant v) {
+    Rules::variant = v;
+    if (v == Variant::Dimy) Board::set(5, 5);
+    else Board::set(FILE_NB, RANK_NB);
+    if (v != Variant::Tsivy) Rules::vela = COLOR_NB;  // la vela n'est définie que pour le Fanoron-Tsivy
+}
+
 Key Position::compute_key() const {
     Key k = sideToMove == BLACK ? Zobrist::side : 0;
     for (int c = 0; c < COLOR_NB; ++c)
@@ -40,22 +55,23 @@ bool Position::set(const std::string& fen) {
     if (!(is >> board >> stm)) return false;
 
     Position p{};
-    int x = 0, y = RANK_NB - 1;
+    const int files = Board::files;
+    int x = 0, y = Board::ranks - 1;
     for (char ch : board) {
         if (ch == '/') {
-            if (x != FILE_NB || y == 0) return false;
+            if (x != files || y == 0) return false;
             x = 0, --y;
         } else if (ch >= '1' && ch <= '9') {
             x += ch - '0';
         } else if (ch == 'W' || ch == 'w' || ch == 'B' || ch == 'b') {
-            if (x >= FILE_NB) return false;
+            if (x >= files) return false;
             p.byColor[(ch == 'W' || ch == 'w') ? WHITE : BLACK] |= square_bb(make_square(x, y));
             ++x;
         } else
             return false;
-        if (x > FILE_NB) return false;
+        if (x > files) return false;
     }
-    if (x != FILE_NB || y != 0) return false;
+    if (x != files || y != 0) return false;
     if (stm != "w" && stm != "b") return false;
     p.sideToMove = stm == "w" ? WHITE : BLACK;
     p.rule50 = 0;
@@ -70,9 +86,9 @@ bool Position::set(const std::string& fen) {
 
 std::string Position::fen() const {
     std::ostringstream os;
-    for (int y = RANK_NB - 1; y >= 0; --y) {
+    for (int y = Board::ranks - 1; y >= 0; --y) {
         int emptyCnt = 0;
-        for (int x = 0; x < FILE_NB; ++x) {
+        for (int x = 0; x < Board::files; ++x) {
             Bitboard b = square_bb(make_square(x, y));
             char ch = byColor[WHITE] & b ? 'W' : byColor[BLACK] & b ? 'B' : 0;
             if (!ch) {
@@ -91,24 +107,27 @@ std::string Position::fen() const {
 
 std::string Position::pretty() const {
     std::ostringstream os;
-    for (int y = RANK_NB - 1; y >= 0; --y) {
+    const int files = Board::files;
+    for (int y = Board::ranks - 1; y >= 0; --y) {
         os << ' ' << y + 1 << "  ";
-        for (int x = 0; x < FILE_NB; ++x) {
+        for (int x = 0; x < files; ++x) {
             Bitboard b = square_bb(make_square(x, y));
             os << (byColor[WHITE] & b ? 'W' : byColor[BLACK] & b ? 'B' : '.');
-            if (x < FILE_NB - 1) os << " - ";
+            if (x < files - 1) os << " - ";
         }
         os << '\n';
         if (y) {
             os << "    ";
-            for (int x = 0; x < FILE_NB; ++x) {
+            for (int x = 0; x < files; ++x) {
                 os << '|';
-                if (x < FILE_NB - 1) os << (((x + y) % 2 == 0) ? " \\ " : " / ");
+                if (x < files - 1) os << (((x + y) % 2 == 0) ? " \\ " : " / ");
             }
             os << '\n';
         }
     }
-    os << "    a   b   c   d   e   f   g   h   i\n\n";
+    os << "   ";
+    for (int x = 0; x < files; ++x) os << ' ' << char('a' + x) << "  ";
+    os << "\n\n";
     os << "Fen: " << fen() << '\n';
     os << "Key: " << std::hex << key << std::dec << '\n';
     os << "Trait: " << (sideToMove == WHITE ? "blancs (W)" : "noirs (B)") << "  W=" << popcount(byColor[WHITE])

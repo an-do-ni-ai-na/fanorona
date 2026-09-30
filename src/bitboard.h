@@ -7,9 +7,15 @@
 
 namespace fanorona {
 
-// Colonnes utiles pour éviter les débordements lors des décalages.
-constexpr Bitboard FILE_A_BB = 0x1ULL | 0x1ULL << 9 | 0x1ULL << 18 | 0x1ULL << 27 | 0x1ULL << 36;
-constexpr Bitboard FILE_I_BB = FILE_A_BB << 8;
+// Géométrie du plateau de la variante courante (fixée par Board::set, avant toute recherche).
+// Fanoron-Tsivy : 9 x 5 (défaut) ; Fanoron-Dimy : 5 x 5, logé dans les colonnes a..e de l'encodage 9 x 5.
+struct Board {
+    static inline int files = FILE_NB;
+    static inline int ranks = RANK_NB;
+    static inline Bitboard mask = ALL_SQUARES;  // cases qui existent
+    static void set(int files, int ranks);     // recalcule Neighbor et les masques de décalage
+    static bool contains(int x, int y) { return x >= 0 && x < files && y >= 0 && y < ranks; }
+};
 
 // Points "forts" : (x + y) pair. Seuls eux sont reliés en diagonale.
 constexpr Bitboard make_strong() {
@@ -23,18 +29,22 @@ constexpr Bitboard STRONG_BB = make_strong();
 // Voisin de `sq` dans la direction d (SQ_NONE si hors plateau / pas de ligne).
 extern int Neighbor[SQUARE_NB][DIR_NB];
 
+// ShiftFrom[d] : cases qui ont un voisin dans la direction d (ligne existante, arrivée sur le plateau).
+// Calculé depuis Neighbor : un seul ET avant le décalage, quel que soit le plateau.
+extern Bitboard ShiftFrom[DIR_NB];
+
 // Décalage d'un bitboard d'un pas dans la direction d, en respectant les
 // lignes du plateau (les diagonales ne partent que des points forts).
 inline Bitboard shift(Bitboard b, int d) {
     switch (d) {
-    case EAST:       return (b & ~FILE_I_BB) << 1;
-    case WEST:       return (b & ~FILE_A_BB) >> 1;
-    case NORTH:      return (b << 9) & ALL_SQUARES;
-    case SOUTH:      return b >> 9;
-    case NORTH_EAST: return ((b & STRONG_BB & ~FILE_I_BB) << 10) & ALL_SQUARES;
-    case NORTH_WEST: return ((b & STRONG_BB & ~FILE_A_BB) << 8) & ALL_SQUARES;
-    case SOUTH_EAST: return (b & STRONG_BB & ~FILE_I_BB) >> 8;
-    case SOUTH_WEST: return (b & STRONG_BB & ~FILE_A_BB) >> 10;
+    case EAST:       return (b & ShiftFrom[EAST]) << 1;
+    case WEST:       return (b & ShiftFrom[WEST]) >> 1;
+    case NORTH:      return (b & ShiftFrom[NORTH]) << 9;
+    case SOUTH:      return (b & ShiftFrom[SOUTH]) >> 9;
+    case NORTH_EAST: return (b & ShiftFrom[NORTH_EAST]) << 10;
+    case NORTH_WEST: return (b & ShiftFrom[NORTH_WEST]) << 8;
+    case SOUTH_EAST: return (b & ShiftFrom[SOUTH_EAST]) >> 8;
+    case SOUTH_WEST: return (b & ShiftFrom[SOUTH_WEST]) >> 10;
     default:         return 0;
     }
 }

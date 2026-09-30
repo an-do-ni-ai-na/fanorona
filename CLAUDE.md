@@ -40,7 +40,7 @@ sur la VM `fanorona-dev` vers Loki/Grafana du homelab (dashboard "Fanorona - Rec
 Build de débogage avec sanitizers :
 
 ```sh
-g++ -g -O0 -std=c++17 -Isrc -fsanitize=address,undefined src/{bitboard,position,movegen,evaluate,nnue,tt,search,uci}.cpp tests/test_main.cpp -o /tmp/t -pthread && /tmp/t
+g++ -g -O0 -std=c++17 -Isrc -fsanitize=address,undefined src/{bitboard,position,movegen,evaluate,nnue,tt,search,telo,uci}.cpp tests/test_main.cpp -o /tmp/t -pthread && /tmp/t
 ```
 
 ## Architecture
@@ -49,8 +49,9 @@ g++ -g -O0 -std=c++17 -Isrc -fsanitize=address,undefined src/{bitboard,position,
 |---|---|
 | `src/types.h` | constantes, `Color`, `Direction`, encodage `Move`, valeurs de mat |
 | `src/bitboard.*` | `Neighbor[sq][dir]`, `shift()`, `capture_line()`, `capturers()` (détection rapide des captures) |
-| `src/position.*` | `Position` (32 octets, copy-make), FEN, Zobrist, `Rules` (options de règles) |
-| `src/movegen.*` | `generate_moves()` (tours complets dédupliqués), `generate_detailed()` (avec notation), `parse_move()`, `perft()` |
+| `src/position.*` | `Position` (32 octets, copy-make), FEN, Zobrist, `Rules` (options de règles, dont `variant` et `vela`), `set_variant()`, `start_fen()` |
+| `src/movegen.*` | `generate_moves()` (tours complets dédupliqués), `generate_detailed()` (avec notation), `parse_move()`, `perft()` ; `generate_vela()` pour la phase 1 de la vela |
+| `src/telo.*` | Fanoron-Telo 3×3 (alignement, pose puis déplacement) : module à part, résolu par analyse rétrograde au démarrage (`Telo::init`), `go` parfait ou `go depth N` limité |
 | `src/evaluate.*` | évaluation manuelle (HCE), du point de vue du camp au trait ; bascule vers `NNUE::evaluate()` si activé |
 | `src/nnue.*` | inférence NNUE (charge un `.nnue`, forward pass 2×45→256 ReLU clippé→1, PAS ENCORE incrémental) |
 | `src/tt.*` | table de transposition, seaux de 2 entrées, générations |
@@ -89,6 +90,10 @@ g++ -g -O0 -std=c++17 -Isrc -fsanitize=address,undefined src/{bitboard,position,
 ## Valeurs de référence (régressions)
 
 - perft depuis le départ : 1 → 5, 2 → 39, 3 → 724, 4 → 18026, 5 → 431830, 6 → 9204447.
+- Fanoron-Dimy (5×5) : 1 → 5, 2 → 21, 3 → 202, 4 → 3469, 5 → 34608 (symétrie vérifiée, pas de référence externe).
+- Fanoron-Telo (3×3) : 1 → 9, 2 → 72, 3 → 504, 4 → 3024, 5 → 15120 ; valeur exacte du départ : gain des Blancs en 9.
+- `bench` : signature inchangée par l'ajout des variantes (876243 nœuds, profondeur 8) — la géométrie
+  paramétrable ne doit rien changer au 9×5.
   (Seule la profondeur 1 est vérifiée à la main ; pas de référence publiée confrontée.)
 - Toute modification du générateur doit garder ces valeurs, sauf changement de règle volontaire.
 - Toute modification de la recherche ou de l'évaluation change la signature `bench` : c'est normal, mais la
@@ -102,6 +107,14 @@ g++ -g -O0 -std=c++17 -Isrc -fsanitize=address,undefined src/{bitboard,position,
 - Null move / RFP sont désactivés dans les positions à capture (tous les coups y sont forcés).
 - `MoveList` est sur la pile (`MAX_MOVES = 1024` × 8 octets par nœud) : attention si on augmente `MAX_PLY`.
 - `Rules::*` sont des globales statiques : ne pas les modifier pendant une recherche.
+- **Géométrie** : l'encodage des cases garde un pas de 9 (`sq = y * 9 + x`) quelle que soit la variante ; le 5×5
+  est logé dans les colonnes a..e. Tout ce qui dépend de la taille passe par `Board` (`files`, `ranks`, `mask`) et
+  par `ShiftFrom[d]` (cases ayant un voisin dans la direction d), recalculés par `set_variant()` : ne jamais
+  réutiliser `ALL_SQUARES` comme « cases vides possibles », utiliser `Board::mask`.
+- **NNUE** : le réseau est entraîné sur le 9×5 ; `evaluate()` l'ignore hors Fanoron-Tsivy (HCE à la place).
+- **Vela** : la phase se déduit du plateau (`Position::vela_phase1()`, camp handicapé à plus de 5 pions), pas d'état
+  supplémentaire dans `Position`. La quiescence doit rester consciente de la vela (le camp handicapé ne capture
+  jamais, le bénéficiaire sans prise a perdu).
 - La recherche tourne dans un `std::thread` lancé par `go` ; `stop` met `Search::stopSignal`.
 
 ## État actuel

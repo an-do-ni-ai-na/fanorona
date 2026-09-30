@@ -46,6 +46,8 @@ uint64_t perft(const Position& pos, int depth);
 
 namespace fanorona {
 inline bool has_capture(const Position& pos) {
+    // Vela, phase 1 : seul le bénéficiaire capture (et il y est obligé).
+    if (pos.vela_phase1() && pos.sideToMove != Rules::vela) return false;
     return capturers(pos.pieces(pos.sideToMove), pos.pieces(~pos.sideToMove)) != 0;
 }
 }  // namespace fanorona

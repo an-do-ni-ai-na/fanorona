@@ -25,7 +25,7 @@ struct Path {
 template <typename Emit>
 void capture_dfs(Bitboard us, Bitboard them, int cur, Bitboard visited, int lastDir, Bitboard acc, Path& path,
                  Emit& emit) {
-    Bitboard empty = ~(us | them | visited) & ALL_SQUARES;
+    Bitboard empty = ~(us | them | visited) & Board::mask;
     bool continued = false;
 
     for (int d = 0; d < DIR_NB; ++d) {
@@ -53,8 +53,56 @@ void capture_dfs(Bitboard us, Bitboard them, int cur, Bitboard visited, int last
     if (Rules::mandatoryContinuation && !continued && path.n > 0) emit(cur, acc, path);
 }
 
+// Vela, phase 1 (voir Rules::vela). Bénéficiaire : captures d'UNE pièce (la plus proche sur la ligne), sans
+// enchaînement. Autre camp : paika uniquement, en laissant si possible une capture au bénéficiaire.
+template <typename Emit>
+void generate_vela(const Position& pos, Emit& emit) {
+    Color stm = pos.sideToMove;
+    Bitboard us = pos.pieces(stm), them = pos.pieces(~stm), empty = pos.empty();
+    Path path;
+    if (stm == Rules::vela) {
+        for (Bitboard b = us; b;) {
+            int s = pop_lsb(b);
+            path.from = s;
+            for (int d = 0; d < DIR_NB; ++d) {
+                int t = Neighbor[s][d];
+                if (t == SQ_NONE || !(empty & square_bb(t))) continue;
+                int ahead = Neighbor[t][d], behind = Neighbor[s][opposite(d)];
+                path.n = 1;
+                path.to[0] = t;
+                if (ahead != SQ_NONE && (them & square_bb(ahead))) {
+                    path.withdrawal[0] = false;
+                    emit(s, t, square_bb(ahead), &path);
+                }
+                if (behind != SQ_NONE && (them & square_bb(behind))) {
+                    path.withdrawal[0] = true;
+                    emit(s, t, square_bb(behind), &path);
+                }
+            }
+        }
+        return;
+    }
+    // Paika du camp handicapé : d'abord ceux qui laissent une capture au bénéficiaire.
+    int moves[MAX_MOVES][2], n = 0, kept = 0;
+    for (Bitboard b = us; b;) {
+        int s = pop_lsb(b);
+        for (int d = 0; d < DIR_NB; ++d) {
+            int t = Neighbor[s][d];
+            if (t == SQ_NONE || !(empty & square_bb(t)) || n >= MAX_MOVES) continue;
+            Bitboard after = us ^ square_bb(s) ^ square_bb(t);
+            bool leaves = capturers(them, after) != 0;
+            moves[n][0] = s, moves[n][1] = t | (leaves ? 64 : 0);
+            kept += leaves;
+            ++n;
+        }
+    }
+    for (int i = 0; i < n; ++i)
+        if (!kept || (moves[i][1] & 64)) emit(moves[i][0], moves[i][1] & 63, Bitboard(0), nullptr);
+}
+
 template <typename Emit>
 void generate_all(const Position& pos, Emit&& emit) {
+    if (pos.vela_phase1()) return generate_vela(pos, emit);
     Bitboard us = pos.pieces(pos.sideToMove), them = pos.pieces(~pos.sideToMove);
     Bitboard caps = capturers(us, them);
     Path path;

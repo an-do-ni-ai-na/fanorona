@@ -141,7 +141,12 @@ Value Worker::qsearch(const Position& pos, Value alpha, Value beta, int ply, int
 
     // Sans capture possible, la position est "calme" : on renvoie
     // l'évaluation statique (sauf blocage total = défaite).
-    if (!capturers(u, t)) return has_paika(u, pos.empty()) ? evaluate(pos) : mated_in(ply);
+    if (pos.vela_phase1()) {
+        // Vela : le camp handicapé ne capture jamais (position calme) ; le bénéficiaire doit capturer, sinon il perd.
+        if (us != Rules::vela) return has_paika(u, pos.empty()) ? evaluate(pos) : mated_in(ply);
+        if (!has_capture(pos)) return mated_in(ply);
+    } else if (!capturers(u, t))
+        return has_paika(u, pos.empty()) ? evaluate(pos) : mated_in(ply);
 
     // Les captures sont obligatoires, donc le "stand pat" n'est pas légal au
     // sens strict. On l'utilise tout de même comme borne heuristique (comme

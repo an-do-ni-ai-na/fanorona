@@ -3,7 +3,7 @@ CXXFLAGS ?= -O3 -march=native -DNDEBUG
 CXXFLAGS += -std=c++17 -Wall -Wextra -pthread
 LDFLAGS  += -pthread
 
-SRC  := src/bitboard.cpp src/position.cpp src/movegen.cpp src/evaluate.cpp src/nnue.cpp src/tt.cpp src/search.cpp src/uci.cpp
+SRC  := src/bitboard.cpp src/position.cpp src/movegen.cpp src/evaluate.cpp src/nnue.cpp src/tt.cpp src/search.cpp src/telo.cpp src/uci.cpp
 OBJ  := $(SRC:.cpp=.o)
 EXE  := fanorona
 

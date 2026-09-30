@@ -43,6 +43,8 @@ contre le moteur (six niveaux, voir ci-dessous), à deux sur le même écran, ou
 lui-même ; reprise de coup, indice, abandon, revanche. En fin de partie, « Analyser » évalue chaque position
 (`/api/eval`) : courbe d'avantage, imprécisions `?!`, erreurs `?` et gaffes `??` (perte de chances de gain
 ≥ 0,1 / 0,2 / 0,3 comme sur lichess), perte moyenne en centipions, meilleur coup affiché sur le plateau.
+Trois jeux (Fanoron-Tsivy 9×5, Dimy 5×5, Telo 3×3) et la partie *vela*, proposée au perdant en fin de
+partie (« Vela ») puis enchaînée (« Vela suivante ») jusqu'à ce que le bénéficiaire gagne.
 Six niveaux de difficulté (1–3 : chaque coup légal est évalué par une recherche courte puis tiré au sort, les
 bons coups restant favoris ; 4–5 : profondeur plafonnée ; 6 : pleine force).
 Saisie : cliquer la pièce puis chaque case d'arrivée ; si un déplacement permet approche **et** retrait,
@@ -61,6 +63,8 @@ requête (`position startpos moves ...`), le moteur reste seul juge des règles.
 | `setoption name Hash value 256` | taille de la table de transposition (Mo) |
 | `setoption name MandatoryContinuation value true` | variante : séquence de captures obligatoire jusqu'au bout |
 | `setoption name NoCaptureLimit value 100` | nulle après N demi-coups sans capture |
+| `setoption name Variant value tsivy\|dimy\|telo` | jeu : Fanoron-Tsivy 9×5 (défaut), Fanoron-Dimy 5×5, Fanoron-Telo 3×3 |
+| `setoption name Vela value none\|white\|black` | partie *vela* (Fanoron-Tsivy) : camp bénéficiaire |
 | `d`, `moves`, `eval`, `status` | affichage, coups légaux, évaluation, état de la partie |
 | `perft N` | comptage des feuilles (validation du générateur) |
 | `bench [N]` | recherche à profondeur N sur un jeu de positions fixe |
@@ -99,6 +103,24 @@ BBBBBBBBB/BBBBBBBBB/BWBW1BWBW/WWWWWWWWW/WWWWWWWWW w 0 1
   (option `MandatoryContinuation` pour la variante stricte).
 - Fin de partie : le camp qui n'a plus de pièce (ou plus aucun coup) a perdu.
   Nulle par triple répétition ou après `NoCaptureLimit` demi-coups sans capture.
+
+### Variantes
+
+- **Fanoron-Dimy** (5×5) : mêmes règles, 12 pions chacun, centre vide
+  (`BBBBB/BBBBB/BW1BW/WWWWW/WWWWW w`).
+- **Fanoron-Telo** (3×3, source : Ludii d'après l'ethnographie de l'Imerina) : jeu d'alignement sans capture.
+  3 pions chacun ; les joueurs posent d'abord leurs pions à tour de rôle (les Blancs commencent), puis les
+  déplacent d'un point le long d'une ligne ; aligner ses 3 pions (rangée, colonne, diagonale) gagne, y compris
+  pendant la pose. Notation : pose `b2`, déplacement `a1b2`. Le jeu est **entièrement résolu** au démarrage du
+  moteur (analyse rétrograde) : avec un jeu parfait, **les Blancs gagnent en 9 demi-coups** (en commençant au
+  centre). Un Fanoron-Telo « à captures » avec 4 pions par camp existe aussi dans certains jeux du commerce ;
+  il n'est pas implémenté.
+- **Vela** (Fanoron-Tsivy, d'après R. C. Bell, 1979) : partie à handicap jouée traditionnellement après une
+  défaite, le perdant en étant le bénéficiaire. Le bénéficiaire commence. Phase 1, jusqu'à ce que l'autre camp
+  n'ait plus que 5 pions (17 prises) : le bénéficiaire **doit** capturer exactement une pièce par tour — la plus
+  proche sur la ligne, sans enchaînement — et perd s'il ne le peut pas ; l'autre camp ne joue que des *paika*,
+  en laissant si possible une prise au bénéficiaire. Phase 2 : règles normales. Les velas se succèdent jusqu'à ce
+  que le bénéficiaire gagne.
 
 ## Architecture (et parallèle avec Stockfish)
 

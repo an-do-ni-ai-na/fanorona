@@ -7,6 +7,7 @@
 #include "movegen.h"
 #include "position.h"
 #include "search.h"
+#include "telo.h"
 #include "tt.h"
 
 using namespace fanorona;
@@ -52,13 +53,13 @@ static Position mirrored(const Position& p) {
 }
 
 static void test_perft_startpos() {
-    Position p = from_fen(START_FEN);
+    Position p = from_fen(start_fen());
     const uint64_t expected[] = {1, 5, 39, 724, 18026, 431830};
     for (int d = 1; d <= 5; ++d) CHECK(perft(p, d) == expected[d]);
 }
 
 static void test_opening_moves() {
-    Position p = from_fen(START_FEN);
+    Position p = from_fen(start_fen());
     CHECK(parse_move(p, "d3e3A") != MOVE_NONE);
     CHECK(parse_move(p, "d3e3W") != MOVE_NONE);
     CHECK(parse_move(p, "e2e3A") != MOVE_NONE);
@@ -138,7 +139,7 @@ static void test_diagonals_only_on_strong_points() {
 static void test_symmetry_and_keys() {
     std::mt19937_64 rng(42);
     for (int game = 0; game < 30; ++game) {
-        Position p = from_fen(START_FEN);
+        Position p = from_fen(start_fen());
         for (int ply = 0; ply < 40; ++ply) {
             CHECK(p.key == p.compute_key());
             Position q = from_fen(p.fen());
@@ -174,12 +175,111 @@ static void test_search() {
     CHECK(move_captured(r.bestMove) == bb({"f3", "g3"}));
 
     // Recherche depuis la position initiale : coup légal renvoyé.
-    p = from_fen(START_FEN);
+    p = from_fen(start_fen());
     l.depth = 6;
     r = Search::think(p, {p.key}, l, false);
     MoveList ml;
     generate_moves(p, ml);
     CHECK(ml.contains(r.bestMove));
+}
+
+
+// ---------- Fanoron-Dimy (5 x 5) ----------
+static Position mirrored5(const Position& p) {
+    Position m{};
+    for (int c = 0; c < COLOR_NB; ++c)
+        for (Bitboard b = p.byColor[c]; b;) {
+            int s = pop_lsb(b);
+            m.byColor[1 - c] |= square_bb(make_square(4 - file_of(s), 4 - rank_of(s)));
+        }
+    m.sideToMove = ~p.sideToMove;
+    m.key = m.compute_key();
+    return m;
+}
+
+static void test_dimy() {
+    set_variant(Variant::Dimy);
+    Position p = from_fen(start_fen());
+    CHECK(popcount(p.pieces(WHITE)) == 12 && popcount(p.pieces(BLACK)) == 12);
+    CHECK(p.fen() == start_fen());
+    CHECK((p.empty() & ~Board::mask) == 0);
+    CHECK(string_to_square("f1") == SQ_NONE && string_to_square("e5") != SQ_NONE);
+    // Symétrie : la position de départ est son propre miroir (rotation 180° + couleurs).
+    Position m = mirrored5(p);
+    for (int d = 1; d <= 4; ++d) CHECK(perft(p, d) == perft(m, d));
+    // Aucun coup ne sort du 5 x 5, sur des parties aléatoires.
+    std::mt19937_64 rng(5);
+    for (int g = 0; g < 50; ++g) {
+        Position q = p;
+        for (int ply = 0; ply < 60; ++ply) {
+            MoveList l;
+            generate_moves(q, l);
+            if (!l.size) break;
+            for (Move mv : l) CHECK((square_bb(move_to(mv)) | move_captured(mv)) & Board::mask);
+            q.do_move(l.moves[rng() % l.size]);
+            CHECK(((q.pieces(WHITE) | q.pieces(BLACK)) & ~Board::mask) == 0);
+        }
+    }
+    std::cout << "perft Dimy :";
+    for (int d = 1; d <= 5; ++d) std::cout << ' ' << perft(p, d);
+    std::cout << '\n';
+    set_variant(Variant::Tsivy);
+}
+
+// ---------- Vela ----------
+static void test_vela() {
+    set_variant(Variant::Tsivy);
+    Rules::vela = WHITE;
+    // Départ : le bénéficiaire a le trait, chaque coup capture exactement une pièce.
+    Position p = from_fen(start_fen());
+    MoveList l;
+    generate_moves(p, l);
+    CHECK(l.size > 0);
+    for (Move m : l) CHECK(popcount(move_captured(m)) == 1);
+
+    // Une seule pièce prise, la plus proche, même si la ligne continue ; pas d'enchaînement.
+    p = from_fen("BBBBBB3/9/9/9/W1BB5 w");
+    CHECK(count_moves(p) == 1);
+    CHECK(parse_move(p, "a1b1A") != MOVE_NONE && move_captured(parse_move(p, "a1b1A")) == bb({"c1"}));
+
+    // Bénéficiaire sans capture : aucun coup, donc perdu.
+    p = from_fen("BBBBBB3/9/9/9/W8 w");
+    CHECK(count_moves(p) == 0);
+
+    // Camp handicapé : paika seulement (même si une capture existe), en laissant une capture au bénéficiaire.
+    p = from_fen("BBBBBB3/9/9/9/W1B6 b");
+    generate_moves(p, l);
+    CHECK(l.size > 0);
+    for (Move m : l) {
+        CHECK(!is_capture(m));
+        Position c = p;
+        c.do_move(m);
+        CHECK(capturers(c.pieces(WHITE), c.pieces(BLACK)) != 0);
+    }
+
+    // Phase 2 (5 pièces restantes) : règles normales, toute la ligne est prise.
+    p = from_fen("BBB6/9/9/9/W1BB5 w");
+    CHECK(move_captured(parse_move(p, "a1b1A")) == bb({"c1", "d1"}));
+    Rules::vela = COLOR_NB;
+}
+
+// ---------- Fanoron-Telo (3 x 3) ----------
+static void test_telo() {
+    Telo::init();
+    Telo::State s;
+    CHECK(Telo::set_fen(s, "3/3/3 w 0 1"));
+    const uint64_t expected[] = {1, 9, 72, 504, 3024, 15120};
+    for (int d = 1; d <= 5; ++d) CHECK(Telo::perft(s, d) == expected[d]);
+    // Alignement pendant la pose : gain en 1.
+    CHECK(Telo::set_fen(s, "WW1/BB1/3 w"));
+    CHECK(Telo::solved(s) == 1);
+    CHECK(Telo::set_fen(s, "WWW/BB1/3 b"));
+    CHECK(Telo::status(s, {s.key()}) == "white wins");
+    // Déplacements : diagonales seulement depuis les points forts (a3 : 1 coup, b2 : 3, b1 point faible : 0).
+    CHECK(Telo::set_fen(s, "WB1/1W1/BWB w"));
+    CHECK(Telo::moves(s).size() == 4);
+    CHECK(Telo::set_fen(s, "3/3/3 w 0 1"));
+    std::cout << "Fanoron-Telo, valeur exacte du départ : " << Telo::solved(s) << '\n';
 }
 
 int main() {
@@ -198,6 +298,9 @@ int main() {
     test_diagonals_only_on_strong_points();
     test_symmetry_and_keys();
     test_search();
+    test_dimy();
+    test_vela();
+    test_telo();
 
     if (failures) {
         std::cerr << failures << " test(s) en échec\n";

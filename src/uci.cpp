@@ -14,6 +14,7 @@
 #include "movegen.h"
 #include "nnue.h"
 #include "search.h"
+#include "telo.h"
 #include "tt.h"
 
 namespace fanorona::UCI {
@@ -25,6 +26,7 @@ constexpr const char* ENGINE_NAME = "Fanorona-Engine 0.1";
 struct Game {
     Position pos;
     std::vector<Key> history;  // clés depuis le début de la partie (dernière = position courante)
+    Telo::State telo;          // position si la variante est le Fanoron-Telo (pos inutilisée)
 
     void reset(const Position& p) {
         pos = p;
@@ -36,8 +38,11 @@ struct Game {
     }
 };
 
+bool is_telo() { return Rules::variant == Variant::Telo; }
+
 // Résultat de la partie du point de vue des règles.
 std::string game_status(const Game& g) {
+    if (is_telo()) return Telo::status(g.telo, g.history);
     MoveList list;
     generate_moves(g.pos, list);
     if (list.size == 0) return g.pos.sideToMove == WHITE ? "black wins" : "white wins";
@@ -49,12 +54,43 @@ std::string game_status(const Game& g) {
     return "ongoing";
 }
 
+void cmd_position_telo(Game& g, std::istringstream& is) {
+    std::string token, fen;
+    is >> token;
+    Telo::State st;
+    if (token == "startpos") is >> token;
+    else if (token == "fen") {
+        while (is >> token && token != "moves") fen += token + " ";
+        if (!Telo::set_fen(st, fen)) {
+            std::cout << "info string invalid fen" << std::endl;
+            return;
+        }
+    } else
+        return;
+    g.telo = st;
+    g.history.assign(1, st.key());
+    while (is >> token) {
+        bool ok = false;
+        for (const auto& m : Telo::moves(g.telo))
+            if (m.notation == token) {
+                g.telo = m.child, ok = true;
+                break;
+            }
+        if (!ok) {
+            std::cout << "info string illegal move " << token << std::endl;
+            break;
+        }
+        g.history.push_back(g.telo.key());
+    }
+}
+
 void cmd_position(Game& g, std::istringstream& is) {
+    if (is_telo()) return cmd_position_telo(g, is);
     std::string token, fen;
     is >> token;
     Position p;
     if (token == "startpos") {
-        p.set(START_FEN);
+        p.set(start_fen());
         is >> token;  // "moves" éventuel
     } else if (token == "fen") {
         while (is >> token && token != "moves") fen += token + " ";
@@ -115,7 +151,7 @@ std::vector<Position> bench_positions() {
     std::vector<Position> v;
     std::mt19937_64 rng(20260927);
     Position start;
-    start.set(START_FEN);
+    start.set(start_fen());
     while (v.size() < 16) {
         Position p = start;
         for (int ply = 0; ply < 60 && v.size() < 16; ++ply) {
@@ -155,7 +191,7 @@ void cmd_play(std::istringstream& is) {
 
     Game g;
     Position start;
-    start.set(START_FEN);
+    start.set(start_fen());
     g.reset(start);
     Search::clear();
 
@@ -235,7 +271,7 @@ void cmd_gensfen(std::istringstream& is) {
     while (written < targetPositions) {
         Game g;
         Position start;
-        start.set(START_FEN);
+        start.set(start_fen());
         g.reset(start);
 
         std::vector<Sample> samples;
@@ -284,6 +320,8 @@ void print_help() {
               << "  go [depth N] [movetime ms] [wtime ms btime ms winc ms binc ms movestogo N] [nodes N] [infinite]\n"
               << "  stop\n"
               << "  setoption name <Hash|MandatoryContinuation|NoCaptureLimit|UseNNUE|EvalFile> value <v>\n"
+              << "  setoption name Variant value tsivy|dimy|telo   (9x5, 5x5, 3x3)\n"
+              << "  setoption name Vela value none|white|black     (partie vela : camp bénéficiaire)\n"
               << "  d            affiche la position\n"
               << "  moves        liste les coups légaux\n"
               << "  eval         évaluation statique\n"
@@ -301,7 +339,7 @@ void print_help() {
 void loop(int argc, char* argv[]) {
     Game game;
     Position start;
-    start.set(START_FEN);
+    start.set(start_fen());
     game.reset(start);
     std::thread searchThread;
 
@@ -329,6 +367,8 @@ void loop(int argc, char* argv[]) {
                       << "option name NoCaptureLimit type spin default 100 min 10 max 10000\n"
                       << "option name UseNNUE type check default false\n"
                       << "option name EvalFile type string default <empty>\n"
+                      << "option name Variant type combo default tsivy var tsivy var dimy var telo\n"
+                      << "option name Vela type combo default none var none var white var black\n"
                       << "uciok" << std::endl;
         } else if (token == "isready") {
             std::cout << "readyok" << std::endl;
@@ -348,10 +388,33 @@ void loop(int argc, char* argv[]) {
             else if (name == "UseNNUE") NNUE::set_enabled(value == "true");
             else if (name == "EvalFile") {
                 if (value != "<empty>") NNUE::load(value);
+            } else if (name == "Variant") {
+                // Nouvelle variante : nouvelle géométrie, on repart de la position initiale.
+                set_variant(value == "dimy" ? Variant::Dimy : value == "telo" ? Variant::Telo : Variant::Tsivy);
+                if (is_telo()) Telo::init();
+                Search::clear();
+                Position p;
+                p.set(start_fen());
+                game.reset(p);
+                game.telo = Telo::State{};
+                if (is_telo()) game.history.assign(1, game.telo.key());
+            } else if (name == "Vela") {
+                if (Rules::variant != Variant::Tsivy && value != "none")
+                    std::cout << "info string la vela n'existe qu'en Fanoron-Tsivy" << std::endl;
+                else {
+                    Rules::vela = value == "white" ? WHITE : value == "black" ? BLACK : COLOR_NB;
+                    Search::clear();
+                    Position p;
+                    p.set(start_fen());
+                    game.reset(p);
+                }
             } else std::cout << "info string unknown option " << name << std::endl;
         } else if (token == "position") {
             join();
             cmd_position(game, is);
+        } else if (token == "go" && is_telo()) {
+            SearchLimits limits = parse_limits(is);
+            Telo::go(game.telo, limits.depth);
         } else if (token == "go") {
             join();
             SearchLimits limits = parse_limits(is);
@@ -363,10 +426,15 @@ void loop(int argc, char* argv[]) {
             });
             if (argc > 1) join();
         } else if (token == "d") {
-            std::cout << game.pos.pretty() << std::endl;
+            std::cout << (is_telo() ? Telo::pretty(game.telo) : game.pos.pretty()) << std::endl;
+        } else if (token == "moves" && is_telo()) {
+            for (const auto& m : Telo::moves(game.telo)) std::cout << m.notation << ' ';
+            std::cout << std::endl;
         } else if (token == "moves") {
             for (const auto& dm : generate_detailed(game.pos)) std::cout << dm.notation << ' ';
             std::cout << std::endl;
+        } else if ((token == "play" || token == "gensfen" || token == "bench" || token == "eval") && is_telo()) {
+            std::cout << "info string commande indisponible en Fanoron-Telo" << std::endl;
         } else if (token == "eval") {
             std::cout << "Evaluation (camp au trait) : " << evaluate(game.pos) << std::endl;
         } else if (token == "status") {
@@ -374,7 +442,8 @@ void loop(int argc, char* argv[]) {
         } else if (token == "perft") {
             int d = 1;
             is >> d;
-            cmd_perft(game.pos, d);
+            if (is_telo()) std::cout << "Nodes searched: " << Telo::perft(game.telo, d) << std::endl;
+            else cmd_perft(game.pos, d);
         } else if (token == "bench") {
             int d = 8;
             is >> d;

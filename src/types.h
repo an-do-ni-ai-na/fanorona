@@ -10,6 +10,8 @@ using Key = uint64_t;
 
 // Plateau 9 x 5 : colonnes a..i (x = 0..8), rangées 1..5 (y = 0..4).
 // Case sq = y * 9 + x  ->  45 cases, tiennent dans un uint64_t.
+// FILE_NB est le PAS de l'encodage des cases, toujours 9 : les plateaux plus petits (Fanoron-Dimy 5 x 5) sont
+// logés dans le coin a1 de ce même encodage, la géométrie réelle est dans Board (bitboard.h).
 constexpr int FILE_NB = 9;
 constexpr int RANK_NB = 5;
 constexpr int SQUARE_NB = 45;
