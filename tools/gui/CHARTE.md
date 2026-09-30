@@ -55,9 +55,24 @@ les reflets des pièces sont éteints. Choix explicite dans le menu Apparence, o
 | Lignes | brûlées `#58391b`, léger reflet | gravées `#2c2926` avec reflet clair décalé (sillon) |
 | Pièces | ivoire et ébène, anneau intérieur tourné | galets : quartz et basalte très sombre (`#3f3d3b → #060606`), grain fin, sans anneau |
 
-Commun aux deux : ombre portée douce sous chaque pièce, points forts (diagonales) marqués plus gros que les
-points faibles, dernier coup en or translucide, sélection et cibles en sarcelle foncée, meilleur coup du moteur en
-pointillés bleus. Approche/retrait : orange `#c2551f` / bleu `#2f6fb0`, toujours doublés du libellé.
+Commun aux deux : points forts (diagonales) marqués plus gros que les points faibles. Approche/retrait :
+orange `#c2551f` / bleu `#2f6fb0`, toujours doublés du libellé.
+
+## Marques de déplacement (suivent le thème, pas le plateau)
+
+Variables `--hl-*` : dernier coup (`--hl-last`), sélection, cibles et cases déjà parcourues (`--hl-sel`), tracé de la
+chaîne en cours (`--hl-path`), meilleur coup / indice en pointillés (`--hl-best`), ombre portée des pièces
+(`--hl-shadow`) et ombre de la pièce glissée (`--hl-drag`). Toutes vérifiées sur les deux plateaux.
+
+| | Papier | Ardoise | Veille |
+|---|---|---|---|
+| Dernier coup | or translucide | terre cuite translucide | crème très douce |
+| Sélection, cibles, tracé | terre cuite foncée (accent) | bleu ardoise profond | crème lumineuse |
+| Meilleur coup, indice | bleu information `#3e6a8a` | bleu clair `#7fa9c9` | ambre |
+| Ombres des pièces | brun chaud léger | noir marqué | noir profond |
+
+En Veille, le plateau étant assombri par filtre, les marques sont claires (crème, ambre) plutôt que foncées :
+une marque sombre y disparaîtrait dans les lignes du plateau.
 
 ## Formes et espacements
 

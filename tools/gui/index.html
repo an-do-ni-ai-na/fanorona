@@ -28,6 +28,8 @@
   --j-inacc: #2f80d0; --j-mist: #b87800; --j-blun: #d0302f;
   --shadow: 0 1px 2px rgba(40, 30, 20, .06), 0 6px 20px rgba(40, 30, 20, .06);
   --board-filter: none; --piece-shine: .22;
+  --hl-last: rgba(236, 178, 64, .55); --hl-sel: rgba(168, 79, 40, .62); --hl-path: rgba(150, 66, 30, .78); --hl-best: rgba(62, 106, 138, .8);
+  --hl-shadow: rgba(60, 40, 20, .3); --hl-drag: rgba(60, 40, 20, .35);
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
@@ -40,6 +42,8 @@
     --j-inacc: #3d8fd9; --j-mist: #c4850c; --j-blun: #e0454a;
     --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 8px 24px rgba(0, 0, 0, .25);
     --board-filter: none; --piece-shine: .2;
+    --hl-last: rgba(210, 116, 63, .5); --hl-sel: rgba(28, 58, 88, .7); --hl-path: rgba(28, 58, 88, .8); --hl-best: rgba(127, 169, 201, .9);
+    --hl-shadow: rgba(0, 0, 0, .42); --hl-drag: rgba(0, 0, 0, .5);
     color-scheme: dark;
   }
 }
@@ -52,6 +56,8 @@
   --j-inacc: #3d8fd9; --j-mist: #c4850c; --j-blun: #e0454a;
   --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 8px 24px rgba(0, 0, 0, .25);
   --board-filter: none; --piece-shine: .2;
+  --hl-last: rgba(210, 116, 63, .5); --hl-sel: rgba(28, 58, 88, .7); --hl-path: rgba(28, 58, 88, .8); --hl-best: rgba(127, 169, 201, .9);
+  --hl-shadow: rgba(0, 0, 0, .42); --hl-drag: rgba(0, 0, 0, .5);
   color-scheme: dark;
 }
 /* Veille : pour jouer la nuit — tons ambrés, aucun blanc pur, plateau assombri et réchauffé. */
@@ -64,16 +70,16 @@
   --j-inacc: #5a90c8; --j-mist: #bd8726; --j-blun: #d4474c;
   --shadow: 0 1px 2px rgba(0, 0, 0, .5);
   --board-filter: brightness(.6) sepia(.35) saturate(.85); --piece-shine: 0;
+  --hl-last: rgba(255, 222, 160, .4); --hl-sel: rgba(255, 238, 205, .78); --hl-path: rgba(255, 238, 205, .85); --hl-best: rgba(255, 190, 110, 1);
+  --hl-shadow: rgba(0, 0, 0, .55); --hl-drag: rgba(0, 0, 0, .6);
   color-scheme: dark;
 }
 /* Plateaux */
 :root, :root[data-board="wood"] {
   --b-1: #e6c48e; --b-2: #c7985a; --b-line: #58391b; --b-line-hi: rgba(255, 236, 200, .28); --b-coord: #58391b;
-  --b-last: rgba(255, 206, 84, .5); --b-sel: rgba(22, 70, 62, .6); --b-path: rgba(22, 70, 62, .72); --b-best: rgba(36, 72, 150, .7);
 }
 :root[data-board="granite"] {
   --b-1: #a7a39c; --b-2: #85817a; --b-line: #2c2926; --b-line-hi: rgba(255, 255, 255, .38); --b-coord: #2c2926;
-  --b-last: rgba(255, 214, 110, .5); --b-sel: rgba(18, 62, 72, .62); --b-path: rgba(18, 62, 72, .75); --b-best: rgba(30, 64, 140, .72);
 }
 
 * { box-sizing: border-box; }
@@ -162,18 +168,18 @@ svg#board { width: 100%; height: auto; display: block; user-select: none; touch-
 .ln-hi { stroke: var(--b-line-hi); stroke-width: 2.4; stroke-linecap: round; }
 .pt { fill: var(--b-line); }
 .coord { fill: var(--b-coord); font: 600 16px var(--font-ui); opacity: .7; }
-.last { fill: var(--b-last); }
-.selc { fill: var(--b-sel); }
-.dest { fill: var(--b-sel); }
+.last { fill: var(--hl-last); }
+.selc { fill: var(--hl-sel); }
+.dest { fill: var(--hl-sel); }
 .cap-ring { fill: none; stroke-width: 6; stroke-dasharray: 9 6; }
 .cap-ring.A { stroke: #c2551f; } .cap-ring.W { stroke: #2f6fb0; }
-.path { fill: none; stroke: var(--b-path); stroke-width: 9; stroke-linecap: round; stroke-linejoin: round; }
-.path.best, .path.hint { stroke: var(--b-best); stroke-dasharray: 16 10; }
-.visited { fill: var(--b-sel); }
+.path { fill: none; stroke: var(--hl-path); stroke-width: 9; stroke-linecap: round; stroke-linejoin: round; }
+.path.best, .path.hint { stroke: var(--hl-best); stroke-dasharray: 16 10; }
+.visited { fill: var(--hl-sel); }
 .piece { transition: transform .22s cubic-bezier(.2, .7, .3, 1), opacity .25s ease; pointer-events: none; }
-.piece.drag { transition: none; filter: drop-shadow(0 8px 8px rgba(0, 0, 0, .35)); }
+.piece.drag { transition: none; filter: drop-shadow(0 8px 8px var(--hl-drag)); }
 .piece.gone { opacity: 0; }
-.piece .shadow { fill: rgba(0, 0, 0, .28); }
+.piece .shadow { fill: var(--hl-shadow); }
 .piece .rim-W { fill: none; stroke: rgba(80, 60, 30, .55); stroke-width: 1.6; }
 .piece .rim-B { fill: none; stroke: rgba(0, 0, 0, .8); stroke-width: 1.6; }
 .piece .inner-W { fill: none; stroke: rgba(150, 125, 85, .35); stroke-width: 1.6; }
