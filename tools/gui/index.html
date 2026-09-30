@@ -323,6 +323,16 @@ dialog::backdrop { background: rgba(10, 8, 6, .55); backdrop-filter: blur(2px); 
 .colors button.rand { width: 80px; height: 80px; }
 .colors svg { width: 70%; height: 70%; }
 .start-row { display: flex; justify-content: center; }
+.copyrow { display: flex; gap: 8px; }
+.copyrow input { flex: 1; min-width: 0; font: 12.5px var(--font-mono); background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: var(--r-sm); padding: 8px 9px; color: var(--strong); }
+#shareDlg textarea { width: 100%; font: 12.5px/1.5 var(--font-mono); background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: var(--r-sm); padding: 9px 10px; color: var(--strong); resize: vertical; }
+#shareDlg .row2 { display: flex; gap: 8px; } #shareDlg .row2 > * { flex: 1; }
+#shareDlg .note { margin: 0; font-size: 12.5px; color: var(--muted); }
+#shareDlg .share-pane { display: flex; flex-direction: column; gap: 12px; }
+#shareDlg .share-pane.hidden { display: none; }
+.err { color: var(--j-blun); font-size: 13px; min-height: 1em; }
 
 /* ---------- Adaptatif ---------- */
 @media (max-width: 1100px) {
@@ -441,6 +451,7 @@ dialog::backdrop { background: rgba(10, 8, 6, .55); backdrop-filter: blur(2px); 
       <button id="bPrev" title="Précédent (←)"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M17 5v14L6 12z"/></svg></button>
       <button id="bNext" title="Suivant (→)"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 5v14l11-7z"/></svg></button>
       <button id="bLast" title="Fin (Fin)"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 5h2v14h-2zM4 5v14l11-7z"/></svg></button>
+      <button id="bShare" title="Partager, exporter, importer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/></svg></button>
       <button id="bFlip" title="Retourner le plateau (f)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 4v16M7 20l-3-3M7 20l3-3M17 20V4M17 4l-3 3M17 4l3 3"/></svg></button>
     </div>
     <div class="ctrls actions" id="actions"></div>
@@ -481,6 +492,35 @@ dialog::backdrop { background: rgba(10, 8, 6, .55); backdrop-filter: blur(2px); 
       <button data-c="W" title="Jouer les Blancs"><svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="16" fill="#fbf8f1" stroke="#8e836f" stroke-width="2"/><circle cx="20" cy="20" r="10" fill="none" stroke="#d8cfbe" stroke-width="2"/></svg></button>
     </div>
     <div class="start-row hidden" id="startRow"><button class="btn primary" id="startBtn">Commencer la partie</button></div>
+  </div>
+</dialog>
+
+<dialog id="shareDlg">
+  <div class="dlg-head"><span>Partager la partie</span><button class="icon-btn" id="shareClose" title="Fermer">✕</button></div>
+  <div class="dlg-body">
+    <div class="seg" id="shareTabs"><button data-v="link" class="on">Lien</button><button data-v="fgn">Notation</button><button data-v="import">Importer</button></div>
+    <div class="share-pane" data-v="link">
+      <div class="field"><label>Lien vers cette partie</label>
+        <div class="copyrow"><input id="shareUrl" readonly><button class="btn" data-copy="shareUrl">Copier</button></div></div>
+      <p class="note">Le lien contient toute la partie (coups, variante, joueurs, résultat) : rien n'est stocké sur le serveur.
+        Il s'ouvre depuis le réseau du homelab ou via Tailscale.</p>
+      <div class="field"><label>Position affichée (FEN)</label>
+        <div class="copyrow"><input id="shareFen" readonly><button class="btn" data-copy="shareFen">Copier</button></div></div>
+    </div>
+    <div class="share-pane hidden" data-v="fgn">
+      <label class="switch" id="fgnAnaRow">Inclure l'analyse (annotations et évaluations) <input type="checkbox" id="fgnAna"></label>
+      <textarea id="fgnText" readonly rows="10" spellcheck="false"></textarea>
+      <div class="row2"><button class="btn" data-copy="fgnText">Copier</button><button class="btn primary" id="fgnDownload">Télécharger (.fgn)</button></div>
+      <p class="note">FGN : notation de partie de Fanorona inspirée du PGN des échecs (en-têtes entre crochets, coups notés
+        comme dans les publications, ex. <code>d3-e3A</code>). Voir le README du dépôt.</p>
+    </div>
+    <div class="share-pane hidden" data-v="import">
+      <textarea id="importText" rows="8" spellcheck="false" placeholder="Collez une partie : notation FGN, simple liste de coups (d3e3A c3d3W …) ou lien de partage."></textarea>
+      <div class="row2"><label class="btn" style="text-align:center">Ouvrir un fichier…<input type="file" id="importFile" accept=".fgn,.pgn,.txt" hidden></label>
+        <button class="btn primary" id="importBtn">Importer</button></div>
+      <p class="note">La partie importée remplace la partie en cours ; chaque coup est vérifié par le moteur.</p>
+      <div class="err" id="importErr"></div>
+    </div>
   </div>
 </dialog>
 
@@ -1155,6 +1195,7 @@ function renderGauge() {
 const fmtN = n => (n >= 1e6 ? (n / 1e6).toFixed(1) + "M" : n >= 1e3 ? Math.round(n / 1e3) + "k" : String(n));
 const levelName = id => (levels.find(l => l.id === id) || {}).name || "Niveau " + id;
 function playerName(c) {
+  if (importedNames && importedNames[c] && cfg.mode === "friend") return { name: importedNames[c], sub: "", short: "" };
   if (cfg.mode === "friend") return { name: colorName(c), sub: "" };
   if (cfg.mode === "auto") return { name: "Fanorona-Engine", sub: "pleine force", short: "" };
   if (cfg.color === c) return { name: "Vous", sub: "" };
@@ -1782,6 +1823,160 @@ function renderPuzzle() {
 $("navPuzzle").onclick = openPuzzles;
 
 // =====================================================================================================
+// Export, partage, import
+// FGN (Fanorona Game Notation) : format texte calqué sur le PGN. En-têtes [Clé "valeur"], puis les coups
+// numérotés ; notation des publications (d3-e3A-d4W ; pose du Telo : b2), annotations ?! ? ?? et
+// évaluations { +1.2 } en option. À l'import, tirets, numéros, commentaires et annotations sont ignorés.
+// Lien de partage : #g=<JSON en base64url> dans l'URL (rien n'est stocké côté serveur).
+// =====================================================================================================
+const GAME_TAG = { tsivy: "Fanoron-Tsivy", dimy: "Fanoron-Dimy", telo: "Fanoron-Telo" };
+const hyphenate = m => m.replace(/([a-i][1-5][AW]?)(?=[a-i][1-5])/g, "$1-");
+function fgnDate(d = new Date()) { return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, "0")}.${String(d.getDate()).padStart(2, "0")}`; }
+function exportData() {
+  const r = game.result;
+  return { v: 1, game: cfg.game, vela: velaSide() || "", fen: cfg.startFen || "", moves: game.moves.slice(),
+    result: r ? r.score : "*", why: r ? r.why : "", white: playerName("W").name, black: playerName("B").name,
+    date: fgnDate(), mode: cfg.mode, level: cfg.level, clock: cfg.clock };
+}
+function toFGN(withAnalysis) {
+  const d = exportData(), tags = [["Event", cfg.mode === "computer" ? "Partie contre l'ordinateur" : "Partie"],
+    ["Site", location.host], ["Date", d.date], ["White", d.white], ["Black", d.black], ["Result", d.result],
+    ["Variant", GAME_TAG[d.game]]];
+  if (d.vela) tags.push(["Vela", d.vela === "W" ? "Blancs" : "Noirs"]);
+  if (d.fen) tags.push(["FEN", d.fen]);
+  if (cfg.mode === "computer") tags.push(["EngineLevel", String(cfg.level)]);
+  if (cfg.clock !== "0") tags.push(["TimeControl", cfg.clock.replace(/^(\d+)\+(\d+)$/, (_, m, i) => `${m * 60}+${i}`)]);
+  if (d.why) tags.push(["Termination", d.why]);
+  const off = firstSide() === "B" ? 1 : 0;
+  const out = [];
+  d.moves.forEach((m, k) => {
+    const idx = k + off;
+    if (idx % 2 === 0) out.push(`${idx / 2 + 1}.`);
+    else if (k === 0) out.push(`${(idx + 1) / 2}...`);
+    let tok = hyphenate(m);
+    if (withAnalysis && analysis && analysis.evals.some(Boolean)) {
+      const j = judgment(k + 1), e = evalAt(k + 1);
+      if (j) tok += j.g;
+      if (e) tok += ` { ${e.label} }`;
+    }
+    out.push(tok);
+  });
+  out.push(d.result);
+  // coupe la ligne de coups à ~80 caractères, comme les PGN
+  const lines = [];
+  let line = "";
+  for (const t of out) { if (line && (line + " " + t).length > 80) { lines.push(line); line = t; } else line = line ? line + " " + t : t; }
+  if (line) lines.push(line);
+  return tags.map(([k, v]) => `[${k} "${String(v).replace(/"/g, "'")}"]`).join("\n") + "\n\n" + lines.join("\n") + "\n";
+}
+const b64u = str => btoa(String.fromCharCode(...new TextEncoder().encode(str))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+const unb64u = s => new TextDecoder().decode(Uint8Array.from(atob(s.replace(/-/g, "+").replace(/_/g, "/")), c => c.charCodeAt(0)));
+function shareLink() {
+  const d = exportData();
+  const compact = { v: 1, g: d.game, m: d.moves.join(" "), r: d.result };
+  if (d.vela) compact.l = d.vela;
+  if (d.fen) compact.f = d.fen;
+  if (d.why) compact.y = d.why;
+  compact.w = d.white; compact.b = d.black; compact.d = d.date;
+  return `${location.origin}${location.pathname}#g=${b64u(JSON.stringify(compact))}`;
+}
+function parseFGN(text) {
+  const tags = {};
+  for (const m of text.matchAll(/\[(\w+)\s+"([^"]*)"\]/g)) tags[m[1]] = m[2];
+  let body = text.replace(/\[(\w+)\s+"[^"]*"\]/g, " ").replace(/\{[^}]*\}/g, " ").replace(/;[^\n]*/g, " ");
+  while (/\([^()]*\)/.test(body)) body = body.replace(/\([^()]*\)/g, " ");  // variantes
+  const moves = [];
+  let result = tags.Result || "*";
+  for (let tok of body.split(/\s+/)) {
+    if (!tok) continue;
+    if (/^(1-0|0-1|1\/2-1\/2|½-½|\*)$/.test(tok)) { result = tok === "1/2-1/2" ? "½-½" : tok; continue; }
+    tok = tok.replace(/^\d+\.(\.\.)?/, "").replace(/[?!]+$/, "").replace(/[-x:]/g, "");
+    if (!tok) continue;
+    if (!/^(?:[a-i][1-5][AW]?)+$/.test(tok)) throw new Error(`Coup illisible : « ${tok} »`);
+    moves.push(tok);
+  }
+  const game = Object.keys(GAME_TAG).find(k => GAME_TAG[k] === tags.Variant) || (tags.Variant ? null : "tsivy");
+  if (!game) throw new Error(`Variante inconnue : « ${tags.Variant} »`);
+  const vela = tags.Vela === "Blancs" ? "W" : tags.Vela === "Noirs" ? "B" : "";
+  return { game, vela, fen: tags.FEN || "", moves, result, why: tags.Termination || "", white: tags.White, black: tags.Black };
+}
+function parseLink(text) {
+  const m = text.match(/#g=([A-Za-z0-9_-]+)/);
+  if (!m) return null;
+  const c = JSON.parse(unb64u(m[1]));
+  return { game: c.g || "tsivy", vela: c.l || "", fen: c.f || "", moves: c.m ? c.m.split(" ") : [], result: c.r || "*", why: c.y || "",
+    white: c.w, black: c.b };
+}
+async function importGame(d) {
+  if (!GAMES[d.game]) throw new Error("Variante inconnue");
+  if (d.fen && !/^[WB1-9]{1,9}(?:\/[WB1-9]{1,9}){2,4} [wb](?: \d{1,4} \d{1,4})?$/.test(d.fen)) throw new Error("FEN invalide");
+  // Vérification complète par le moteur avant de toucher à la partie en cours.
+  const req = { game: d.game, vela: d.game === "tsivy" ? d.vela : "", variant: "free", fen: d.fen || undefined };
+  const st = await api("/api/state", { moves: d.moves, ...req });
+  if (retro) exitRetro();
+  if (learn || puzzle) { learn = null; puzzle = null; document.body.classList.remove("learning", "puzzle"); }
+  epoch++; anaEpoch++; busy = false; thinking(false);
+  Object.assign(cfg, { game: d.game, vela: req.vela, velaWho: "", startFen: d.fen || "", mode: "friend", clock: "0", variant: "free" });
+  startBoard = null; clock = null; analysis = null; liveInfo = null; hintMove = null; chosen = null; pendingAW = null; inputView = null;
+  game = { moves: d.moves.slice(), legal: [], status: "ongoing", fen: startFen(), result: null };
+  flipped = false;
+  applyGeometry(); rebuildPositions(); viewPly = game.moves.length;
+  buildBoard();
+  applyServerState(st);
+  // Résultat non déductible de la position (abandon, temps) : on reprend celui de la partie.
+  if (!game.result && d.result && d.result !== "*") {
+    const map = { "1-0": "Victoire des Blancs", "0-1": "Victoire des Noirs", "½-½": "Partie nulle" };
+    game.result = { score: d.result, text: map[d.result] || d.result, why: d.why || "Résultat de la partie importée" };
+  }
+  importedNames = { W: d.white, B: d.black };
+  save(); render();
+  flash(`Partie importée : ${game.moves.length} demi-coups`);
+}
+let importedNames = null;
+function openShare(tab = "link") {
+  $("shareUrl").value = shareLink();
+  $("shareFen").value = fenOf(viewPly);
+  $("fgnAnaRow").classList.toggle("hidden", !(analysis && analysis.evals.some(Boolean)));
+  $("fgnText").value = toFGN($("fgnAna").checked);
+  $("importErr").textContent = "";
+  setShareTab(tab);
+  $("shareDlg").showModal();
+}
+function fenOf(k) { return boardFen(positions[k], sideAt(k)); }
+function setShareTab(v) {
+  for (const b of $("shareTabs").children) b.classList.toggle("on", b.dataset.v === v);
+  for (const p of document.querySelectorAll(".share-pane")) p.classList.toggle("hidden", p.dataset.v !== v);
+}
+for (const b of $("shareTabs").children) b.onclick = () => setShareTab(b.dataset.v);
+$("shareClose").onclick = () => $("shareDlg").close();
+$("bShare").onclick = () => openShare();
+$("fgnAna").onchange = () => { $("fgnText").value = toFGN($("fgnAna").checked); };
+for (const b of document.querySelectorAll("[data-copy]")) b.onclick = async () => {
+  const el = $(b.dataset.copy);
+  try { await navigator.clipboard.writeText(el.value); } catch (e) { el.select(); document.execCommand("copy"); }
+  const t = b.textContent; b.textContent = "Copié ✓"; setTimeout(() => (b.textContent = t), 1200);
+};
+$("fgnDownload").onclick = () => {
+  const blob = new Blob([$("fgnText").value], { type: "text/plain;charset=utf-8" });
+  const a = document.createElement("a"), d = new Date();
+  a.href = URL.createObjectURL(blob);
+  a.download = `fanorona-${fgnDate(d).replace(/\./g, "")}-${String(d.getHours()).padStart(2, "0")}${String(d.getMinutes()).padStart(2, "0")}.fgn`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+};
+$("importFile").onchange = async e => { const f = e.target.files[0]; if (f) $("importText").value = await f.text(); };
+$("importBtn").onclick = async () => {
+  const text = $("importText").value.trim();
+  $("importErr").textContent = "";
+  if (!text) return;
+  try {
+    await importGame(parseLink(text) || parseFGN(text));
+    $("shareDlg").close();
+    $("importText").value = "";
+  } catch (e) { $("importErr").textContent = "Import impossible : " + e.message.replace(/^illegal move (\S+)/, "coup illégal « $1 »"); }
+};
+
+// =====================================================================================================
 // Actions
 // =====================================================================================================
 function setView(k) {
@@ -1844,6 +2039,7 @@ function nextGame() {
   return normal;
 }
 async function startGame() {
+  importedNames = null;
   epoch++; anaEpoch++; busy = false; thinking(false);
   game = { moves: [], legal: [], status: "ongoing", fen: startFen(), result: null };
   analysis = null; liveInfo = null; hintMove = null; chosen = null; pendingAW = null; inputView = null;
@@ -1970,7 +2166,7 @@ $("soundBtn").onclick = () => { cfg.sound = !cfg.sound; applySoundBtn(); save();
 function save() {
   if (learn || puzzle) return;
   try {
-    localStorage.setItem("fanorona-gui-v3", JSON.stringify({ cfg, theme, boardTheme, autoNight, flipped, moves: game.moves, result: game.result, clock,
+    localStorage.setItem("fanorona-gui-v3", JSON.stringify({ cfg, names: importedNames, theme, boardTheme, autoNight, flipped, moves: game.moves, result: game.result, clock,
       analysis: analysis && !analysis.running ? analysis : null }));
   } catch (e) { /* stockage indisponible */ }
 }
@@ -1988,7 +2184,8 @@ function load() {
   } catch (e) { flash("Serveur injoignable : " + e.message); }
   const saved = load();
   if (saved) {
-    Object.assign(cfg, saved.cfg || {}, { startFen: "" });
+    Object.assign(cfg, saved.cfg || {});
+    importedNames = saved.names || null;
     if (cfg.net && !nets.includes(cfg.net)) cfg.net = "";
     theme = saved.theme || "auto";
     boardTheme = saved.boardTheme || "wood";
@@ -2008,8 +2205,18 @@ function load() {
     } catch (e) { game.moves = []; game.result = null; analysis = null; }
   }
   await startGame();
-  if (!saved) openDialog();
-})();
+  if (!saved && !location.hash.startsWith("#g=")) openDialog();
+})().then(openLinkFromHash);
+// Lien de partage : au chargement, ou collé dans la barre d'adresse d'un onglet déjà ouvert (seule l'ancre
+// change, la page n'est pas rechargée). On nettoie ensuite l'URL pour qu'un rechargement ne réimporte pas.
+async function openLinkFromHash() {
+  if (!location.hash.startsWith("#g=")) return;
+  if ($("dlg").open) $("dlg").close();
+  try { await importGame(parseLink(location.hash)); }
+  catch (e) { flash("Lien de partie invalide : " + e.message.replace(/^illegal move (\S+)/, "coup illégal « $1 »")); }
+  history.replaceState(null, "", location.pathname);
+}
+window.addEventListener("hashchange", openLinkFromHash);
 </script>
 </body>
 </html>

@@ -45,6 +45,8 @@ lui-même ; reprise de coup, indice, abandon, revanche. En fin de partie, « Ana
 ≥ 0,1 / 0,2 / 0,3 comme sur lichess), perte moyenne en centipions, meilleur coup affiché sur le plateau.
 « Apprendre de ses erreurs » rejoue ensuite chaque erreur ou gaffe du joueur : il faut trouver un coup
 aussi bon que celui du moteur (moins de 0,1 de chances de gain perdues), avec la solution à la demande.
+Partage (bouton ⤴ sous la liste des coups) : lien contenant toute la partie, export FGN (avec analyse en option),
+FEN de la position affichée, import d'un FGN, d'une liste de coups ou d'un lien.
 Puzzles tactiques (« Puzzles ») : ~950 positions où un seul coup gagne nettement (chaînes, rafles, coups calmes,
 combinaisons), classement Elo personnel, série de réussites ; générés depuis l'auto-jeu par
 `tools/puzzles/gen_puzzles.py` (voir plus bas).
@@ -179,4 +181,33 @@ hasard, puis le moteur évalue chaque réponse. On garde la position si un seul 
 familles, et s'arrêter trop tôt dans la bonne chaîne est une erreur. Second avis : le réseau NNUE (profondeur 10)
 doit jouer un coup accepté, sinon le puzzle est écarté (~3 %). La difficulté est une estimation (nombre de coups,
 longueur de chaîne, coup calme, solution en plusieurs coups), à recalibrer d'après les résultats réels.
+
+## Format de partie FGN
+
+Il n'existe pas de format standard pour noter une partie complète de Fanorona. L'interface utilise le **FGN**
+(*Fanorona Game Notation*), calqué sur le PGN des échecs :
+
+```
+[Event "Partie contre l'ordinateur"]
+[Date "2026.09.30"]
+[White "Vous"]
+[Black "Fanorona-Engine"]
+[Result "0-1"]
+[Variant "Fanoron-Tsivy"]
+[Vela "Noirs"]
+[FEN "BBBBBBBBB/BBBBBBBBB/BWBW1BWBW/WWWWWWWWW/WWWWWWWWW b 0 1"]
+[Termination "Les Blancs abandonnent"]
+
+1... f4-e3A 2. d1-d2 e3-f4W?? { -3.2 } 3. e1-d2 f3-e3W 0-1
+```
+
+- En-têtes : `Event`, `Site`, `Date` (AAAA.MM.JJ), `White`, `Black`, `Result` (`1-0`, `0-1`, `½-½`, `*`),
+  `Variant` (`Fanoron-Tsivy` par défaut, `Fanoron-Dimy`, `Fanoron-Telo`), et selon le cas `Vela` (camp
+  bénéficiaire), `FEN` (position de départ si ce n'est pas la position initiale), `TimeControl` (secondes+incrément),
+  `EngineLevel`, `Termination`.
+- Coups : notation des publications, cases reliées par des tirets, `A`/`W` après chaque prise (`d3-e3A-d4W`) ;
+  pose du Fanoron-Telo : la case seule (`b2`). Numéros `1.`, `1...` quand les Noirs commencent.
+- Optionnel : annotations `?!`, `?`, `??` et évaluations `{ +1.2 }` (point de vue des Blancs, en pions).
+- À l'import, les tirets, numéros, commentaires `{…}`, variantes `(…)` et annotations sont ignorés ; une simple
+  liste de coups (`d3e3A c3d3W`) est acceptée. Chaque coup est vérifié par le moteur.
 
