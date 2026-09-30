@@ -31,7 +31,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-MOVE_RE = re.compile(r"^(?:[a-i][1-5][AW]?){2,}$")
+MOVE_RE = re.compile(r"^[a-i][1-5](?:[a-i][1-5][AW]?)*$")  # une case seule = pose (Fanoron-Telo)
+GAMES = {"tsivy", "dimy", "telo"}
 MAX_MOVETIME = 30000
 MAX_PLIES = 2000
 
@@ -53,12 +54,36 @@ def check_moves(moves):
     return moves
 
 
-def preamble(req):
-    """Commandes communes : variante de règles, puis position."""
-    moves = check_moves(req.get("moves", []))
-    cmds = []
-    if req.get("variant") == "mandatory":
+def rule_options(req):
+    """Options de règles : jeu (tsivy 9x5, dimy 5x5, telo 3x3), partie vela, continuation obligatoire."""
+    game = req.get("game", "tsivy")
+    if game not in GAMES:
+        raise EngineError(f"jeu inconnu : {game}")
+    cmds = [f"setoption name Variant value {game}"] if game != "tsivy" else []
+    vela = req.get("vela")
+    if vela not in (None, "", "W", "B"):
+        raise EngineError("vela : W, B ou rien")
+    if vela and game == "tsivy":
+        cmds.append("setoption name Vela value " + ("white" if vela == "W" else "black"))
+    if req.get("variant") == "mandatory" and game != "telo":
         cmds.append("setoption name MandatoryContinuation value true")
+    return cmds
+
+
+def net_options(req):
+    net = req.get("net")
+    if not net or req.get("game", "tsivy") != "tsivy":  # réseau entraîné sur le 9 x 5 uniquement
+        return []
+    nets = available_nets()
+    if net not in nets:
+        raise EngineError(f"réseau inconnu : {net}")
+    return [f"setoption name EvalFile value {nets[net]}", "setoption name UseNNUE value true"]
+
+
+def preamble(req):
+    """Commandes communes : règles, puis position."""
+    moves = check_moves(req.get("moves", []))
+    cmds = rule_options(req)
     cmds.append("position startpos" + (" moves " + " ".join(moves) if moves else ""))
     return cmds
 
@@ -200,13 +225,7 @@ def search(req):
     level = LEVELS.get(int(req.get("level", 6)))
     if level is None:
         raise EngineError("niveau inconnu")
-    opts = []
-    net = req.get("net")
-    if net:
-        nets = available_nets()
-        if net not in nets:
-            raise EngineError(f"réseau inconnu : {net}")
-        opts += [f"setoption name EvalFile value {nets[net]}", "setoption name UseNNUE value true"]
+    opts = net_options(req)
 
     legal = get_state(req)["legal"] if level["mode"] == "sample" else None
     if legal is not None and len(legal) == 1:
@@ -244,15 +263,7 @@ def evaluate_plies(req):
     if any(not isinstance(k, int) or not 0 <= k <= len(moves) for k in plies):
         raise EngineError("demi-coup hors de la partie")
     depth = max(1, min(int(req.get("depth", 6)), 12))
-    opts = []
-    net = req.get("net")
-    if net:
-        nets = available_nets()
-        if net not in nets:
-            raise EngineError(f"réseau inconnu : {net}")
-        opts += [f"setoption name EvalFile value {nets[net]}", "setoption name UseNNUE value true"]
-    if req.get("variant") == "mandatory":
-        opts.append("setoption name MandatoryContinuation value true")
+    opts = net_options(req) + rule_options(req)
 
     if not search_slots.acquire(timeout=60):
         raise EngineError("moteur occupé, réessayez")
@@ -264,7 +275,9 @@ def evaluate_plies(req):
             for k in plies:
                 pos = "position startpos" + (" moves " + " ".join(moves[:k]) if k else "")
                 # "ucinewgame" : chaque position est analysée sans dépendre de la précédente (TT vidée).
-                best, info = eng.go(["ucinewgame", pos, f"go depth {depth}"])
+                # Fanoron-Telo : le jeu est résolu, "go" sans profondeur donne la valeur exacte.
+                go = "go" if req.get("game") == "telo" else f"go depth {depth}"
+                best, info = eng.go(["ucinewgame", pos, go])
                 out.append({"ply": k, "best": None if best == "(none)" else best, "score": info.get("score"),
                             "depth": info.get("depth"), "pv": info.get("pv", [])})
         finally:

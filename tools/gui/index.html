@@ -130,6 +130,8 @@ button, select { font: inherit; color: inherit; }
 .meta .players { border-top: 1px solid var(--border); padding-top: 12px; display: flex; flex-direction: column; gap: 6px; }
 .meta .players > div { display: flex; align-items: center; gap: 9px; color: var(--strong); }
 .meta .players small { display: block; color: var(--muted); font-size: 12px; }
+.meta .vela { border-top: 1px solid var(--border); padding-top: 12px; color: var(--strong); }
+.meta .vela small { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
 .meta .status { border-top: 1px solid var(--border); padding-top: 12px; color: var(--strong); font-weight: 600; }
 .meta .status small { display: block; font-weight: 400; color: var(--muted); }
 
@@ -156,7 +158,7 @@ button, select { font: inherit; color: inherit; }
 .gauge .w { position: absolute; left: 0; right: 0; bottom: 0; height: 50%; background: #f4efe4; transition: height .5s ease; }
 .gauge.flip .w { top: 0; bottom: auto; }
 .gauge .tick { position: absolute; left: 0; right: 0; top: 50%; height: 2px; margin-top: -1px; background: var(--accent); opacity: .9; }
-.board-wrap { position: relative; width: min(100%, calc((100vh - 120px) * 920 / 520)); }
+.board-wrap { position: relative; --ar: 1.769; --maxw: 100%; width: min(100%, var(--maxw), calc((100vh - 120px) * var(--ar))); }
 svg#board { width: 100%; height: auto; display: block; user-select: none; touch-action: none; border-radius: var(--r);
   box-shadow: 0 2px 4px rgba(0, 0, 0, .12), 0 14px 34px rgba(0, 0, 0, .18); filter: var(--board-filter); transition: filter .3s; }
 .b-frame { fill: none; stroke: rgba(0, 0, 0, .18); stroke-width: 2; }
@@ -340,6 +342,7 @@ dialog::backdrop { background: rgba(10, 8, 6, .55); backdrop-filter: blur(2px); 
         <div><div class="title" id="metaTitle">Contre l'ordinateur</div><div class="sub" id="metaSub">Illimité • Standard</div></div>
       </div>
       <div class="players" id="metaPlayers"></div>
+      <div class="vela hidden" id="metaVela"></div>
       <div class="status hidden" id="metaStatus"></div>
     </section>
 
@@ -367,7 +370,7 @@ dialog::backdrop { background: rgba(10, 8, 6, .55); backdrop-filter: blur(2px); 
   <div class="board-col">
     <div class="gauge" id="gauge" title="Évaluation"><div class="w" id="gaugeW"></div><div class="tick"></div></div>
     <div class="board-wrap">
-      <svg id="board" viewBox="0 0 920 520" aria-label="Plateau de Fanorona"></svg>
+      <svg id="board" viewBox="0 0 920 520" data-dyn="1" aria-label="Plateau de Fanorona"></svg>
       <div class="overlay top hidden" id="awChoice"><button class="A" id="chooseA">Approche</button><button class="W" id="chooseW">Retrait</button></div>
       <div class="overlay bottom hidden" id="stopBox"><button class="stop" id="stopChain">Arrêter la capture</button></div>
       <div class="flash" id="flash"></div>
@@ -393,6 +396,9 @@ dialog::backdrop { background: rgba(10, 8, 6, .55); backdrop-filter: blur(2px); 
 <dialog id="dlg">
   <div class="dlg-head"><span id="dlgTitle">Nouvelle partie</span><button class="icon-btn" id="dlgClose" title="Fermer">✕</button></div>
   <div class="dlg-body">
+    <div class="field"><label>Jeu</label>
+      <div class="seg" id="segGame"><button data-v="tsivy">Tsivy 9 × 5</button><button data-v="dimy">Dimy 5 × 5</button><button data-v="telo">Telo 3 × 3</button></div>
+      <div class="lvl-name" id="gameNote"></div></div>
     <div class="field"><label>Adversaire</label>
       <div class="seg" id="segMode"><button data-v="computer">Ordinateur</button><button data-v="friend">Deux joueurs</button><button data-v="auto">Ordinateur contre ordinateur</button></div></div>
     <div class="field" id="fLevel"><label>Niveau</label>
@@ -409,8 +415,9 @@ dialog::backdrop { background: rgba(10, 8, 6, .55); backdrop-filter: blur(2px); 
           <option value="200">0,2 s par coup</option><option value="500">0,5 s par coup</option><option value="1000">1 s par coup</option>
           <option value="2000">2 s par coup</option><option value="5000">5 s par coup</option><option value="10000">10 s par coup</option>
         </select></div>
-      <div class="field"><label>Évaluation</label><select id="dNet"><option value="">Manuelle (HCE)</option></select></div>
-      <div class="field"><label>Variante</label>
+      <div class="field" id="fNet"><label>Évaluation</label><select id="dNet"><option value="">Manuelle (HCE)</option></select></div>
+      <div class="field" id="fVela"><label>Partie vela</label><select id="dVela"></select></div>
+      <div class="field" id="fVariant"><label>Variante</label>
         <select id="dVariant"><option value="free">Standard (arrêt libre)</option><option value="mandatory">Continuation obligatoire</option></select></div>
     </div>
     <div class="colors" id="colorRow">
@@ -425,17 +432,30 @@ dialog::backdrop { background: rgba(10, 8, 6, .55); backdrop-filter: blur(2px); 
 <script>
 "use strict";
 // =====================================================================================================
-// Géométrie et règles locales. sq = y*9 + x, x = a..i, y = rangée 1..5 (cf. CLAUDE.md du dépôt).
-// La logique de capture ne sert qu'à l'affichage (animation, historique) : le moteur reste seul juge.
+// Géométrie et règles locales. Indice local sq = y*W + x (W, H : taille du plateau de la variante),
+// x = a.., y = rangée 1... La logique de capture ne sert qu'à l'affichage : le moteur reste seul juge.
+// Variantes : Fanoron-Tsivy 9x5, Fanoron-Dimy 5x5 (mêmes règles), Fanoron-Telo 3x3 (pose puis déplacement,
+// alignement, sans capture). Vela (Tsivy) : le bénéficiaire commence ; en phase 1 il prend UNE pièce par tour.
 // =====================================================================================================
-const W = 9, H = 5, S = 100, M = 60, NS = "http://www.w3.org/2000/svg";
+const S = 100, M = 60, NS = "http://www.w3.org/2000/svg";
+let W = 9, H = 5;
 const FILES = "abcdefghi";
-const START_FEN = "BBBBBBBBB/BBBBBBBBB/BWBW1BWBW/WWWWWWWWW/WWWWWWWWW w 0 1";
+const GAMES = {
+  tsivy: { name: "Fanoron-Tsivy", size: "9 × 5", files: 9, ranks: 5, fen: "BBBBBBBBB/BBBBBBBBB/BWBW1BWBW/WWWWWWWWW/WWWWWWWWW" },
+  dimy: { name: "Fanoron-Dimy", size: "5 × 5", files: 5, ranks: 5, fen: "BBBBB/BBBBB/BW1BW/WWWWW/WWWWW" },
+  telo: { name: "Fanoron-Telo", size: "3 × 3", files: 3, ranks: 3, fen: "3/3/3" },
+};
+const VELA_REMAINING = 5;
+const velaSide = () => (cfg.game === "tsivy" && (cfg.vela === "W" || cfg.vela === "B") ? cfg.vela : null);
+const firstSide = () => velaSide() || "W";
+const startFen = () => GAMES[cfg.game].fen + (firstSide() === "B" ? " b 0 1" : " w 0 1");
+function applyGeometry() { W = GAMES[cfg.game].files; H = GAMES[cfg.game].ranks; }
+const rulesReq = () => ({ game: cfg.game, vela: velaSide() || "", variant: cfg.variant });
 const sqName = s => FILES[s % W] + (Math.floor(s / W) + 1);
 const sqOf = n => (n.charCodeAt(0) - 97) + (n.charCodeAt(1) - 49) * W;
 const xy = s => [s % W, Math.floor(s / W)];
 const inside = (x, y) => x >= 0 && x < W && y >= 0 && y < H;
-const sideAt = k => (k % 2 ? "B" : "W");
+const sideAt = k => (k % 2 ? other(firstSide()) : firstSide());
 const other = c => (c === "W" ? "B" : "W");
 const colorName = c => (c === "W" ? "Blancs" : "Noirs");
 
@@ -463,6 +483,9 @@ function captureLine(board, from, to, kind) {
   if (kind === "A") { x = tx + dx; y = ty + dy; sx = dx; sy = dy; } else { x = fx - dx; y = fy - dy; sx = -dx; sy = -dy; }
   const out = [];
   while (inside(x, y)) { const p = board[y * W + x]; if (!p || p.c === mover) break; out.push(y * W + x); x += sx; y += sy; }
+  // Vela, phase 1 : le bénéficiaire ne prend que la pièce la plus proche.
+  const vs = velaSide();
+  if (vs && mover === vs && count(board, other(vs)) > VELA_REMAINING) return out.slice(0, 1);
   return out;
 }
 function applyStep(board, from, to, kind) {
@@ -471,8 +494,10 @@ function applyStep(board, from, to, kind) {
   b[to] = b[from]; b[from] = null;
   return b;
 }
-function applyMove(board, str) {
+// mover/pid ne servent qu'aux poses du Fanoron-Telo (case seule) : couleur posée, identifiant stable.
+function applyMove(board, str, mover, pid) {
   const m = parseMove(str);
+  if (!m.steps.length) { const b = board.slice(); b[m.from] = { id: pid || 900 + m.from, c: mover }; return b; }
   let b = board, cur = m.from;
   for (const st of m.steps) { b = applyStep(b, cur, st.to, st.kind); cur = st.to; }
   return b;
@@ -485,8 +510,9 @@ const count = (b, c) => b.reduce((n, p) => n + (p && p.c === c ? 1 : 0), 0);
 // =====================================================================================================
 const LEVEL_FALLBACK = [1, 2, 3, 4, 5, 6].map(id => ({ id, name: "Niveau " + id, timed: id > 3 }));
 let levels = LEVEL_FALLBACK, nets = [];
-let cfg = { mode: "computer", color: "W", level: 4, clock: "0", movetime: 1000, net: "", variant: "free", showEval: true, sound: true };
-let game = { moves: [], legal: [], status: "ongoing", fen: START_FEN, result: null };
+let cfg = { mode: "computer", color: "W", level: 4, clock: "0", movetime: 1000, net: "", variant: "free", showEval: true, sound: true,
+  game: "tsivy", vela: "", velaWho: "" };
+let game = { moves: [], legal: [], status: "ongoing", fen: "", result: null };
 let positions = [];      // positions[k] = plateau après k demi-coups (pièces {id, c}, identifiants stables)
 let viewPly = 0;         // demi-coup affiché
 let clock = null;        // {W, B, inc} en ms
@@ -501,10 +527,13 @@ const live = () => viewPly === game.moves.length;
 const over = () => !!game.result;
 
 function rebuildPositions() {
-  let b = parseFen(START_FEN).board.map((c, i) => (c ? { id: i + 1, c } : null));
+  let b = parseFen(startFen()).board.map((c, i) => (c ? { id: i + 1, c } : null));
   positions = [b];
-  for (const m of game.moves) { b = applyMove(b, m); positions.push(b); }
+  game.moves.forEach((m, k) => { b = applyMove(b, m, sideAt(k), 100 + k); positions.push(b); });
 }
+const telo = () => cfg.game === "telo";
+// Fanoron-Telo : phase de pose tant que le camp au trait a moins de 3 pions sur le plateau.
+const teloPlacing = () => telo() && count(liveBoard(), sideAt(game.moves.length)) < 3;
 const liveBoard = () => positions[game.moves.length];
 const shownBoard = () => (chosen ? inputView : anim ? anim.board : positions[viewPly]);
 
@@ -561,22 +590,28 @@ function boardDefs(defs) {
 }
 const boardStyle = () => document.documentElement.dataset.board || "wood";
 
+const boardW = () => M * 2 + (W - 1) * S, boardH = () => M * 2 + (H - 1) * S;
 function buildBoard() {
+  applyGeometry();
   svg.innerHTML = "";
   pieceEls.clear();
+  const VW = boardW(), VH = boardH();
+  svg.setAttribute("viewBox", `0 0 ${VW} ${VH}`);
+  svg.parentElement.style.setProperty("--ar", VW / VH);
+  svg.parentElement.style.setProperty("--maxw", W >= 9 ? "100%" : W >= 5 ? "620px" : "440px");
   const defs = el("defs", {}, svg);
   boardDefs(defs);
   const stone = boardStyle() === "granite";
-  el("rect", { x: 0, y: 0, width: 920, height: 520, fill: "url(#boardGrad)" }, svg);
+  el("rect", { x: 0, y: 0, width: VW, height: VH, fill: "url(#boardGrad)" }, svg);
   if (stone) {
-    el("rect", { x: 0, y: 0, width: 920, height: 520, filter: "url(#mottle)" }, svg);
-    el("rect", { x: 0, y: 0, width: 920, height: 520, filter: "url(#speckDark)", opacity: .75 }, svg);
-    el("rect", { x: 0, y: 0, width: 920, height: 520, filter: "url(#speckLight)", opacity: .6 }, svg);
+    el("rect", { x: 0, y: 0, width: VW, height: VH, filter: "url(#mottle)" }, svg);
+    el("rect", { x: 0, y: 0, width: VW, height: VH, filter: "url(#speckDark)", opacity: .75 }, svg);
+    el("rect", { x: 0, y: 0, width: VW, height: VH, filter: "url(#speckLight)", opacity: .6 }, svg);
   } else {
-    el("rect", { x: 0, y: 0, width: 920, height: 520, filter: "url(#grain)", opacity: .55 }, svg);
-    el("rect", { x: 0, y: 0, width: 920, height: 520, filter: "url(#grainFine)", opacity: .35 }, svg);
+    el("rect", { x: 0, y: 0, width: VW, height: VH, filter: "url(#grain)", opacity: .55 }, svg);
+    el("rect", { x: 0, y: 0, width: VW, height: VH, filter: "url(#grainFine)", opacity: .35 }, svg);
   }
-  el("rect", { x: 1, y: 1, width: 918, height: 518, rx: 10, class: "b-frame" }, svg);
+  el("rect", { x: 1, y: 1, width: VW - 2, height: VH - 2, rx: 10, class: "b-frame" }, svg);
   // Lignes gravées : un reflet clair décalé sous le trait sombre donne l'effet de sillon.
   const hi = el("g", { transform: "translate(1.3 1.6)" }, svg), lines = el("g", {}, svg);
   const seg = (a, b) => {
@@ -597,7 +632,7 @@ function buildBoard() {
   const coords = el("g", {}, svg);
   for (let x = 0; x < W; x++) {
     const s = flipped ? (W - 1 - x) : x;
-    el("text", { x: M + x * S + 20, y: 511, class: "coord", "text-anchor": "middle" }, coords).textContent = FILES[s];
+    el("text", { x: M + x * S + 20, y: VH - 9, class: "coord", "text-anchor": "middle" }, coords).textContent = FILES[s];
   }
   for (let y = 0; y < H; y++) {
     const r = flipped ? y + 1 : H - y;
@@ -617,7 +652,15 @@ function makePiece(p) {
   el("ellipse", { cx: -10, cy: -14, rx: 13, ry: 7.5, class: "shine", transform: "rotate(-20 -10 -14)" }, g);
   return g;
 }
-function drawPath(path, cls) { el("polyline", { points: path.map(s => pos(s).join(",")).join(" "), class: cls }, layers.over); }
+function drawPath(path, cls) {
+  if (path.length === 1) { const [cx, cy] = pos(path[0]); el("circle", { cx, cy, r: 40, class: cls, fill: "none" }, layers.over); return; }
+  el("polyline", { points: path.map(s => pos(s).join(",")).join(" "), class: cls }, layers.over);
+}
+// Fanoron-Telo : les trois points alignés du vainqueur.
+function teloWinLine(board) {
+  const lines = [[0, 1, 2], [3, 4, 5], [6, 7, 8], [0, 3, 6], [1, 4, 7], [2, 5, 8], [0, 4, 8], [2, 4, 6]];
+  return lines.find(l => board[l[0]] && l.every(i => board[i] && board[i].c === board[l[0]].c)) || null;
+}
 function hl(s, cls, r = 44, layer = layers.under) { const [cx, cy] = pos(s); el("circle", { cx, cy, r, class: cls }, layer); }
 
 function renderBoard() {
@@ -639,6 +682,7 @@ function renderBoard() {
     const m = parseMove(game.moves[viewPly - 1]);
     [m.from, ...m.steps.map(s => s.to)].forEach(s => hl(s, "last"));
   }
+  if (telo() && !chosen && !anim) { const wl = teloWinLine(shownBoard()); if (wl) drawPath(wl, "path"); }
   if (!chosen && !anim) {
     const best = analysis && analysis.evals[viewPly] && analysis.evals[viewPly].best;
     if (best && (over() || !live())) { const m = parseMove(best); drawPath([m.from, ...m.steps.map(s => s.to)], "path best"); }
@@ -725,10 +769,18 @@ svg.addEventListener("pointerdown", e => {
   const board = shownBoard(), p = board[sq];
   let justSelected = false;
   if (pendingAW) { drag = { from: sq, click: true }; return; }
+  if (teloPlacing()) {
+    const str = sqName(sq);
+    if (game.legal.includes(str)) commit({ str, from: sq, steps: [] });
+    else flash(p ? "Phase de pose : choisissez un point libre" : "Pose impossible ici");
+    return;
+  }
   if ((!chosen || chosen.steps.length === 0) && p && p.c === sideAt(game.moves.length)) {
     if (!chosen || chosen.from !== sq) {
       if (!movable(sq)) {
-        flash(game.legal.some(m => /[AW]/.test(m)) ? "Capture obligatoire : cette pièce ne peut pas capturer" : "Cette pièce ne peut pas bouger");
+        flash(game.legal.some(m => /[AW]/.test(m)) ? "Capture obligatoire : cette pièce ne peut pas capturer"
+          : velaSide() && velaSide() !== sideAt(game.moves.length) && count(liveBoard(), sideAt(game.moves.length)) > VELA_REMAINING
+            ? "Vela : ce déplacement ne laisserait aucune prise à l'adversaire" : "Cette pièce ne peut pas bouger");
         return;
       }
       select(sq); justSelected = true; render();
@@ -802,7 +854,7 @@ async function pushMove(str, byEngine) {
   const wasLive = live();
   const before = liveBoard();
   game.moves.push(str);
-  positions.push(applyMove(before, str));
+  positions.push(applyMove(before, str, mover, 100 + game.moves.length - 1));
   if (wasLive) viewPly = game.moves.length;
   if (clock && game.moves.length > 2) clock[mover] += clock.inc;
   clockMark = performance.now();
@@ -812,7 +864,7 @@ async function pushMove(str, byEngine) {
   const my = ++epoch;
   busy = true;
   try {
-    const st = await api("/api/state", { moves: game.moves, variant: cfg.variant });
+    const st = await api("/api/state", { moves: game.moves, ...rulesReq() });
     if (my !== epoch) return;
     applyServerState(st);
   } catch (e) {
@@ -826,7 +878,7 @@ async function pushMove(str, byEngine) {
 }
 
 async function refresh() {
-  const st = await api("/api/state", { moves: game.moves, variant: cfg.variant });
+  const st = await api("/api/state", { moves: game.moves, ...rulesReq() });
   rebuildPositions();
   applyServerState(st);
   chosen = null; pendingAW = null; inputView = null;
@@ -848,7 +900,7 @@ async function maybeEngine() {
   busy = true; thinking(true); render();
   const side = sideAt(game.moves.length);
   try {
-    const r = await api("/api/go", { moves: game.moves, variant: cfg.variant, movetime: engineMovetime(), net: cfg.net || null,
+    const r = await api("/api/go", { moves: game.moves, ...rulesReq(), movetime: engineMovetime(), net: cfg.net || null,
       level: cfg.mode === "auto" ? 6 : cfg.level });
     if (my !== epoch) return;
     liveInfo = { ...r.info, side };
@@ -858,7 +910,7 @@ async function maybeEngine() {
     busy = false;
     const before = liveBoard();
     game.moves.push(r.bestmove);
-    positions.push(applyMove(before, r.bestmove));
+    positions.push(applyMove(before, r.bestmove, side, 100 + game.moves.length - 1));
     if (viewPly === game.moves.length - 1) viewPly = game.moves.length;
     if (clock && game.moves.length > 2) clock[side] += clock.inc;
     clockMark = performance.now();
@@ -876,6 +928,7 @@ let anim = null;           // image intermédiaire pendant l'animation d'un coup
 async function animateEngine(str) {
   if (!live()) return;
   const m = parseMove(str);
+  if (!m.steps.length) return;
   let b = liveBoard(), cur = m.from;
   const path = [m.from];
   for (const st of m.steps) {
@@ -896,6 +949,7 @@ function finish(status, reason) {
     "black wins": ["0-1", "Victoire des Noirs", "Les Blancs n'ont plus de pièce ou plus de coup"],
     "draw (no-capture limit)": ["½-½", "Partie nulle", "Limite de coups sans capture"],
     "draw (threefold repetition)": ["½-½", "Partie nulle", "Triple répétition"],
+    "draw (move limit)": ["½-½", "Partie nulle", "Limite de coups atteinte"],
   };
   if (status === "resign") {
     const w = other(reason);
@@ -904,7 +958,11 @@ function finish(status, reason) {
     const w = other(reason);
     game.result = { score: w === "W" ? "1-0" : "0-1", text: "Victoire des " + colorName(w), why: "Temps écoulé pour les " + colorName(reason) };
   } else {
-    const [score, text, why] = map[status] || ["*", status, ""];
+    let [score, text, why] = map[status] || ["*", status, ""];
+    if (telo() && (status === "white wins" || status === "black wins")) {
+      const w = status === "white wins" ? "W" : "B";
+      why = teloWinLine(liveBoard()) ? `Les ${colorName(w)} alignent leurs trois pions` : `Les ${colorName(other(w))} sont bloqués`;
+    }
     game.result = { score, text, why };
   }
   epoch++; busy = false; thinking(false);
@@ -995,7 +1053,7 @@ function judgment(i) {               // appréciation du coup i (1..n), façon l
   const a = evalAt(i - 1), b = evalAt(i);
   if (!a || !b) return null;
   const e = analysis.evals[i - 1];
-  if (e.best && sameBoard(applyMove(positions[i - 1], e.best), positions[i])) return null;
+  if (e.best && sameBoard(applyMove(positions[i - 1], e.best, sideAt(i - 1)), positions[i])) return null;
   const sg = sideAt(i - 1) === "W" ? 1 : -1;
   const loss = sg * (a.wc - b.wc);
   if (loss >= 0.3) return { g: "??", cls: "blun", name: "Gaffe" };
@@ -1041,8 +1099,18 @@ function renderMeta() {
   const clk = $("dClock").querySelector(`option[value="${cfg.clock}"]`);
   $("metaTitle").textContent = cfg.mode === "computer" ? "Contre l'ordinateur" : cfg.mode === "friend" ? "Deux joueurs" : "Ordinateur contre ordinateur";
   const evalName = cfg.net ? "NNUE " + cfg.net : "HCE";
-  $("metaSub").textContent = [clk ? clk.textContent.replace(/ \(.*\)/, "") : "Illimité",
-    cfg.variant === "mandatory" ? "Continuation obligatoire" : "Standard", evalName].join(" • ");
+  const g = GAMES[cfg.game];
+  $("metaSub").textContent = [g.name + " " + g.size, clk ? clk.textContent.replace(/ \(.*\)/, "") : "Illimité",
+    telo() ? null : cfg.variant === "mandatory" ? "Continuation obligatoire" : null,
+    cfg.game === "tsivy" ? evalName : null].filter(Boolean).join(" • ");
+  const vs = velaSide(), vb = $("metaVela");
+  vb.classList.toggle("hidden", !vs);
+  if (vs) {
+    const left = count(shownBoard(), other(vs)), taken = 22 - left;
+    vb.innerHTML = `<b>Vela</b> — bénéficiaire : ${playerName(vs).name} (${colorName(vs)})` +
+      (left > VELA_REMAINING ? `<small>Phase 1 : ${Math.min(taken, 17)} / 17 prises, une pièce par tour ; l'adversaire ne fait que des paika</small>`
+        : `<small>Phase 2 : règles normales</small>`);
+  }
   $("metaPlayers").innerHTML = ["W", "B"].map(c => { const p = playerName(c); return `<div><span class="pdot ${c}"></span><div>${p.name}${p.sub ? `<small>${p.sub}</small>` : ""}</div></div>`; }).join("");
   const st = $("metaStatus");
   st.classList.toggle("hidden", !over());
@@ -1060,7 +1128,7 @@ function renderEngine() {
 function renderMoves() {
   const box = $("moves"), n = game.moves.length;
   let html = "";
-  if (!n) html = `<div class="empty">${cfg.mode === "computer" && cfg.color === "B" ? "Le moteur commence…" : "Aux Blancs de jouer"}</div>`;
+  if (!n) html = `<div class="empty">${cfg.mode === "computer" && cfg.color === "B" ? "Le moteur commence…" : "Aux " + colorName(sideAt(0)) + " de jouer"}</div>`;
   const cell = i => {
     if (i > n) return `<div class="mv"></div>`;
     const j = analysis ? judgment(i) : null, e = analysis ? evalAt(i) : null;
@@ -1091,7 +1159,10 @@ function renderActions() {
   const a = $("actions");
   let html;
   if (over()) {
-    html = `<button id="aRematch" class="go">${ICON.again}Revanche</button><button id="aNew">${ICON.plus}Nouvelle partie</button>` +
+    const n = nextGame();
+    html = `<button id="aRematch" class="go" title="${n.title}">${ICON.again}${n.label}</button>` +
+      (n.vela2 ? `<button id="aVela" title="${n.vela2.title}">${ICON.again}Vela</button>` : "") +
+      `<button id="aNew">${ICON.plus}${n.vela2 ? "Nouvelle" : "Nouvelle partie"}</button>` +
       `<button id="aAnalyse" ${analysis && (analysis.running || analysis.done) ? "disabled" : ""}>${ICON.chart}Analyser</button>`;
   } else {
     const canBack = game.moves.length > 0 && cfg.mode !== "auto";
@@ -1102,7 +1173,7 @@ function renderActions() {
   if (a.dataset.html !== html) {
     a.innerHTML = html; a.dataset.html = html;
     const on = (id, f) => { const b = $(id); if (b) b.onclick = f; };
-    on("aRematch", rematch); on("aNew", openDialog); on("aAnalyse", runAnalysis);
+    on("aRematch", () => nextGame().go()); on("aVela", () => nextGame().vela2.go()); on("aNew", openDialog); on("aAnalyse", runAnalysis);
     on("aBack", takeback); on("aHint", hint); on("aResign", resign);
   }
   const n = game.moves.length;
@@ -1179,7 +1250,7 @@ async function runAnalysis() {
     for (let i = 0; i <= n; i += 8) {
       const plies = [];
       for (let k = i; k <= Math.min(n, i + 7); k++) plies.push(k);
-      const r = await api("/api/eval", { moves: game.moves, plies, depth: analysis.depth, net: cfg.net || null, variant: cfg.variant });
+      const r = await api("/api/eval", { moves: game.moves, plies, depth: analysis.depth, net: cfg.net || null, ...rulesReq() });
       if (my !== anaEpoch) return;
       for (const e of r.evals) analysis.evals[e.ply] = e;
       renderAnalysis(); renderMoves(); renderGauge(); renderBoard();
@@ -1248,7 +1319,7 @@ async function hint() {
   const my = ++epoch;
   busy = true; thinking(true); render();
   try {
-    const r = await api("/api/go", { moves: game.moves, variant: cfg.variant, movetime: cfg.movetime, net: cfg.net || null, level: 6 });
+    const r = await api("/api/go", { moves: game.moves, ...rulesReq(), movetime: cfg.movetime, net: cfg.net || null, level: 6 });
     if (my !== epoch) return;
     liveInfo = { ...r.info, side: sideAt(game.moves.length) };
     const m = parseMove(r.bestmove);
@@ -1258,17 +1329,30 @@ async function hint() {
   finally { if (my === epoch) { busy = false; thinking(false); } }
   render();
 }
-function rematch() {
-  if (cfg.mode === "computer") cfg.color = other(cfg.color);
-  startGame();
+// Enchaînement traditionnel : après une partie gagnée, le perdant peut demander une vela (il en est le
+// bénéficiaire) ; les velas se succèdent jusqu'à ce que le bénéficiaire gagne, puis on revient au jeu normal.
+function winnerOf() { const r = game.result && game.result.score; return r === "1-0" ? "W" : r === "0-1" ? "B" : null; }
+function velaWhoFor(color) { return cfg.mode === "computer" ? (color === cfg.color ? "me" : "engine") : color; }
+function nextGame() {
+  const w = winnerOf(), vs = velaSide();
+  const normal = { label: "Revanche", title: "Nouvelle partie, couleurs inversées",
+    go: () => { if (cfg.mode === "computer") cfg.color = other(cfg.color); cfg.vela = ""; cfg.velaWho = ""; startGame(); } };
+  if (vs && w && w !== vs)  // le bénéficiaire a perdu : la vela continue
+    return { label: "Vela suivante", title: "Nouvelle vela, même bénéficiaire", go: () => startGame() };
+  if (!vs && w && cfg.game === "tsivy" && cfg.mode !== "auto") {
+    const loser = other(w);
+    normal.vela2 = { title: `Vela : les ${colorName(loser)} (perdants) commencent et sont avantagés`,
+      go: () => { cfg.vela = loser; cfg.velaWho = velaWhoFor(loser); startGame(); } };
+  }
+  return normal;
 }
 async function startGame() {
   epoch++; anaEpoch++; busy = false; thinking(false);
-  game = { moves: [], legal: [], status: "ongoing", fen: START_FEN, result: null };
+  game = { moves: [], legal: [], status: "ongoing", fen: startFen(), result: null };
   analysis = null; liveInfo = null; hintMove = null; chosen = null; pendingAW = null; inputView = null;
   clock = parseClock(cfg.clock); clockMark = performance.now();
   flipped = cfg.mode === "computer" && cfg.color === "B";
-  rebuildPositions(); viewPly = 0;
+  applyGeometry(); rebuildPositions(); viewPly = 0;
   buildBoard();
   try { await refresh(); } catch (e) { flash("Serveur injoignable : " + e.message); }
   save(); render();
@@ -1292,7 +1376,25 @@ function syncDialog() {
   $("colorRow").classList.toggle("hidden", draft.mode !== "computer");
   $("startRow").classList.toggle("hidden", draft.mode === "computer");
   $("dlgTitle").textContent = draft.mode === "computer" ? "Jouer contre l'ordinateur" : draft.mode === "friend" ? "Partie à deux" : "Ordinateur contre ordinateur";
+  for (const b of $("segGame").children) b.classList.toggle("on", b.dataset.v === draft.game);
+  $("gameNote").textContent = {
+    tsivy: "Le jeu complet : 22 pions chacun, captures par approche et retrait.",
+    dimy: "Même règles sur un plateau 5 × 5 : 12 pions chacun.",
+    telo: "Pose puis déplacement de 3 pions chacun : aligner ses 3 pions gagne (pas de capture).",
+  }[draft.game];
+  const isT = draft.game === "tsivy";
+  $("fVela").classList.toggle("hidden", !isT);
+  $("fNet").classList.toggle("hidden", !isT);
+  $("fVariant").classList.toggle("hidden", draft.game === "telo");
+  const opts = draft.mode === "computer"
+    ? [["", "Non (partie normale)"], ["me", "Oui, j'en bénéficie"], ["engine", "Oui, le moteur en bénéficie"]]
+    : [["", "Non (partie normale)"], ["W", "Oui, Blancs bénéficiaires"], ["B", "Oui, Noirs bénéficiaires"]];
+  $("dVela").innerHTML = opts.map(([v, t]) => `<option value="${v}">${t}</option>`).join("");
+  if (!opts.some(o => o[0] === draft.velaWho)) draft.velaWho = "";
+  $("dVela").value = draft.velaWho;
 }
+for (const b of $("segGame").children) b.onclick = () => { draft.game = b.dataset.v; syncDialog(); };
+$("dVela").onchange = e => (draft.velaWho = e.target.value);
 for (const b of $("segMode").children) b.onclick = () => { draft.mode = b.dataset.v; syncDialog(); };
 $("dClock").onchange = e => (draft.clock = e.target.value);
 $("dMovetime").onchange = e => (draft.movetime = +e.target.value);
@@ -1301,6 +1403,8 @@ $("dVariant").onchange = e => (draft.variant = e.target.value);
 function launch(color) {
   Object.assign(cfg, draft);
   if (color) cfg.color = color === "R" ? (Math.random() < 0.5 ? "W" : "B") : color;
+  const who = cfg.game === "tsivy" ? cfg.velaWho : "";
+  cfg.vela = who === "me" ? cfg.color : who === "engine" ? other(cfg.color) : who === "W" || who === "B" ? who : "";
   $("dlg").close();
   startGame();
 }
@@ -1364,12 +1468,12 @@ $("soundBtn").onclick = () => { cfg.sound = !cfg.sound; applySoundBtn(); save();
 // ---------- Persistance (confort local uniquement) ----------
 function save() {
   try {
-    localStorage.setItem("fanorona-gui-v2", JSON.stringify({ cfg, theme, boardTheme, autoNight, flipped, moves: game.moves, result: game.result, clock,
+    localStorage.setItem("fanorona-gui-v3", JSON.stringify({ cfg, theme, boardTheme, autoNight, flipped, moves: game.moves, result: game.result, clock,
       analysis: analysis && !analysis.running ? analysis : null }));
   } catch (e) { /* stockage indisponible */ }
 }
 function load() {
-  try { return JSON.parse(localStorage.getItem("fanorona-gui-v2")); } catch (e) { return null; }
+  try { return JSON.parse(localStorage.getItem("fanorona-gui-v3")); } catch (e) { return null; }
 }
 
 (async function init() {
@@ -1392,10 +1496,10 @@ function load() {
   if (saved && Array.isArray(saved.moves) && saved.moves.length) {
     game.moves = saved.moves; game.result = saved.result || null; clock = saved.clock || null;
     analysis = saved.analysis || null; flipped = !!saved.flipped;
-    rebuildPositions(); viewPly = game.moves.length;
+    applyGeometry(); rebuildPositions(); viewPly = game.moves.length;
     buildBoard();
     try {
-      const st = await api("/api/state", { moves: game.moves, variant: cfg.variant });
+      const st = await api("/api/state", { moves: game.moves, ...rulesReq() });
       applyServerState(st);
       render(); maybeEngine();
       return;
