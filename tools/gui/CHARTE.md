@@ -58,21 +58,21 @@ les reflets des pièces sont éteints. Choix explicite dans le menu Apparence, o
 Commun aux deux : points forts (diagonales) marqués plus gros que les points faibles. Approche/retrait :
 orange `#c2551f` / bleu `#2f6fb0`, toujours doublés du libellé.
 
-## Marques de déplacement (suivent le thème, pas le plateau)
+## Marques de déplacement (suivent le plateau, pas le thème)
 
-Variables `--hl-*` : dernier coup (`--hl-last`), sélection, cibles et cases déjà parcourues (`--hl-sel`), tracé de la
-chaîne en cours (`--hl-path`), meilleur coup / indice en pointillés (`--hl-best`), ombre portée des pièces
-(`--hl-shadow`) et ombre de la pièce glissée (`--hl-drag`). Toutes vérifiées sur les deux plateaux.
+Variables `--hl-*`, définies dans le bloc de chaque plateau : dernier coup (`--hl-last`), sélection, cibles et cases
+déjà parcourues (`--hl-sel`), tracé de la chaîne en cours (`--hl-path`), meilleur coup / indice en pointillés
+(`--hl-best`), ombre portée des pièces (`--hl-shadow`) et ombre de la pièce glissée (`--hl-drag`).
 
-| | Papier | Ardoise | Veille |
-|---|---|---|---|
-| Dernier coup | or translucide | terre cuite translucide | crème très douce |
-| Sélection, cibles, tracé | terre cuite foncée (accent) | bleu ardoise profond | crème lumineuse |
-| Meilleur coup, indice | bleu information `#3e6a8a` | bleu clair `#7fa9c9` | ambre |
-| Ombres des pièces | brun chaud léger | noir marqué | noir profond |
+| | Bois | Granite |
+|---|---|---|
+| Dernier coup | or translucide | jaune chaud translucide |
+| Sélection, cibles, tracé | sarcelle vive `rgb(20 118 98)` | terre cuite vive `rgb(196 80 30)` |
+| Meilleur coup, indice | bleu profond | bleu profond |
+| Ombres des pièces | brun chaud | noir |
 
-En Veille, le plateau étant assombri par filtre, les marques sont claires (crème, ambre) plutôt que foncées :
-une marque sombre y disparaîtrait dans les lignes du plateau.
+Les teintes sont volontairement vives et de luminosité moyenne : elles restent lisibles dans les trois thèmes,
+y compris en Veille où le filtre assombrit tout le plateau (une marque foncée y disparaîtrait dans les lignes).
 
 ## Formes et espacements
 

@@ -28,8 +28,6 @@
   --j-inacc: #2f80d0; --j-mist: #b87800; --j-blun: #d0302f;
   --shadow: 0 1px 2px rgba(40, 30, 20, .06), 0 6px 20px rgba(40, 30, 20, .06);
   --board-filter: none; --piece-shine: .22;
-  --hl-last: rgba(236, 178, 64, .55); --hl-sel: rgba(168, 79, 40, .62); --hl-path: rgba(150, 66, 30, .78); --hl-best: rgba(62, 106, 138, .8);
-  --hl-shadow: rgba(60, 40, 20, .3); --hl-drag: rgba(60, 40, 20, .35);
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
@@ -42,8 +40,6 @@
     --j-inacc: #3d8fd9; --j-mist: #c4850c; --j-blun: #e0454a;
     --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 8px 24px rgba(0, 0, 0, .25);
     --board-filter: none; --piece-shine: .2;
-    --hl-last: rgba(210, 116, 63, .5); --hl-sel: rgba(28, 58, 88, .7); --hl-path: rgba(28, 58, 88, .8); --hl-best: rgba(127, 169, 201, .9);
-    --hl-shadow: rgba(0, 0, 0, .42); --hl-drag: rgba(0, 0, 0, .5);
     color-scheme: dark;
   }
 }
@@ -56,8 +52,6 @@
   --j-inacc: #3d8fd9; --j-mist: #c4850c; --j-blun: #e0454a;
   --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 8px 24px rgba(0, 0, 0, .25);
   --board-filter: none; --piece-shine: .2;
-  --hl-last: rgba(210, 116, 63, .5); --hl-sel: rgba(28, 58, 88, .7); --hl-path: rgba(28, 58, 88, .8); --hl-best: rgba(127, 169, 201, .9);
-  --hl-shadow: rgba(0, 0, 0, .42); --hl-drag: rgba(0, 0, 0, .5);
   color-scheme: dark;
 }
 /* Veille : pour jouer la nuit — tons ambrés, aucun blanc pur, plateau assombri et réchauffé. */
@@ -70,16 +64,18 @@
   --j-inacc: #5a90c8; --j-mist: #bd8726; --j-blun: #d4474c;
   --shadow: 0 1px 2px rgba(0, 0, 0, .5);
   --board-filter: brightness(.6) sepia(.35) saturate(.85); --piece-shine: 0;
-  --hl-last: rgba(255, 222, 160, .4); --hl-sel: rgba(255, 238, 205, .78); --hl-path: rgba(255, 238, 205, .85); --hl-best: rgba(255, 190, 110, 1);
-  --hl-shadow: rgba(0, 0, 0, .55); --hl-drag: rgba(0, 0, 0, .6);
   color-scheme: dark;
 }
 /* Plateaux */
 :root, :root[data-board="wood"] {
   --b-1: #e6c48e; --b-2: #c7985a; --b-line: #58391b; --b-line-hi: rgba(255, 236, 200, .28); --b-coord: #58391b;
+  --hl-last: rgba(255, 206, 84, .55); --hl-sel: rgba(20, 118, 98, .85); --hl-path: rgba(20, 118, 98, .88); --hl-best: rgba(40, 80, 170, .82);
+  --hl-shadow: rgba(50, 30, 10, .34); --hl-drag: rgba(50, 30, 10, .4);
 }
 :root[data-board="granite"] {
   --b-1: #a7a39c; --b-2: #85817a; --b-line: #2c2926; --b-line-hi: rgba(255, 255, 255, .38); --b-coord: #2c2926;
+  --hl-last: rgba(255, 200, 90, .55); --hl-sel: rgba(196, 80, 30, .85); --hl-path: rgba(196, 80, 30, .88); --hl-best: rgba(30, 70, 160, .82);
+  --hl-shadow: rgba(0, 0, 0, .4); --hl-drag: rgba(0, 0, 0, .45);
 }
 
 * { box-sizing: border-box; }
