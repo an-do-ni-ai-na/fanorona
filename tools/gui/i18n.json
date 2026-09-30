@@ -315,7 +315,10 @@
     "cont_time": "Arrêtée après 2 minutes : changez de position pour relancer.",
     "cont_busy": "Moteur occupé, nouvel essai dans un instant…",
     "cont_none": "Aucun coup possible.",
-    "cont_toggle": "Activer l'analyse en continu"
+    "cont_toggle": "Activer l'analyse en continu",
+    "install_app": "Installer l'application",
+    "install_ios": "Sur iPhone ou iPad : bouton Partager, puis « Sur l'écran d'accueil ».",
+    "offline": "Hors ligne : le serveur est injoignable."
   },
   "mg": {
     "lang_name": "Malagasy",
@@ -632,6 +635,9 @@
     "cont_time": "Nijanona taorian'ny 2 minitra : ovay ny toerana raha hanohy.",
     "cont_busy": "Sahirana ny motera, handramana indray…",
     "cont_none": "Tsy misy dia azo atao.",
-    "cont_toggle": "Alefaso ny famakafakana mitohy"
+    "cont_toggle": "Alefaso ny famakafakana mitohy",
+    "install_app": "Hametraka ny rindranasa",
+    "install_ios": "Amin'ny iPhone na iPad : tsindrio ny bokotra Zarao, avy eo « Sur l'écran d'accueil ».",
+    "offline": "Tsy misy fifandraisana : tsy tratra ny mpizara."
   }
 }

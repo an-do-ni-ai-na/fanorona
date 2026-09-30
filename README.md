@@ -45,6 +45,9 @@ lui-même ; reprise de coup, indice, abandon, revanche. En fin de partie, « Ana
 ≥ 0,1 / 0,2 / 0,3 comme sur lichess), perte moyenne en centipions, meilleur coup affiché sur le plateau.
 « Apprendre de ses erreurs » rejoue ensuite chaque erreur ou gaffe du joueur : il faut trouver un coup
 aussi bon que celui du moteur (moins de 0,1 de chances de gain perdues), avec la solution à la demande.
+Application installable (PWA) : manifeste, service worker (coquille en cache, réseau d abord) et icônes dans
+`tools/gui/pwa/` ; menu du profil > « Installer l application » (Android/Chrome/Edge), ou Partager > « Sur l écran
+d accueil » sur iPhone. Le site doit être servi en HTTPS (c est le cas via nginx-proxy).
 Analyse en continu (panneau de gauche, page Jouer) : le moteur cherche sans fin sur la position affichée et montre
 ses 1 à 3 meilleures lignes (flèches sur le plateau, barre d'évaluation) ; relancée à chaque changement de position,
 arrêtée après 2 minutes ; indisponible pendant une partie en cours contre l'ordinateur.

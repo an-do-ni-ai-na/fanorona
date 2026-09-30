@@ -4,6 +4,15 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Fanorona</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+<meta name="theme-color" content="#f2efe9" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#141311" media="(prefers-color-scheme: dark)">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Fanorona">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
@@ -524,6 +533,8 @@ dialog::backdrop { background: rgba(10, 8, 6, .55); backdrop-filter: blur(2px); 
   <div class="menu hidden" id="profileMenu" role="dialog">
     <div class="menu-sec"><h4 data-i18n="switch_profile">Changer de profil</h4><div class="menu-profiles" id="menuProfiles"></div>
       <button class="menu-link" id="manageProfiles" data-i18n="manage_profiles">Gérer les profils…</button></div>
+    <div class="menu-sec hidden" id="installSec"><button class="btn primary" id="installBtn" data-i18n="install_app">Installer l'application</button>
+      <p class="note hidden" id="installIos" data-i18n="install_ios"></p></div>
     <div class="menu-sec"><h4 data-i18n="theme">Thème</h4><div class="seg" id="segTheme">
       <button data-v="auto" data-i18n="theme_auto">Auto</button><button data-v="light" data-i18n="theme_light">Papier</button><button data-v="dark" data-i18n="theme_dark">Ardoise</button><button data-v="night" data-i18n="theme_night">Veille</button></div></div>
     <div class="menu-sec"><h4 data-i18n="board">Plateau</h4><div class="tiles" id="boardTiles">
@@ -2848,7 +2859,9 @@ function load() {
   else { profile = null; renderChip(); }
   if (location.hash.startsWith("#g=")) markPage("play");
   else {
-    showPage("home");
+    // Raccourcis de l'application installée : ?page=puzzles, ?page=learn…
+    const pg = new URLSearchParams(location.search).get("page");
+    showPage(["play", "puzzles", "learn", "games"].includes(pg) ? pg : "home");
     if (!pid) openProfiles(false);
   }
 })().then(openLinkFromHash);
@@ -2878,6 +2891,28 @@ async function openLinkFromHash() {
   history.replaceState(null, "", location.pathname);
 }
 window.addEventListener("hashchange", openLinkFromHash);
+
+// ---------- Application installable (PWA) ----------
+if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(e => console.warn("service worker", e));
+let installPrompt = null;
+const standalone = () => matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+const isIos = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+function syncInstall() {
+  const show = !standalone() && (installPrompt || isIos);
+  $("installSec").classList.toggle("hidden", !show);
+  $("installBtn").classList.toggle("hidden", !installPrompt);
+  $("installIos").classList.toggle("hidden", !!installPrompt || !isIos);
+}
+window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); installPrompt = e; syncInstall(); });
+window.addEventListener("appinstalled", () => { installPrompt = null; syncInstall(); });
+$("installBtn").onclick = async () => {
+  if (!installPrompt) return;
+  installPrompt.prompt();
+  await installPrompt.userChoice;
+  installPrompt = null; syncInstall();
+};
+syncInstall();
+
 </script>
 </body>
 </html>

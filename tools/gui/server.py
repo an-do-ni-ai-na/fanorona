@@ -708,6 +708,13 @@ def stop_analysis(sid):
     return {"stopped": sid}
 
 
+# Application installable (PWA) : manifeste, service worker (à la racine pour couvrir tout le site), icônes.
+PWA_FILES = {"/manifest.webmanifest": ("pwa/manifest.webmanifest", "application/manifest+json"),
+             "/sw.js": ("pwa/sw.js", "text/javascript; charset=utf-8"),
+             "/favicon.ico": ("pwa/favicon-32.png", "image/png")}
+PWA_ICONS = {"icon-192.png", "icon-512.png", "maskable-512.png", "apple-touch-icon.png", "favicon-32.png"}
+
+
 def available_nets():
     d = Path(args.nets)
     if not d.is_dir():
@@ -755,6 +762,17 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json(200, get_game(int(path.rsplit("/", 1)[1])))
             except (EngineError, ValueError) as e:
                 return self.send_json(400, {"error": str(e)})
+        static = PWA_FILES.get(path) or (("pwa/" + path[7:], "image/png") if path.startswith("/icons/") and
+                                          path[7:] in PWA_ICONS else None)
+        if static:
+            body = (HERE / static[0]).read_bytes()
+            self.send_response(200)
+            self.send_header("Content-Type", static[1])
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Cache-Control", "no-cache" if path == "/sw.js" else "public, max-age=86400")
+            self.end_headers()
+            self.wfile.write(body)
+            return
         if path in ("/lessons.json", "/puzzles.json", "/i18n.json"):
             body = (HERE / path[1:]).read_bytes()
             self.send_response(200)
