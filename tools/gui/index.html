@@ -167,6 +167,8 @@ button, select { font: inherit; color: inherit; }
 .map .dot.s2 { background: color-mix(in srgb, var(--accent) 55%, transparent); border-color: var(--accent); }
 .map .dot.s3 { background: var(--accent); border-color: var(--accent); }
 .map .dot.cur { outline: 2px solid var(--info); outline-offset: 2px; }
+body.retro #metaBox, body.retro #engineBox, body.retro #analysisBox, body.retro #actions { display: none; }
+.map .dot.ko { background: var(--j-blun); border-color: var(--j-blun); }
 body.learning #metaBox, body.learning #engineBox, body.learning #analysisBox, body.learning #actions { display: none; }
 .panel h3 { margin: 0 0 10px; font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .07em; color: var(--muted);
   display: flex; align-items: center; justify-content: space-between; }
@@ -376,6 +378,7 @@ dialog::backdrop { background: rgba(10, 8, 6, .55); backdrop-filter: blur(2px); 
 <main class="round">
   <aside class="side">
     <section class="box panel learn hidden" id="learnBox"></section>
+    <section class="box panel learn hidden" id="retroBox"></section>
     <section class="box meta" id="metaBox">
       <div class="head">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="4" y="6" width="16" height="12" rx="2"/><path d="M9 10h.01M15 10h.01M9 14h6M12 3v3M8 21h8"/></svg>
@@ -404,6 +407,7 @@ dialog::backdrop { background: rgba(10, 8, 6, .55); backdrop-filter: blur(2px); 
       <div class="progress" id="anaProgress"><i></i></div>
       <div class="chart-wrap"><svg class="chart" id="chart" viewBox="0 0 600 150" role="img" aria-label="Avantage au fil de la partie"></svg><div class="tip" id="tip"></div></div>
       <table class="summary" id="summary"></table>
+      <button class="btn primary hidden" id="retroBtn" style="width:100%;margin-top:12px">Apprendre de ses erreurs</button>
     </section>
   </aside>
 
@@ -764,7 +768,8 @@ function renderBoard() {
 // Saisie : clic ou glisser-déposer, chaîne de captures case par case
 // =====================================================================================================
 const humanSide = c => cfg.mode === "friend" || (cfg.mode === "computer" && cfg.color === c);
-const canInput = () => live() && !over() && !busy && humanSide(sideAt(game.moves.length)) && !(learn && learn.status !== "play");
+const canInput = () => live() && !over() && !busy && humanSide(sideAt(game.moves.length)) && !(learn && learn.status !== "play")
+  && !(retro && retro.st !== "find");
 
 function candidates() {
   return game.legal.map(parseMove).filter(m => m.from === chosen.from &&
@@ -882,6 +887,7 @@ svg.addEventListener("contextmenu", e => { if (chosen) { e.preventDefault(); can
 async function commit(m) {
   chosen = null; pendingAW = null; inputView = null; hintMove = null;
   if (learn && learn.solo) return learnSoloMove(m);
+  if (retro) return retroTry(m);
   await pushMove(m.str, false);
 }
 
@@ -944,7 +950,7 @@ async function refresh() {
   render();
 }
 
-const engineToMove = () => !over() && !(learn && learn.status !== "play") && (cfg.mode === "auto" || (cfg.mode === "computer" && cfg.color !== sideAt(game.moves.length)));
+const engineToMove = () => !over() && !retro && !(learn && learn.status !== "play") && (cfg.mode === "auto" || (cfg.mode === "computer" && cfg.color !== sideAt(game.moves.length)));
 
 function engineMovetime() {
   const lv = levels.find(l => l.id === cfg.level);
@@ -1190,7 +1196,8 @@ function renderMoves() {
   if (!n) html = `<div class="empty">${cfg.mode === "computer" && cfg.color === "B" ? "Le moteur commence…" : "Aux " + colorName(sideAt(0)) + " de jouer"}</div>`;
   const cell = i => {
     if (i > n) return `<div class="mv"></div>`;
-    const j = analysis ? judgment(i) : null, e = analysis ? evalAt(i) : null;
+    const hide = retro && i >= retro.list[retro.k];  // coup d'essai de la révision : pas d'annotation d'origine
+    const j = analysis && !hide ? judgment(i) : null, e = analysis && !hide ? evalAt(i) : null;
     return `<div class="mv${i === viewPly ? " active" : ""}" data-ply="${i}">${game.moves[i - 1]}` +
       (j ? `<span class="g ${j.cls}" title="${j.name}">${j.g}</span>` : "") + (e ? `<span class="ev">${e.label}</span>` : "") + `</div>`;
   };
@@ -1298,6 +1305,9 @@ function renderAnalysis() {
   $("summary").innerHTML = `<tr><th></th><th><span class="pdot W" style="display:inline-block;vertical-align:middle"></span> Blancs</th><th><span class="pdot B" style="display:inline-block;vertical-align:middle"></span> Noirs</th></tr>` +
     row("Imprécisions", "inacc", "inacc", "?!") + row("Erreurs", "mist", "mist", "?") + row("Gaffes", "blun", "blun", "??") +
     `<tr><td>Perte moyenne (cp)</td><td>${acpl("W")}</td><td>${acpl("B")}</td></tr>`;
+  const nMist = analysis.done && !retro ? retroMistakes().length : 0;
+  $("retroBtn").classList.toggle("hidden", !nMist);
+  $("retroBtn").textContent = `Apprendre de ses erreurs (${nMist})`;
 }
 
 async function runAnalysis() {
@@ -1340,7 +1350,7 @@ function flash(msg) {
 
 function render() {
   renderBoard(); renderUsers(); renderClocks(); renderMoves(); renderActions(); renderMeta(); renderEngine(); renderGauge(); renderAnalysis();
-  renderLearn();
+  renderLearn(); renderRetro();
   $("showEval").checked = cfg.showEval;
 }
 
@@ -1360,6 +1370,7 @@ const allSteps = () => lessons.chapters.flatMap((c, ci) => c.steps.map((s, si) =
 const soloGoal = g => g.type !== "win" && !g.level;
 
 async function openLearn() {
+  if (retro) exitRetro();
   if (!lessons) {
     try { lessons = await (await fetch("/lessons.json")).json(); } catch (e) { return flash("Leçons indisponibles"); }
   }
@@ -1473,6 +1484,134 @@ function renderLearn() {
 }
 
 // =====================================================================================================
+// Apprendre de ses erreurs (façon lichess) : après l'analyse, on rejoue chaque erreur (?) ou gaffe (??) du
+// joueur depuis la position d'avant la faute. Un coup est accepté s'il donne le même plateau que le meilleur
+// coup du moteur, ou s'il perd moins de 0,1 de chances de gain par rapport à lui (seuil d'une imprécision),
+// évalué à la même profondeur que l'analyse. La partie réelle est mise de côté puis restaurée.
+// =====================================================================================================
+let retro = null;
+const RETRO_TOL = 0.1;
+function retroMistakes() {
+  if (!analysis || !analysis.done) return [];
+  const sides = cfg.mode === "computer" ? [cfg.color] : ["W", "B"];
+  const out = [];
+  for (let i = 1; i <= game.moves.length; i++) {
+    const j = judgment(i);
+    if (j && (j.cls === "mist" || j.cls === "blun") && sides.includes(sideAt(i - 1)) && analysis.evals[i - 1].best) out.push(i);
+  }
+  return out;
+}
+function startRetro() {
+  const list = retroMistakes();
+  if (!list.length) return flash("Aucune erreur à revoir");
+  retro = { list, k: 0, st: "find", msg: "", tries: 0, results: {}, judg: Object.fromEntries(list.map(i => [i, judgment(i)])),
+    saved: { moves: game.moves.slice(), result: game.result, status: game.status, legal: game.legal, fen: game.fen, mode: cfg.mode, viewPly } };
+  document.body.classList.add("retro");
+  loadRetro(0);
+}
+async function loadRetro(k) {
+  retro.k = k; retro.st = "find"; retro.msg = ""; retro.tries = 0; hintMove = null;
+  const i = retro.list[k];
+  epoch++; busy = false;
+  cfg.mode = "friend";
+  game.moves = retro.saved.moves.slice(0, i - 1); game.result = null;
+  chosen = null; pendingAW = null; inputView = null;
+  rebuildPositions(); viewPly = game.moves.length;
+  try { await refresh(); } catch (e) { flash(e.message); }
+  render();
+}
+function exitRetro() {
+  const sv = retro.saved;
+  retro = null; hintMove = null;
+  document.body.classList.remove("retro");
+  cfg.mode = sv.mode;
+  Object.assign(game, { moves: sv.moves, result: sv.result, status: sv.status, legal: sv.legal, fen: sv.fen });
+  chosen = null; pendingAW = null; inputView = null;
+  rebuildPositions(); viewPly = sv.viewPly;
+  render();
+}
+async function retroTry(m) {
+  const i = retro.list[retro.k], prefix = retro.saved.moves.slice(0, i - 1), side = sideAt(i - 1);
+  const before = positions[i - 1], e = analysis.evals[i - 1];
+  const after = applyMove(before, m.str, side, 300 + retro.tries);
+  retro.st = "checking"; retro.tries++;
+  game.moves.push(m.str); positions.push(after); viewPly = game.moves.length;
+  sound(count(before, other(side)) > count(after, other(side)) ? "capture" : "move");
+  render();
+  let verdict;
+  if (sameBoard(after, applyMove(before, retro.saved.moves[i - 1], side))) verdict = "same";
+  else if (sameBoard(after, applyMove(before, e.best, side))) verdict = "best";
+  else {
+    try {
+      const r = await api("/api/eval", { moves: [...prefix, m.str], plies: [i], depth: analysis.depth, net: cfg.net || null, ...rulesReq() });
+      const ev = r.evals[0], sg = side === "W" ? 1 : -1;
+      // Plus de coup pour l'adversaire : le coup gagne.
+      const candWc = ev.score ? whiteScore(ev.score, sideAt(i)).wc : sg;
+      const loss = sg * (evalAt(i - 1).wc - candWc);
+      verdict = loss < RETRO_TOL ? "good" : "bad";
+    } catch (err) { verdict = "error"; flash(err.message); }
+  }
+  if (!retro) return;
+  if (verdict === "best" || verdict === "good") {
+    retro.st = "ok";
+    retro.results[i] = "ok";
+    retro.msg = verdict === "best" ? "Exactement le coup du moteur !" : "Bon coup : il est presque aussi fort que celui du moteur.";
+    sound("end");
+    render();
+    return;
+  }
+  retro.msg = verdict === "same" ? "C'est le coup joué dans la partie : cherchez autre chose." :
+    verdict === "bad" ? "Ce coup n'est pas meilleur. Réessayez, ou voyez la solution." : "Vérification impossible, réessayez.";
+  retro.st = "wrong";
+  render();
+  setTimeout(() => {
+    if (!retro || retro.st !== "wrong") return;
+    game.moves.pop(); positions.pop(); viewPly = game.moves.length;
+    retro.st = "find";
+    render();
+  }, 900);
+}
+function retroShow() {
+  const i = retro.list[retro.k], m = parseMove(analysis.evals[i - 1].best);
+  hintMove = [m.from, ...m.steps.map(s => s.to)];
+  retro.st = "shown";
+  retro.results[i] = retro.results[i] || "ko";
+  retro.msg = "Le coup du moteur : " + analysis.evals[i - 1].best;
+  render();
+}
+function renderRetro() {
+  const box = $("retroBox");
+  box.classList.toggle("hidden", !retro);
+  if (!retro) return;
+  const { list, k } = retro, i = list[k], j = retro.judg[i], done = retro.st === "ok" || retro.st === "shown";
+  const moveNo = `${Math.ceil(i / 2)}${i % 2 ? "." : "…"}`;
+  const found = Object.values(retro.results).filter(v => v === "ok").length;
+  const last = k === list.length - 1;
+  const dots = list.map((p, n) => `<button class="dot ${retro.results[p] === "ok" ? "s3" : retro.results[p] === "ko" ? "ko" : ""}${n === k ? " cur" : ""}" data-k="${n}" title="Coup ${Math.ceil(p / 2)}"></button>`).join("");
+  const html = `<div class="crumbs"><span>Erreur ${k + 1} / ${list.length}</span><button id="rQuit">Quitter ✕</button></div>
+    <h2>Trouvez un meilleur coup</h2>
+    <p class="text">Au coup ${moveNo}, ${retro.saved.mode === "computer" ? "vous avez joué" : `les ${colorName(sideAt(i - 1))} ont joué`} <b>${retro.saved.moves[i - 1]}</b>
+      <span class="g ${j ? j.cls : ""}">${j ? j.g : ""}</span>${j ? " (" + j.name.toLowerCase() + ")" : ""}. Rejouez la position.</p>
+    ${retro.msg ? `<div class="outcome ${retro.st === "ok" ? "ok" : "ko"}"><p style="margin:0">${retro.msg}</p></div>` : ""}
+    ${retro.st === "checking" ? `<div class="goal"><span>Vérification par le moteur…</span><span></span></div>` : ""}
+    <div class="row">` +
+    (done ? "" : `<button class="btn" id="rShow">Voir la solution</button>`) +
+    `<button class="btn primary" id="rNext">${last ? "Terminer" : done ? "Suivant" : "Passer"}</button></div>
+    <div class="map"><div class="ch cur"><span>${found} / ${list.length} trouvé${found > 1 ? "s" : ""}</span><span class="dots">${dots}</span></div></div>`;
+  if (box.dataset.html === html) return;
+  box.innerHTML = html; box.dataset.html = html;
+  $("rQuit").onclick = exitRetro;
+  if ($("rShow")) $("rShow").onclick = retroShow;
+  $("rNext").onclick = () => {
+    if (!retro.results[i]) retro.results[i] = "ko";
+    if (last) { const f = Object.values(retro.results).filter(v => v === "ok").length; exitRetro(); flash(`${f} erreur${f > 1 ? "s" : ""} sur ${list.length} corrigée${f > 1 ? "s" : ""}`); }
+    else loadRetro(k + 1);
+  };
+  for (const d of box.querySelectorAll(".dot")) d.onclick = () => loadRetro(+d.dataset.k);
+}
+$("retroBtn").onclick = startRetro;
+
+// =====================================================================================================
 // Actions
 // =====================================================================================================
 function setView(k) {
@@ -1550,6 +1689,7 @@ async function startGame() {
 // ---------- Boîte de dialogue ----------
 let draft = null;
 function openDialog() {
+  if (retro) exitRetro();
   if (learn) { learn = null; startBoard = null; document.body.classList.remove("learning"); Object.assign(cfg, learnSavedCfg || {}, { startFen: "" }); }
   draft = { ...cfg };
   syncDialog();

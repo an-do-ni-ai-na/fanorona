@@ -43,6 +43,8 @@ contre le moteur (six niveaux, voir ci-dessous), à deux sur le même écran, ou
 lui-même ; reprise de coup, indice, abandon, revanche. En fin de partie, « Analyser » évalue chaque position
 (`/api/eval`) : courbe d'avantage, imprécisions `?!`, erreurs `?` et gaffes `??` (perte de chances de gain
 ≥ 0,1 / 0,2 / 0,3 comme sur lichess), perte moyenne en centipions, meilleur coup affiché sur le plateau.
+« Apprendre de ses erreurs » rejoue ensuite chaque erreur ou gaffe du joueur : il faut trouver un coup
+aussi bon que celui du moteur (moins de 0,1 de chances de gain perdues), avec la solution à la demande.
 Tutoriel interactif (« Apprendre ») : 6 chapitres, du déplacement aux chaînes de captures, à la vela et au
 Fanoron-Telo, avec exercices sur le plateau, indices et étoiles (leçons dans `tools/gui/lessons.json`).
 Trois jeux (Fanoron-Tsivy 9×5, Dimy 5×5, Telo 3×3) et la partie *vela*, proposée au perdant en fin de
