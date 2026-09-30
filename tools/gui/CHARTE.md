@@ -53,7 +53,7 @@ les reflets des pièces sont éteints. Choix explicite dans le menu Apparence, o
 |---|---|---|
 | Matière | dégradé miel `#e6c48e → #c7985a`, veines (bruit étiré) | gris `#a7a39c → #85817a`, mouchetures sombres et claires, marbrure lente |
 | Lignes | brûlées `#58391b`, léger reflet | gravées `#2c2926` avec reflet clair décalé (sillon) |
-| Pièces | ivoire et ébène, anneau intérieur tourné | galets : quartz et basalte, grain fin, sans anneau |
+| Pièces | ivoire et ébène, anneau intérieur tourné | galets : quartz et basalte très sombre (`#3f3d3b → #060606`), grain fin, sans anneau |
 
 Commun aux deux : ombre portée douce sous chaque pièce, points forts (diagonales) marqués plus gros que les
 points faibles, dernier coup en or translucide, sélection et cibles en sarcelle foncée, meilleur coup du moteur en

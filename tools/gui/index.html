@@ -555,7 +555,7 @@ function boardDefs(defs) {
   rad("pW-wood", [["0", "#fffdf7"], [".55", "#efe5d1"], ["1", "#c9b894"]]);
   rad("pB-wood", [["0", "#5b5149"], [".5", "#2b2520"], ["1", "#0d0b09"]]);
   rad("pW-granite", [["0", "#fbfaf7"], [".6", "#e3dfd7"], ["1", "#b9b3a8"]]);
-  rad("pB-granite", [["0", "#6a6763"], [".55", "#3a3835"], ["1", "#161514"]]);
+  rad("pB-granite", [["0", "#3f3d3b"], [".5", "#1b1a19"], ["1", "#060606"]]);
 }
 const boardStyle = () => document.documentElement.dataset.board || "wood";
 
@@ -609,7 +609,7 @@ function makePiece(p) {
   const stone = boardStyle() === "granite", g = el("g", { class: "piece" });
   el("ellipse", { cx: 3, cy: 6, rx: 34, ry: 32, class: "shadow" }, g);
   el("circle", { r: 34, fill: `url(#p${p.c}-${stone ? "granite" : "wood"})` }, g);
-  if (stone) el("circle", { r: 34, fill: "#000", filter: "url(#pebble)", opacity: p.c === "W" ? .35 : .5 }, g);
+  if (stone) el("circle", { r: 34, fill: "#000", filter: "url(#pebble)", opacity: p.c === "W" ? .35 : .18 }, g);
   else el("circle", { r: 23, class: "inner-" + p.c }, g);
   el("circle", { r: 34, class: "rim-" + p.c }, g);
   el("ellipse", { cx: -10, cy: -14, rx: 13, ry: 7.5, class: "shine", transform: "rotate(-20 -10 -14)" }, g);
