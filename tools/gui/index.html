@@ -377,21 +377,22 @@ dialog::backdrop { background: rgba(10, 8, 6, .55); backdrop-filter: blur(2px); 
       <circle cx="9.5" cy="16" r="3.2" fill="currentColor" stroke="none"/><circle cx="22.5" cy="16" r="3" fill="var(--surface)" stroke-width="1.6"/></svg>
     <span class="brand-text">Fanorona</span></a>
   <nav>
-    <button id="navNew">Jouer</button>
-    <button id="navAnalyse">Analyse</button>
-    <button id="navPuzzle">Puzzles</button>
-    <button id="navLearn">Apprendre</button>
+    <button id="navNew" data-i18n="nav_play">Jouer</button>
+    <button id="navAnalyse" data-i18n="nav_analyse">Analyse</button>
+    <button id="navPuzzle" data-i18n="nav_puzzles">Puzzles</button>
+    <button id="navLearn" data-i18n="nav_learn">Apprendre</button>
   </nav>
   <div class="spacer"></div>
-  <button class="icon-btn" id="soundBtn" title="Sons"></button>
-  <button class="icon-btn" id="themeBtn" title="Apparence" aria-haspopup="true"></button>
-  <div class="appearance hidden" id="appearance" role="dialog" aria-label="Apparence">
-    <div><h4>Thème</h4><div class="seg" id="segTheme">
-      <button data-v="auto">Auto</button><button data-v="light">Papier</button><button data-v="dark">Ardoise</button><button data-v="night">Veille</button></div></div>
-    <div><h4>Plateau</h4><div class="tiles" id="boardTiles">
-      <button class="tile" data-v="wood"><div class="sw wood"></div>Bois</button>
-      <button class="tile" data-v="granite"><div class="sw granite"></div>Granite</button></div></div>
-    <label class="switch">Veille automatique de 22 h à 7 h <input type="checkbox" id="autoNight"></label>
+  <button class="icon-btn" id="soundBtn" title="Sons" data-i18n-title="sounds"></button>
+  <button class="icon-btn" id="themeBtn" title="Apparence" data-i18n-title="appearance" aria-haspopup="true"></button>
+  <div class="appearance hidden" id="appearance" role="dialog" aria-label="Apparence" data-i18n-aria="appearance">
+    <div><h4 data-i18n="theme">Thème</h4><div class="seg" id="segTheme">
+      <button data-v="auto" data-i18n="theme_auto">Auto</button><button data-v="light" data-i18n="theme_light">Papier</button><button data-v="dark" data-i18n="theme_dark">Ardoise</button><button data-v="night" data-i18n="theme_night">Veille</button></div></div>
+    <div><h4 data-i18n="board">Plateau</h4><div class="tiles" id="boardTiles">
+      <button class="tile" data-v="wood"><div class="sw wood"></div><span data-i18n="board_wood">Bois</span></button>
+      <button class="tile" data-v="granite"><div class="sw granite"></div><span data-i18n="board_granite">Granite</span></button></div></div>
+    <label class="switch"><span data-i18n="auto_night">Veille automatique de 22 h à 7 h</span> <input type="checkbox" id="autoNight"></label>
+    <div><h4 data-i18n="language">Langue</h4><div class="seg" id="segLang"><button data-v="fr">Français</button><button data-v="mg">Malagasy</button></div></div>
   </div>
 </header>
 
@@ -411,33 +412,33 @@ dialog::backdrop { background: rgba(10, 8, 6, .55); backdrop-filter: blur(2px); 
     </section>
 
     <section class="box panel" id="engineBox">
-      <h3>Moteur <span id="engineState"></span></h3>
+      <h3><span data-i18n="engine">Moteur</span> <span id="engineState"></span></h3>
       <div class="kv">
-        <div><b id="sDepth">–</b><small>profondeur</small></div>
-        <div><b id="sNodes">–</b><small>nœuds</small></div>
-        <div><b id="sNps">–</b><small>nœuds/s</small></div>
+        <div><b id="sDepth">–</b><small data-i18n="depth">profondeur</small></div>
+        <div><b id="sNodes">–</b><small data-i18n="nodes">nœuds</small></div>
+        <div><b id="sNps">–</b><small data-i18n="nps">nœuds/s</small></div>
       </div>
       <div class="pv" id="pv"></div>
       <div class="toggles">
-        <label class="switch">Afficher l'évaluation <input type="checkbox" id="showEval"></label>
+        <label class="switch"><span data-i18n="show_eval">Afficher l'évaluation</span> <input type="checkbox" id="showEval"></label>
       </div>
     </section>
 
     <section class="box panel hidden" id="analysisBox">
-      <h3>Analyse <span id="anaState"></span></h3>
+      <h3><span data-i18n="analysis">Analyse</span> <span id="anaState"></span></h3>
       <div class="progress" id="anaProgress"><i></i></div>
-      <div class="chart-wrap"><svg class="chart" id="chart" viewBox="0 0 600 150" role="img" aria-label="Avantage au fil de la partie"></svg><div class="tip" id="tip"></div></div>
+      <div class="chart-wrap"><svg class="chart" id="chart" viewBox="0 0 600 150" role="img" aria-label="Avantage au fil de la partie" data-i18n-aria="analysis_chart"></svg><div class="tip" id="tip"></div></div>
       <table class="summary" id="summary"></table>
       <button class="btn primary hidden" id="retroBtn" style="width:100%;margin-top:12px">Apprendre de ses erreurs</button>
     </section>
   </aside>
 
   <div class="board-col">
-    <div class="gauge" id="gauge" title="Évaluation"><div class="w" id="gaugeW"></div><div class="tick"></div></div>
+    <div class="gauge" id="gauge" title="Évaluation" data-i18n-title="evaluation"><div class="w" id="gaugeW"></div><div class="tick"></div></div>
     <div class="board-wrap">
-      <svg id="board" viewBox="0 0 920 520" data-dyn="1" aria-label="Plateau de Fanorona"></svg>
-      <div class="overlay top hidden" id="awChoice"><button class="A" id="chooseA">Approche</button><button class="W" id="chooseW">Retrait</button></div>
-      <div class="overlay bottom hidden" id="stopBox"><button class="stop" id="stopChain">Arrêter la capture</button></div>
+      <svg id="board" viewBox="0 0 920 520" data-dyn="1" aria-label="Plateau de Fanorona" data-i18n-aria="board_label"></svg>
+      <div class="overlay top hidden" id="awChoice"><button class="A" id="chooseA" data-i18n="approach">Approche</button><button class="W" id="chooseW" data-i18n="withdrawal">Retrait</button></div>
+      <div class="overlay bottom hidden" id="stopBox"><button class="stop" id="stopChain" data-i18n="stop_capture">Arrêter la capture</button></div>
       <div class="flash" id="flash"></div>
     </div>
   </div>
@@ -447,12 +448,12 @@ dialog::backdrop { background: rgba(10, 8, 6, .55); backdrop-filter: blur(2px); 
     <div class="thinkbar"><i id="thinkBar"></i></div>
     <div class="moves-box"><div class="tview" id="moves"></div></div>
     <div class="ctrls nav">
-      <button id="bFirst" title="Début (Origine)"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 5h2v14H6zM20 5v14L9 12z"/></svg></button>
-      <button id="bPrev" title="Précédent (←)"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M17 5v14L6 12z"/></svg></button>
-      <button id="bNext" title="Suivant (→)"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 5v14l11-7z"/></svg></button>
-      <button id="bLast" title="Fin (Fin)"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 5h2v14h-2zM4 5v14l11-7z"/></svg></button>
-      <button id="bShare" title="Partager, exporter, importer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/></svg></button>
-      <button id="bFlip" title="Retourner le plateau (f)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 4v16M7 20l-3-3M7 20l3-3M17 20V4M17 4l-3 3M17 4l3 3"/></svg></button>
+      <button id="bFirst" title="Début (Origine)" data-i18n-title="nav_first"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 5h2v14H6zM20 5v14L9 12z"/></svg></button>
+      <button id="bPrev" title="Précédent (←)" data-i18n-title="nav_prev"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M17 5v14L6 12z"/></svg></button>
+      <button id="bNext" title="Suivant (→)" data-i18n-title="nav_next"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 5v14l11-7z"/></svg></button>
+      <button id="bLast" title="Fin (Fin)" data-i18n-title="nav_last"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 5h2v14h-2zM4 5v14l11-7z"/></svg></button>
+      <button id="bShare" title="Partager, exporter, importer" data-i18n-title="share_btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/></svg></button>
+      <button id="bFlip" title="Retourner le plateau (f)" data-i18n-title="flip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 4v16M7 20l-3-3M7 20l3-3M17 20V4M17 4l-3 3M17 4l3 3"/></svg></button>
     </div>
     <div class="ctrls actions" id="actions"></div>
     <div class="pline pbot"><div class="ruser bottom" id="userBottom"></div><div class="clock bottom" id="clockBottom"></div></div>
@@ -460,65 +461,63 @@ dialog::backdrop { background: rgba(10, 8, 6, .55); backdrop-filter: blur(2px); 
 </main>
 
 <dialog id="dlg">
-  <div class="dlg-head"><span id="dlgTitle">Nouvelle partie</span><button class="icon-btn" id="dlgClose" title="Fermer">✕</button></div>
+  <div class="dlg-head"><span id="dlgTitle">Nouvelle partie</span><button class="icon-btn" id="dlgClose" title="Fermer" data-i18n-title="close">✕</button></div>
   <div class="dlg-body">
-    <div class="field"><label>Jeu</label>
+    <div class="field"><label data-i18n="game">Jeu</label>
       <div class="seg" id="segGame"><button data-v="tsivy">Tsivy 9 × 5</button><button data-v="dimy">Dimy 5 × 5</button><button data-v="telo">Telo 3 × 3</button></div>
       <div class="lvl-name" id="gameNote"></div></div>
-    <div class="field"><label>Adversaire</label>
-      <div class="seg" id="segMode"><button data-v="computer">Ordinateur</button><button data-v="friend">Deux joueurs</button><button data-v="auto">Ordinateur contre ordinateur</button></div></div>
-    <div class="field" id="fLevel"><label>Niveau</label>
+    <div class="field"><label data-i18n="opponent">Adversaire</label>
+      <div class="seg" id="segMode"><button data-v="computer" data-i18n="computer">Ordinateur</button><button data-v="friend" data-i18n="two_players">Deux joueurs</button><button data-v="auto" data-i18n="mode_auto">Ordinateur contre ordinateur</button></div></div>
+    <div class="field" id="fLevel"><label data-i18n="level">Niveau</label>
       <div class="seg" id="segLevel"></div><div class="lvl-name" id="lvlName"></div></div>
     <div class="grid2">
-      <div class="field"><label>Cadence</label>
+      <div class="field"><label data-i18n="time_control">Cadence</label>
         <select id="dClock">
-          <option value="0">Illimité</option><option value="1+0">1 + 0 (bullet)</option><option value="3+2">3 + 2 (blitz)</option>
-          <option value="5+3">5 + 3 (blitz)</option><option value="10+5">10 + 5 (rapide)</option><option value="15+10">15 + 10 (rapide)</option>
-          <option value="30+0">30 + 0 (classique)</option>
+          <option value="0" data-i18n="unlimited">Illimité</option><option value="1+0" data-i18n="tc_bullet" data-i18n-t="1 + 0">1 + 0 (bullet)</option><option value="3+2" data-i18n="tc_blitz" data-i18n-t="3 + 2">3 + 2 (blitz)</option>
+          <option value="5+3" data-i18n="tc_blitz" data-i18n-t="5 + 3">5 + 3 (blitz)</option><option value="10+5" data-i18n="tc_rapid" data-i18n-t="10 + 5">10 + 5 (rapide)</option><option value="15+10" data-i18n="tc_rapid" data-i18n-t="15 + 10">15 + 10 (rapide)</option>
+          <option value="30+0" data-i18n="tc_classical" data-i18n-t="30 + 0">30 + 0 (classique)</option>
         </select></div>
-      <div class="field" id="fMovetime"><label>Réflexion du moteur</label>
+      <div class="field" id="fMovetime"><label data-i18n="engine_time">Réflexion du moteur</label>
         <select id="dMovetime">
-          <option value="200">0,2 s par coup</option><option value="500">0,5 s par coup</option><option value="1000">1 s par coup</option>
-          <option value="2000">2 s par coup</option><option value="5000">5 s par coup</option><option value="10000">10 s par coup</option>
+          <option value="200" data-i18n="per_move" data-i18n-s="0,2">0,2 s par coup</option><option value="500" data-i18n="per_move" data-i18n-s="0,5">0,5 s par coup</option><option value="1000" data-i18n="per_move" data-i18n-s="1">1 s par coup</option>
+          <option value="2000" data-i18n="per_move" data-i18n-s="2">2 s par coup</option><option value="5000" data-i18n="per_move" data-i18n-s="5">5 s par coup</option><option value="10000" data-i18n="per_move" data-i18n-s="10">10 s par coup</option>
         </select></div>
-      <div class="field" id="fNet"><label>Évaluation</label><select id="dNet"><option value="">Manuelle (HCE)</option></select></div>
-      <div class="field" id="fVela"><label>Partie vela</label><select id="dVela"></select></div>
-      <div class="field" id="fVariant"><label>Variante</label>
-        <select id="dVariant"><option value="free">Standard (arrêt libre)</option><option value="mandatory">Continuation obligatoire</option></select></div>
+      <div class="field" id="fNet"><label data-i18n="evaluation">Évaluation</label><select id="dNet"><option value="" data-i18n="eval_hce">Manuelle (HCE)</option></select></div>
+      <div class="field" id="fVela"><label data-i18n="vela_game">Partie vela</label><select id="dVela"></select></div>
+      <div class="field" id="fVariant"><label data-i18n="variant">Variante</label>
+        <select id="dVariant"><option value="free" data-i18n="variant_free">Standard (arrêt libre)</option><option value="mandatory" data-i18n="variant_mandatory">Continuation obligatoire</option></select></div>
     </div>
     <div class="colors" id="colorRow">
-      <button data-c="B" title="Jouer les Noirs"><svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="16" fill="#2a2622" stroke="#000" stroke-width="2"/><circle cx="20" cy="20" r="10" fill="none" stroke="#4a443c" stroke-width="2"/></svg></button>
-      <button data-c="R" class="rand" title="Couleur aléatoire"><svg viewBox="0 0 40 40"><path d="M20 4a16 16 0 0 1 0 32z" fill="#2a2622"/><path d="M20 4a16 16 0 0 0 0 32z" fill="#fbf8f1"/><circle cx="20" cy="20" r="16" fill="none" stroke="#8e836f" stroke-width="2"/></svg></button>
-      <button data-c="W" title="Jouer les Blancs"><svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="16" fill="#fbf8f1" stroke="#8e836f" stroke-width="2"/><circle cx="20" cy="20" r="10" fill="none" stroke="#d8cfbe" stroke-width="2"/></svg></button>
+      <button data-c="B" title="Jouer les Noirs" data-i18n-title="play_black"><svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="16" fill="#2a2622" stroke="#000" stroke-width="2"/><circle cx="20" cy="20" r="10" fill="none" stroke="#4a443c" stroke-width="2"/></svg></button>
+      <button data-c="R" class="rand" title="Couleur aléatoire" data-i18n-title="play_random"><svg viewBox="0 0 40 40"><path d="M20 4a16 16 0 0 1 0 32z" fill="#2a2622"/><path d="M20 4a16 16 0 0 0 0 32z" fill="#fbf8f1"/><circle cx="20" cy="20" r="16" fill="none" stroke="#8e836f" stroke-width="2"/></svg></button>
+      <button data-c="W" title="Jouer les Blancs" data-i18n-title="play_white"><svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="16" fill="#fbf8f1" stroke="#8e836f" stroke-width="2"/><circle cx="20" cy="20" r="10" fill="none" stroke="#d8cfbe" stroke-width="2"/></svg></button>
     </div>
-    <div class="start-row hidden" id="startRow"><button class="btn primary" id="startBtn">Commencer la partie</button></div>
+    <div class="start-row hidden" id="startRow"><button class="btn primary" id="startBtn" data-i18n="start_game">Commencer la partie</button></div>
   </div>
 </dialog>
 
 <dialog id="shareDlg">
-  <div class="dlg-head"><span>Partager la partie</span><button class="icon-btn" id="shareClose" title="Fermer">✕</button></div>
+  <div class="dlg-head"><span data-i18n="share_title">Partager la partie</span><button class="icon-btn" id="shareClose" title="Fermer" data-i18n-title="close">✕</button></div>
   <div class="dlg-body">
-    <div class="seg" id="shareTabs"><button data-v="link" class="on">Lien</button><button data-v="fgn">Notation</button><button data-v="import">Importer</button></div>
+    <div class="seg" id="shareTabs"><button data-v="link" class="on" data-i18n="tab_link">Lien</button><button data-v="fgn" data-i18n="tab_fgn">Notation</button><button data-v="import" data-i18n="tab_import">Importer</button></div>
     <div class="share-pane" data-v="link">
-      <div class="field"><label>Lien vers cette partie</label>
-        <div class="copyrow"><input id="shareUrl" readonly><button class="btn" data-copy="shareUrl">Copier</button></div></div>
-      <p class="note">Le lien contient toute la partie (coups, variante, joueurs, résultat) : rien n'est stocké sur le serveur.
-        Il s'ouvre depuis le réseau du homelab ou via Tailscale.</p>
-      <div class="field"><label>Position affichée (FEN)</label>
-        <div class="copyrow"><input id="shareFen" readonly><button class="btn" data-copy="shareFen">Copier</button></div></div>
+      <div class="field"><label data-i18n="link_label">Lien vers cette partie</label>
+        <div class="copyrow"><input id="shareUrl" readonly><button class="btn" data-copy="shareUrl" data-i18n="copy">Copier</button></div></div>
+      <p class="note" data-i18n="link_note"></p>
+      <div class="field"><label data-i18n="fen_label">Position affichée (FEN)</label>
+        <div class="copyrow"><input id="shareFen" readonly><button class="btn" data-copy="shareFen" data-i18n="copy">Copier</button></div></div>
     </div>
     <div class="share-pane hidden" data-v="fgn">
-      <label class="switch" id="fgnAnaRow">Inclure l'analyse (annotations et évaluations) <input type="checkbox" id="fgnAna"></label>
+      <label class="switch" id="fgnAnaRow"><span data-i18n="fgn_ana">Inclure l'analyse (annotations et évaluations)</span> <input type="checkbox" id="fgnAna"></label>
       <textarea id="fgnText" readonly rows="10" spellcheck="false"></textarea>
-      <div class="row2"><button class="btn" data-copy="fgnText">Copier</button><button class="btn primary" id="fgnDownload">Télécharger (.fgn)</button></div>
-      <p class="note">FGN : notation de partie de Fanorona inspirée du PGN des échecs (en-têtes entre crochets, coups notés
-        comme dans les publications, ex. <code>d3-e3A</code>). Voir le README du dépôt.</p>
+      <div class="row2"><button class="btn" data-copy="fgnText" data-i18n="copy">Copier</button><button class="btn primary" id="fgnDownload" data-i18n="download">Télécharger (.fgn)</button></div>
+      <p class="note" data-i18n="fgn_note"></p>
     </div>
     <div class="share-pane hidden" data-v="import">
-      <textarea id="importText" rows="8" spellcheck="false" placeholder="Collez une partie : notation FGN, simple liste de coups (d3e3A c3d3W …) ou lien de partage."></textarea>
-      <div class="row2"><label class="btn" style="text-align:center">Ouvrir un fichier…<input type="file" id="importFile" accept=".fgn,.pgn,.txt" hidden></label>
-        <button class="btn primary" id="importBtn">Importer</button></div>
-      <p class="note">La partie importée remplace la partie en cours ; chaque coup est vérifié par le moteur.</p>
+      <textarea id="importText" rows="8" spellcheck="false" placeholder="Collez une partie : notation FGN, simple liste de coups (d3e3A c3d3W …) ou lien de partage." data-i18n-placeholder="import_placeholder"></textarea>
+      <div class="row2"><label class="btn" style="text-align:center"><span data-i18n="open_file">Ouvrir un fichier…</span><input type="file" id="importFile" accept=".fgn,.pgn,.txt" hidden></label>
+        <button class="btn primary" id="importBtn" data-i18n="import_btn">Importer</button></div>
+      <p class="note" data-i18n="import_note">La partie importée remplace la partie en cours ; chaque coup est vérifié par le moteur.</p>
       <div class="err" id="importErr"></div>
     </div>
   </div>
@@ -553,7 +552,32 @@ const xy = s => [s % W, Math.floor(s / W)];
 const inside = (x, y) => x >= 0 && x < W && y >= 0 && y < H;
 const sideAt = k => (k % 2 ? other(firstSide()) : firstSide());
 const other = c => (c === "W" ? "B" : "W");
-const colorName = c => (c === "W" ? "Blancs" : "Noirs");
+const colorName = c => t(c);  // "Blancs" / "Noirs" dans la langue courante
+
+// =====================================================================================================
+// Traduction : textes dans tools/gui/i18n.json (fr = référence, mg = malgache). t("clé", {param}) ;
+// repli sur le français, puis sur la clé. HTML fixe : attributs data-i18n, data-i18n-title, -placeholder, -aria.
+// =====================================================================================================
+let I18N = null, lang = "fr";
+function t(key, p = {}) {
+  const s = (I18N && ((I18N[lang] || {})[key] ?? I18N.fr[key])) ?? key;
+  return s.replace(/\{(\w+)\}/g, (_, k) => (p[k] ?? ""));
+}
+function applyStaticI18n() {
+  document.documentElement.lang = lang;
+  for (const el of document.querySelectorAll("[data-i18n]"))
+    el.textContent = t(el.dataset.i18n, { t: el.dataset.i18nT, s: el.dataset.i18nS });
+  for (const el of document.querySelectorAll("[data-i18n-title]")) el.title = t(el.dataset.i18nTitle);
+  for (const el of document.querySelectorAll("[data-i18n-placeholder]")) el.placeholder = t(el.dataset.i18nPlaceholder);
+  for (const el of document.querySelectorAll("[data-i18n-aria]")) el.setAttribute("aria-label", t(el.dataset.i18nAria));
+  for (const b of $("segLang").children) b.classList.toggle("on", b.dataset.v === lang);
+}
+// Messages d'erreur du serveur ou du moteur (en français/anglais) ramenés à la langue courante.
+function trErr(msg) {
+  return String(msg).replace(/^illegal move (\S+)/, (_, m) => t("err_illegal", { m }))
+    .replace(/^FEN invalide$/, t("err_fen")).replace(/^moteur occupé, réessayez$/, t("err_busy"))
+    .replace(/^pas de réponse du moteur.*/, t("err_no_answer"));
+}
 
 function parseMove(str) {
   const re = /([a-i][1-5])([AW]?)/g;
@@ -875,7 +899,7 @@ function squareAt(evt) {
 }
 svg.addEventListener("pointerdown", e => {
   if (e.button !== 0) return;
-  if (!live()) { flash("Revenez au dernier coup pour jouer (touche Fin)"); return; }
+  if (!live()) { flash(t("flash_back_to_end")); return; }
   if (!canInput()) return;
   const { sq } = squareAt(e);
   if (sq < 0) return;
@@ -885,15 +909,15 @@ svg.addEventListener("pointerdown", e => {
   if (teloPlacing()) {
     const str = sqName(sq);
     if (game.legal.includes(str)) commit({ str, from: sq, steps: [] });
-    else flash(p ? "Phase de pose : choisissez un point libre" : "Pose impossible ici");
+    else flash(p ? t("flash_place_free") : t("flash_place_impossible"));
     return;
   }
   if ((!chosen || chosen.steps.length === 0) && p && p.c === sideAt(game.moves.length)) {
     if (!chosen || chosen.from !== sq) {
       if (!movable(sq)) {
-        flash(game.legal.some(m => /[AW]/.test(m)) ? "Capture obligatoire : cette pièce ne peut pas capturer"
+        flash(game.legal.some(m => /[AW]/.test(m)) ? t("flash_must_capture")
           : velaSide() && velaSide() !== sideAt(game.moves.length) && count(liveBoard(), sideAt(game.moves.length)) > VELA_REMAINING
-            ? "Vela : ce déplacement ne laisserait aucune prise à l'adversaire" : "Cette pièce ne peut pas bouger");
+            ? t("flash_vela_leave") : t("flash_cannot_move"));
         return;
       }
       select(sq); justSelected = true; render();
@@ -1060,27 +1084,31 @@ async function animateEngine(str) {
   anim = null;
 }
 
+// Résultat stocké en codes (t, w) : texte et motif traduits à l'affichage. `raw` : motif libre d'une partie
+// importée ; text/why : ancien format (parties sauvegardées avant la traduction).
+const resText = r => (r.t ? t(r.t) : r.text || "");
+const resWhy = r => (r.raw ? r.raw : r.w ? t(r.w) : r.why || "");
 function finish(status, reason) {
   const map = {
-    "white wins": ["1-0", "Victoire des Blancs", "Les Noirs n'ont plus de pièce ou plus de coup"],
-    "black wins": ["0-1", "Victoire des Noirs", "Les Blancs n'ont plus de pièce ou plus de coup"],
-    "draw (no-capture limit)": ["½-½", "Partie nulle", "Limite de coups sans capture"],
-    "draw (threefold repetition)": ["½-½", "Partie nulle", "Triple répétition"],
-    "draw (move limit)": ["½-½", "Partie nulle", "Limite de coups atteinte"],
+    "white wins": ["1-0", "res_W", "why_nomove_B"],
+    "black wins": ["0-1", "res_B", "why_nomove_W"],
+    "draw (no-capture limit)": ["½-½", "res_draw", "why_50"],
+    "draw (threefold repetition)": ["½-½", "res_draw", "why_rep"],
+    "draw (move limit)": ["½-½", "res_draw", "why_limit"],
   };
   if (status === "resign") {
     const w = other(reason);
-    game.result = { score: w === "W" ? "1-0" : "0-1", text: "Victoire des " + colorName(w), why: "Les " + colorName(reason) + " abandonnent" };
+    game.result = { score: w === "W" ? "1-0" : "0-1", t: "res_" + w, w: "why_resign_" + reason };
   } else if (status === "time") {
     const w = other(reason);
-    game.result = { score: w === "W" ? "1-0" : "0-1", text: "Victoire des " + colorName(w), why: "Temps écoulé pour les " + colorName(reason) };
+    game.result = { score: w === "W" ? "1-0" : "0-1", t: "res_" + w, w: "why_time_" + reason };
   } else {
-    let [score, text, why] = map[status] || ["*", status, ""];
+    let [score, text, why] = map[status] || ["*", "res_draw", ""];
     if (telo() && (status === "white wins" || status === "black wins")) {
       const w = status === "white wins" ? "W" : "B";
-      why = teloWinLine(liveBoard()) ? `Les ${colorName(w)} alignent leurs trois pions` : `Les ${colorName(other(w))} sont bloqués`;
+      why = teloWinLine(liveBoard()) ? "why_align_" + w : "why_blocked_" + other(w);
     }
-    game.result = { score, text, why };
+    game.result = { score, t: text, w: why };
   }
   epoch++; busy = false; thinking(false);
   chosen = null; pendingAW = null; inputView = null;
@@ -1173,9 +1201,9 @@ function judgment(i) {               // appréciation du coup i (1..n), façon l
   if (e.best && sameBoard(applyMove(positions[i - 1], e.best, sideAt(i - 1)), positions[i])) return null;
   const sg = sideAt(i - 1) === "W" ? 1 : -1;
   const loss = sg * (a.wc - b.wc);
-  if (loss >= 0.3) return { g: "??", cls: "blun", name: "Gaffe" };
-  if (loss >= 0.2) return { g: "?", cls: "mist", name: "Erreur" };
-  if (loss >= 0.1) return { g: "?!", cls: "inacc", name: "Imprécision" };
+  if (loss >= 0.3) return { g: "??", cls: "blun", name: t("j_blun") };
+  if (loss >= 0.2) return { g: "?", cls: "mist", name: t("j_mist") };
+  if (loss >= 0.1) return { g: "?!", cls: "inacc", name: t("j_inacc") };
   return null;
 }
 function renderGauge() {
@@ -1186,20 +1214,20 @@ function renderGauge() {
   $("gauge").classList.toggle("hidden", !show);
   $("gauge").classList.toggle("flip", flipped);
   $("gaugeW").style.height = ((s ? s.wc : 0) + 1) * 50 + "%";
-  $("gauge").title = s ? "Évaluation : " + s.label : "Évaluation";
+  $("gauge").title = s ? t("evaluation_is", { v: s.label }) : t("evaluation");
 }
 
 // =====================================================================================================
 // Panneaux
 // =====================================================================================================
 const fmtN = n => (n >= 1e6 ? (n / 1e6).toFixed(1) + "M" : n >= 1e3 ? Math.round(n / 1e3) + "k" : String(n));
-const levelName = id => (levels.find(l => l.id === id) || {}).name || "Niveau " + id;
+const levelName = id => t("level_" + id);
 function playerName(c) {
   if (importedNames && importedNames[c] && cfg.mode === "friend") return { name: importedNames[c], sub: "", short: "" };
   if (cfg.mode === "friend") return { name: colorName(c), sub: "" };
-  if (cfg.mode === "auto") return { name: "Fanorona-Engine", sub: "pleine force", short: "" };
-  if (cfg.color === c) return { name: "Vous", sub: "" };
-  return { name: "Fanorona-Engine", sub: "niveau " + cfg.level + " · " + levelName(cfg.level), short: "niveau " + cfg.level };
+  if (cfg.mode === "auto") return { name: "Fanorona-Engine", sub: t("full_strength"), short: "" };
+  if (cfg.color === c) return { name: t("you"), sub: "" };
+  return { name: "Fanorona-Engine", sub: t("level_n", { n: cfg.level }) + " · " + levelName(cfg.level), short: t("level_n", { n: cfg.level }) };
 }
 function renderUsers() {
   const board = shownBoard();
@@ -1210,43 +1238,42 @@ function renderUsers() {
     $(id).className = "ruser " + (id === "userTop" ? "top" : "bottom") + (turn === c ? " turn" : "");
     $(id).innerHTML = `<span class="pdot ${c}"></span><span class="name">${p.name}</span>` +
       (p.short ? `<span class="rating">${p.short}</span>` : "") +
-      `<span class="mat">${mine} pièces${diff > 0 ? ` <b>+${diff}</b>` : ""}</span>`;
+      `<span class="mat">${t("pieces", { n: mine })}${diff > 0 ? ` <b>+${diff}</b>` : ""}</span>`;
   }
 }
 function renderMeta() {
   const clk = $("dClock").querySelector(`option[value="${cfg.clock}"]`);
-  $("metaTitle").textContent = cfg.mode === "computer" ? "Contre l'ordinateur" : cfg.mode === "friend" ? "Deux joueurs" : "Ordinateur contre ordinateur";
+  $("metaTitle").textContent = t("mode_" + cfg.mode);
   const evalName = cfg.net ? "NNUE " + cfg.net : "HCE";
   const g = GAMES[cfg.game];
-  $("metaSub").textContent = [g.name + " " + g.size, clk ? clk.textContent.replace(/ \(.*\)/, "") : "Illimité",
-    telo() ? null : cfg.variant === "mandatory" ? "Continuation obligatoire" : null,
+  $("metaSub").textContent = [g.name + " " + g.size, clk ? clk.textContent.replace(/ \(.*\)/, "") : t("unlimited"),
+    telo() ? null : cfg.variant === "mandatory" ? t("variant_mandatory") : null,
     cfg.game === "tsivy" ? evalName : null].filter(Boolean).join(" • ");
   const vs = velaSide(), vb = $("metaVela");
   vb.classList.toggle("hidden", !vs);
   if (vs) {
     const left = count(shownBoard(), other(vs)), taken = 22 - left;
-    vb.innerHTML = `<b>Vela</b> — bénéficiaire : ${playerName(vs).name} (${colorName(vs)})` +
-      (left > VELA_REMAINING ? `<small>Phase 1 : ${Math.min(taken, 17)} / 17 prises, une pièce par tour ; l'adversaire ne fait que des paika</small>`
-        : `<small>Phase 2 : règles normales</small>`);
+    vb.innerHTML = t("vela_meta", { name: playerName(vs).name, c: colorName(vs) }) +
+      (left > VELA_REMAINING ? `<small>${t("vela_phase1", { n: Math.min(taken, 17) })}</small>` : `<small>${t("vela_phase2")}</small>`);
   }
   $("metaPlayers").innerHTML = ["W", "B"].map(c => { const p = playerName(c); return `<div><span class="pdot ${c}"></span><div>${p.name}${p.sub ? `<small>${p.sub}</small>` : ""}</div></div>`; }).join("");
   const st = $("metaStatus");
   st.classList.toggle("hidden", !over());
-  if (over()) st.innerHTML = `${game.result.text}<small>${game.result.why}</small>`;
+  if (over()) st.innerHTML = `${resText(game.result)}<small>${resWhy(game.result)}</small>`;
 }
 function renderEngine() {
   const i = liveInfo;
   $("sDepth").textContent = i && i.depth != null ? i.depth : "–";
   $("sNodes").textContent = i && i.nodes != null ? fmtN(i.nodes) : "–";
   $("sNps").textContent = i && i.nps != null ? fmtN(i.nps) : "–";
-  $("pv").textContent = !i ? "" : i.candidates ? `Coup tiré au sort parmi ${i.candidates} (niveau ${cfg.level})`
+  $("pv").textContent = !i ? "" : i.candidates ? t("random_pick", { n: i.candidates, l: cfg.level })
     : i.pv && i.pv.length ? i.pv.join(" ") : "";
-  $("engineState").textContent = busy && engineToMove() ? "réfléchit…" : "";
+  $("engineState").textContent = busy && engineToMove() ? t("thinking") : "";
 }
 function renderMoves() {
   const box = $("moves"), n = game.moves.length;
   let html = "";
-  if (!n) html = `<div class="empty">${cfg.mode === "computer" && cfg.color === "B" ? "Le moteur commence…" : "Aux " + colorName(sideAt(0)) + " de jouer"}</div>`;
+  if (!n) html = `<div class="empty">${cfg.mode === "computer" && cfg.color === "B" ? t("engine_starts") : t("to_move", { c: colorName(sideAt(0)) })}</div>`;
   const cell = i => {
     if (i > n) return `<div class="mv"></div>`;
     const hide = retro && i >= retro.list[retro.k];  // coup d'essai de la révision : pas d'annotation d'origine
@@ -1260,7 +1287,7 @@ function renderMoves() {
     const white = r < 1 ? `<div class="mv">…</div>` : cell(r);
     html += `<div class="idx">${(r + off + 1) / 2}</div>${white}${cell(r + 1)}`;
   }
-  if (over()) html += `<div class="result"><b>${game.result.score}</b><span>${game.result.why} • ${game.result.text}</span></div>`;
+  if (over()) html += `<div class="result"><b>${game.result.score}</b><span>${resWhy(game.result)} • ${resText(game.result)}</span></div>`;
   if (box.innerHTML !== html) {
     const atEnd = box.scrollTop + box.clientHeight >= box.scrollHeight - 30;
     box.innerHTML = html;
@@ -1285,14 +1312,14 @@ function renderActions() {
   if (over()) {
     const n = nextGame();
     html = `<button id="aRematch" class="go" title="${n.title}">${ICON.again}${n.label}</button>` +
-      (n.vela2 ? `<button id="aVela" title="${n.vela2.title}">${ICON.again}Vela</button>` : "") +
-      `<button id="aNew">${ICON.plus}${n.vela2 ? "Nouvelle" : "Nouvelle partie"}</button>` +
-      `<button id="aAnalyse" ${analysis && (analysis.running || analysis.done) ? "disabled" : ""}>${ICON.chart}Analyser</button>`;
+      (n.vela2 ? `<button id="aVela" title="${n.vela2.title}">${ICON.again}${t("vela")}</button>` : "") +
+      `<button id="aNew">${ICON.plus}${n.vela2 ? t("new_short") : t("new_game")}</button>` +
+      `<button id="aAnalyse" ${analysis && (analysis.running || analysis.done) ? "disabled" : ""}>${ICON.chart}${t("analyse_btn")}</button>`;
   } else {
     const canBack = game.moves.length > 0 && cfg.mode !== "auto";
-    html = `<button id="aBack" ${canBack ? "" : "disabled"} title="Reprendre le coup">${ICON.back}Reprendre</button>` +
-      `<button id="aHint" ${cfg.mode !== "auto" && canInput() ? "" : "disabled"} title="Indice">${ICON.hint}Indice</button>` +
-      `<button id="aResign" ${cfg.mode !== "auto" && game.moves.length ? "" : "disabled"} title="Abandonner">${ICON.flag}Abandonner</button>`;
+    html = `<button id="aBack" ${canBack ? "" : "disabled"} title="${t("takeback_title")}">${ICON.back}${t("takeback")}</button>` +
+      `<button id="aHint" ${cfg.mode !== "auto" && canInput() ? "" : "disabled"} title="${t("hint")}">${ICON.hint}${t("hint")}</button>` +
+      `<button id="aResign" ${cfg.mode !== "auto" && game.moves.length ? "" : "disabled"} title="${t("resign")}">${ICON.flag}${t("resign")}</button>`;
   }
   if (a.dataset.html !== html) {
     a.innerHTML = html; a.dataset.html = html;
@@ -1315,7 +1342,7 @@ function renderAnalysis() {
   const done = evals.filter(Boolean).length;
   $("anaProgress").classList.toggle("hidden", !analysis.running);
   $("anaProgress").firstElementChild.style.width = (done / (n + 1) * 100) + "%";
-  $("anaState").textContent = analysis.running ? `${done}/${n + 1}` : `prof. ${analysis.depth}`;
+  $("anaState").textContent = analysis.running ? `${done}/${n + 1}` : t("depth_short", { n: analysis.depth });
 
   const c = $("chart");
   c.innerHTML = "";
@@ -1349,7 +1376,7 @@ function renderAnalysis() {
     const k = kAt(e), ev = evalAt(k), r = c.getBoundingClientRect();
     hov.setAttribute("x1", X(k)); hov.setAttribute("x2", X(k));
     const j = k ? judgment(k) : null;
-    const mv = k ? `${Math.ceil(k / 2)}${k % 2 ? "." : "…"} ${game.moves[k - 1]}${j ? " " + j.g : ""}` : "Position initiale";
+    const mv = k ? `${Math.ceil(k / 2)}${k % 2 ? "." : "…"} ${game.moves[k - 1]}${j ? " " + j.g : ""}` : t("start_position");
     tip.textContent = mv + (ev ? " · " + ev.label : "");
     tip.style.left = (X(k) / CW * r.width) + "px";
     tip.style.top = (Y(ev ? ev.wc : 0) / CH * r.height) + "px";
@@ -1360,16 +1387,16 @@ function renderAnalysis() {
 
   const row = (label, key, cls, g) => `<tr><td>${g ? `<span class="g ${cls}">${g}</span> ` : ""}${label}</td><td>${counts.W[key]}</td><td>${counts.B[key]}</td></tr>`;
   const acpl = s => (counts[s].n ? Math.round(counts[s].loss / counts[s].n) : "–");
-  $("summary").innerHTML = `<tr><th></th><th><span class="pdot W" style="display:inline-block;vertical-align:middle"></span> Blancs</th><th><span class="pdot B" style="display:inline-block;vertical-align:middle"></span> Noirs</th></tr>` +
-    row("Imprécisions", "inacc", "inacc", "?!") + row("Erreurs", "mist", "mist", "?") + row("Gaffes", "blun", "blun", "??") +
-    `<tr><td>Perte moyenne (cp)</td><td>${acpl("W")}</td><td>${acpl("B")}</td></tr>`;
+  $("summary").innerHTML = `<tr><th></th><th><span class="pdot W" style="display:inline-block;vertical-align:middle"></span> ${t("W")}</th><th><span class="pdot B" style="display:inline-block;vertical-align:middle"></span> ${t("B")}</th></tr>` +
+    row(t("inaccuracies"), "inacc", "inacc", "?!") + row(t("mistakes"), "mist", "mist", "?") + row(t("blunders"), "blun", "blun", "??") +
+    `<tr><td>${t("avg_loss")}</td><td>${acpl("W")}</td><td>${acpl("B")}</td></tr>`;
   const nMist = analysis.done && !retro ? retroMistakes().length : 0;
   $("retroBtn").classList.toggle("hidden", !nMist);
-  $("retroBtn").textContent = `Apprendre de ses erreurs (${nMist})`;
+  $("retroBtn").textContent = t("learn_mistakes", { n: nMist });
 }
 
 async function runAnalysis() {
-  if (!game.moves.length) return flash("Rien à analyser");
+  if (!game.moves.length) return flash(t("flash_nothing_to_analyse"));
   const n = game.moves.length, my = ++anaEpoch;
   analysis = { evals: new Array(n + 1).fill(null), running: true, done: false, depth: cfg.net ? 6 : 8 };
   render();
@@ -1385,7 +1412,7 @@ async function runAnalysis() {
     analysis.running = false; analysis.done = true;
   } catch (e) {
     if (my !== anaEpoch) return;
-    analysis.running = false; flash("Analyse interrompue : " + e.message);
+    analysis.running = false; flash(t("flash_analysis_stopped", { e: trErr(e.message) }));
   }
   save(); render();
 }
@@ -1431,7 +1458,7 @@ async function openLearn() {
   if (retro) exitRetro();
   if (puzzle) { puzzle = null; document.body.classList.remove("puzzle"); Object.assign(cfg, puzzleSavedCfg || {}, { startFen: "" }); }
   if (!lessons) {
-    try { lessons = await (await fetch("/lessons.json")).json(); } catch (e) { return flash("Leçons indisponibles"); }
+    try { lessons = await (await fetch("/lessons.json")).json(); } catch (e) { return flash(t("lessons_unavailable")); }
   }
   if (!learn) learnSavedCfg = { ...cfg };
   const p = learnProgress();
@@ -1487,7 +1514,7 @@ async function learnSoloMove(m) {
   rebuildPositions();
   if (goalMet(after)) return learnOutcome(true);
   if (learn.used >= learn.step.goal.max) return learnOutcome(false);
-  try { await refresh(); } catch (e) { flash(e.message); }
+  try { await refresh(); } catch (e) { flash(trErr(e.message)); }
   if (!game.legal.length) learnOutcome(false);
 }
 function learnCheck() {
@@ -1499,35 +1526,39 @@ function learnCheck() {
     return learnOutcome(false);
 }
 const GOAL_TEXT = {
-  reach: g => `Atteindre ${g.target}`,
-  clear: () => "Prendre toutes les pièces noires",
-  captures: g => `Prendre ${g.n} pièce${g.n > 1 ? "s" : ""}`,
-  telo_win: () => "Aligner trois pions",
-  win: g => `Gagner contre le moteur (niveau ${g.level})`,
+  reach: g => t("goal_reach", { sq: g.target }),
+  clear: () => t("goal_clear"),
+  captures: g => t("goal_captures", { n: g.n }),
+  telo_win: () => t("goal_telo"),
+  win: g => t("goal_win", { n: g.level }),
 };
+// Champ traduit d'une leçon : bloc "mg" de lessons.json si la langue est le malgache, sinon le français.
+const L = (o, f) => (o[lang] && o[lang][f]) || o[f];
+// Message stocké en clé (string) ou {k, p} : traduit au moment de l'affichage.
+const tm = m => (!m ? "" : typeof m === "string" ? t(m) : t(m.k, m.p));
 function renderLearn() {
   const box = $("learnBox");
   box.classList.toggle("hidden", !learn);
   if (!learn) return;
   const { step, ci, si } = learn, ch = lessons.chapters[ci], g = step.goal, prog = learnProgress();
   const starsHtml = n => `<span class="stars">${[1, 2, 3].map(i => `<span class="${i <= n ? "" : "off"}">★</span>`).join("")}</span>`;
-  const counter = g.type === "win" ? "" : `${learn.used} / ${g.max} coup${g.max > 1 ? "s" : ""}`;
+  const counter = g.type === "win" ? "" : t("moves_count", { u: learn.used, m: g.max });
   let outcome = "";
   if (learn.status === "success")
-    outcome = `<div class="outcome ok">${starsHtml(learn.stars)}<p>${step.success}</p></div>`;
+    outcome = `<div class="outcome ok">${starsHtml(learn.stars)}<p>${L(step, "success")}</p></div>`;
   else if (learn.status === "fail")
-    outcome = `<div class="outcome ko"><b>Pas encore…</b><p>${step.hint}</p></div>`;
-  const map = lessons.chapters.map((c, i) => `<div class="ch${i === ci ? " cur" : ""}"><span>${c.title}</span><span class="dots">` +
-    c.steps.map((s, j) => `<button class="dot s${prog[s.id] || 0}${i === ci && j === si ? " cur" : ""}" data-ci="${i}" data-si="${j}" title="${s.title}"></button>`).join("") +
+    outcome = `<div class="outcome ko"><b>${t("not_yet")}</b><p>${L(step, "hint")}</p></div>`;
+  const map = lessons.chapters.map((c, i) => `<div class="ch${i === ci ? " cur" : ""}"><span>${L(c, "title")}</span><span class="dots">` +
+    c.steps.map((s, j) => `<button class="dot s${prog[s.id] || 0}${i === ci && j === si ? " cur" : ""}" data-ci="${i}" data-si="${j}" title="${L(s, "title")}"></button>`).join("") +
     `</span></div>`).join("");
-  const html = `<div class="crumbs"><span>${ch.title} · ${si + 1} / ${ch.steps.length}</span><button id="lQuit">Quitter ✕</button></div>
-    <h2>${step.title}</h2><p class="text">${step.text}</p>
+  const html = `<div class="crumbs"><span>${L(ch, "title")} · ${si + 1} / ${ch.steps.length}</span><button id="lQuit">${t("quit")}</button></div>
+    <h2>${L(step, "title")}</h2><p class="text">${L(step, "text")}</p>
     <div class="goal"><span>${GOAL_TEXT[g.type](g)}</span><span>${counter}</span></div>
-    ${learn.showHint && learn.status === "play" ? `<div class="hint">${step.hint}</div>` : ""}
+    ${learn.showHint && learn.status === "play" ? `<div class="hint">${L(step, "hint")}</div>` : ""}
     ${outcome}
-    <div class="row"><button class="btn" id="lRetry">Recommencer</button>` +
-    (learn.status === "play" ? `<button class="btn" id="lHint">Indice</button>` : "") +
-    `<button class="btn primary" id="lNext">${learn.status === "success" ? "Suivant" : "Passer"}</button></div>
+    <div class="row"><button class="btn" id="lRetry">${t("retry")}</button>` +
+    (learn.status === "play" ? `<button class="btn" id="lHint">${t("hint")}</button>` : "") +
+    `<button class="btn primary" id="lNext">${learn.status === "success" ? t("next") : t("skip")}</button></div>
     <div class="map">${map}</div>`;
   if (box.dataset.html === html) return;
   box.innerHTML = html; box.dataset.html = html;
@@ -1562,7 +1593,7 @@ function retroMistakes() {
 }
 function startRetro() {
   const list = retroMistakes();
-  if (!list.length) return flash("Aucune erreur à revoir");
+  if (!list.length) return flash(t("no_mistakes"));
   retro = { list, k: 0, st: "find", msg: "", tries: 0, results: {}, judg: Object.fromEntries(list.map(i => [i, judgment(i)])),
     saved: { moves: game.moves.slice(), result: game.result, status: game.status, legal: game.legal, fen: game.fen, mode: cfg.mode, viewPly } };
   document.body.classList.add("retro");
@@ -1576,7 +1607,7 @@ async function loadRetro(k) {
   game.moves = retro.saved.moves.slice(0, i - 1); game.result = null;
   chosen = null; pendingAW = null; inputView = null;
   rebuildPositions(); viewPly = game.moves.length;
-  try { await refresh(); } catch (e) { flash(e.message); }
+  try { await refresh(); } catch (e) { flash(trErr(e.message)); }
   render();
 }
 function exitRetro() {
@@ -1614,13 +1645,12 @@ async function retroTry(m) {
   if (verdict === "best" || verdict === "good") {
     retro.st = "ok";
     retro.results[i] = "ok";
-    retro.msg = verdict === "best" ? "Exactement le coup du moteur !" : "Bon coup : il est presque aussi fort que celui du moteur.";
+    retro.msg = verdict === "best" ? "retro_best" : "retro_good";
     sound("end");
     render();
     return;
   }
-  retro.msg = verdict === "same" ? "C'est le coup joué dans la partie : cherchez autre chose." :
-    verdict === "bad" ? "Ce coup n'est pas meilleur. Réessayez, ou voyez la solution." : "Vérification impossible, réessayez.";
+  retro.msg = verdict === "same" ? "retro_same" : verdict === "bad" ? "retro_bad" : "retro_err";
   retro.st = "wrong";
   render();
   setTimeout(() => {
@@ -1635,7 +1665,7 @@ function retroShow() {
   hintMove = [m.from, ...m.steps.map(s => s.to)];
   retro.st = "shown";
   retro.results[i] = retro.results[i] || "ko";
-  retro.msg = "Le coup du moteur : " + analysis.evals[i - 1].best;
+  retro.msg = { k: "retro_engine_move", p: { m: analysis.evals[i - 1].best } };
   render();
 }
 function renderRetro() {
@@ -1646,24 +1676,25 @@ function renderRetro() {
   const moveNo = `${Math.ceil(i / 2)}${i % 2 ? "." : "…"}`;
   const found = Object.values(retro.results).filter(v => v === "ok").length;
   const last = k === list.length - 1;
-  const dots = list.map((p, n) => `<button class="dot ${retro.results[p] === "ok" ? "s3" : retro.results[p] === "ko" ? "ko" : ""}${n === k ? " cur" : ""}" data-k="${n}" title="Coup ${Math.ceil(p / 2)}"></button>`).join("");
-  const html = `<div class="crumbs"><span>Erreur ${k + 1} / ${list.length}</span><button id="rQuit">Quitter ✕</button></div>
-    <h2>Trouvez un meilleur coup</h2>
-    <p class="text">Au coup ${moveNo}, ${retro.saved.mode === "computer" ? "vous avez joué" : `les ${colorName(sideAt(i - 1))} ont joué`} <b>${retro.saved.moves[i - 1]}</b>
-      <span class="g ${j ? j.cls : ""}">${j ? j.g : ""}</span>${j ? " (" + j.name.toLowerCase() + ")" : ""}. Rejouez la position.</p>
-    ${retro.msg ? `<div class="outcome ${retro.st === "ok" ? "ok" : "ko"}"><p style="margin:0">${retro.msg}</p></div>` : ""}
-    ${retro.st === "checking" ? `<div class="goal"><span>Vérification par le moteur…</span><span></span></div>` : ""}
+  const dots = list.map((p, n) => `<button class="dot ${retro.results[p] === "ok" ? "s3" : retro.results[p] === "ko" ? "ko" : ""}${n === k ? " cur" : ""}" data-k="${n}" title="${t("move_n", { n: Math.ceil(p / 2) })}"></button>`).join("");
+  const html = `<div class="crumbs"><span>${t("retro_error", { k: k + 1, n: list.length })}</span><button id="rQuit">${t("quit")}</button></div>
+    <h2>${t("retro_title")}</h2>
+    <p class="text">${retro.saved.mode === "computer" ? t("retro_you", { no: moveNo, m: retro.saved.moves[i - 1] })
+      : t("retro_side", { no: moveNo, m: retro.saved.moves[i - 1], c: colorName(sideAt(i - 1)) })}
+      <span class="g ${j ? j.cls : ""}">${j ? j.g : ""}</span>${j ? " (" + t("j_" + j.cls).toLowerCase() + ")" : ""}. ${t("retro_replay")}</p>
+    ${retro.msg ? `<div class="outcome ${retro.st === "ok" ? "ok" : "ko"}"><p style="margin:0">${tm(retro.msg)}</p></div>` : ""}
+    ${retro.st === "checking" ? `<div class="goal"><span>${t("retro_checking")}</span><span></span></div>` : ""}
     <div class="row">` +
-    (done ? "" : `<button class="btn" id="rShow">Voir la solution</button>`) +
-    `<button class="btn primary" id="rNext">${last ? "Terminer" : done ? "Suivant" : "Passer"}</button></div>
-    <div class="map"><div class="ch cur"><span>${found} / ${list.length} trouvé${found > 1 ? "s" : ""}</span><span class="dots">${dots}</span></div></div>`;
+    (done ? "" : `<button class="btn" id="rShow">${t("show_solution")}</button>`) +
+    `<button class="btn primary" id="rNext">${last ? t("finish") : done ? t("next") : t("skip")}</button></div>
+    <div class="map"><div class="ch cur"><span>${t("found", { f: found, n: list.length })}</span><span class="dots">${dots}</span></div></div>`;
   if (box.dataset.html === html) return;
   box.innerHTML = html; box.dataset.html = html;
   $("rQuit").onclick = exitRetro;
   if ($("rShow")) $("rShow").onclick = retroShow;
   $("rNext").onclick = () => {
     if (!retro.results[i]) retro.results[i] = "ko";
-    if (last) { const f = Object.values(retro.results).filter(v => v === "ok").length; exitRetro(); flash(`${f} erreur${f > 1 ? "s" : ""} sur ${list.length} corrigée${f > 1 ? "s" : ""}`); }
+    if (last) { const f = Object.values(retro.results).filter(v => v === "ok").length; exitRetro(); flash(t("retro_done", { f, n: list.length })); }
     else loadRetro(k + 1);
   };
   for (const d of box.querySelectorAll(".dot")) d.onclick = () => loadRetro(+d.dataset.k);
@@ -1677,8 +1708,7 @@ $("retroBtn").onclick = startRetro;
 // comme raté dès la première erreur ou si l'on demande la solution ; on peut ensuite continuer sans effet.
 // =====================================================================================================
 let puzzles = null, puzzle = null, puzzleSavedCfg = null;
-const THEMES = { chaine: "Chaîne de prises", rafle: "Grande rafle", paika: "Coup calme", combinaison: "Combinaison",
-  decisif: "Coup décisif", approche: "Approche", retrait: "Retrait" };
+const themeName = th => t("th_" + th);
 function pstate() {
   let s = null;
   try { s = JSON.parse(localStorage.getItem("fanorona-puzzles")); } catch (e) { /* stockage indisponible */ }
@@ -1689,7 +1719,7 @@ async function openPuzzles() {
   if (retro) exitRetro();
   if (learn) { learn = null; document.body.classList.remove("learning"); Object.assign(cfg, learnSavedCfg || {}); }
   if (!puzzles) {
-    try { puzzles = (await (await fetch("/puzzles.json")).json()).puzzles; } catch (e) { return flash("Puzzles indisponibles"); }
+    try { puzzles = (await (await fetch("/puzzles.json")).json()).puzzles; } catch (e) { return flash(t("puzzles_unavailable")); }
   }
   if (!puzzle) puzzleSavedCfg = { ...cfg, startFen: "" };
   nextPuzzle();
@@ -1750,7 +1780,7 @@ async function puzzleMove(m) {
     pz.k++;
     // Variante acceptée hors de la ligne prévue : la suite scriptée ne s'applique plus, le puzzle est résolu.
     if (pz.k >= pz.p.moves.length || !onLine) return puzzleDone();
-    pz.msg = "Bien joué, continuez…";
+    pz.msg = "pz_continue";
     render();
     await puzzleReply();
     if (puzzle !== pz) return;
@@ -1761,7 +1791,7 @@ async function puzzleMove(m) {
   // Mauvais coup : on le montre, puis on revient.
   if (!pz.failed) { pz.failed = true; puzzleScore(false); }
   pz.st = "wrong";
-  pz.msg = "Ce n'est pas le bon coup. Réessayez, ou voyez la solution.";
+  pz.msg = "pz_wrong";
   game.moves.push(m.str); positions.push(after); viewPly = game.moves.length;
   sound(count(before, other(side)) > count(after, other(side)) ? "capture" : "move");
   render();
@@ -1774,7 +1804,7 @@ async function puzzleMove(m) {
 function puzzleDone() {
   puzzle.st = "solved";
   if (!puzzle.failed) puzzleScore(true);
-  puzzle.msg = puzzle.failed ? "Solution trouvée (après une erreur)." : "Bravo, puzzle réussi !";
+  puzzle.msg = puzzle.failed ? "pz_solved_after" : "pz_solved";
   sound("end");
   render();
 }
@@ -1793,7 +1823,7 @@ async function puzzleShow() {
   }
   if (puzzle !== pz) return;
   pz.st = "shown";
-  pz.msg = "Voici la solution.";
+  pz.msg = "pz_shown";
   render();
 }
 function renderPuzzle() {
@@ -1802,17 +1832,17 @@ function renderPuzzle() {
   if (!puzzle) return;
   const st = pstate(), pz = puzzle, done = pz.st === "solved" || pz.st === "shown";
   const d = pz.delta;
-  const html = `<div class="crumbs"><span>Puzzle${done ? " · " + pz.p.id : ""}</span><button id="pQuit">Quitter ✕</button></div>
-    <div class="prating"><b>${st.rating}</b><span>votre classement</span>${d !== null ? `<span class="delta ${d >= 0 ? "up" : "down"}">${d >= 0 ? "+" : ""}${d}</span>` : ""}</div>
-    <div class="pstats"><span>Réussis <b>${st.solved}/${st.played}</b></span><span>Série <b>${st.streak}</b></span><span>Record <b>${st.best}</b></span></div>
-    <h2>${done ? (pz.failed ? "Puzzle raté" : "Réussi !") : "Trouvez le meilleur coup"}</h2>
-    <p class="text">${done ? `Puzzle classé <b>${pz.p.rating}</b>.` : `Aux ${colorName(pz.side)} de jouer : un seul coup gagne nettement.` +
-      (pz.p.moves.length > 1 ? ` La solution compte ${Math.ceil(pz.p.moves.length / 2)} coups.` : "")}</p>
-    ${pz.msg ? `<div class="outcome ${pz.st === "solved" && !pz.failed ? "ok" : "ko"}"><p style="margin:0">${pz.msg}</p></div>` : ""}
-    ${done ? `<div class="tags">${pz.p.themes.map(t => `<span class="tag">${THEMES[t] || t}</span>`).join("")}</div>` : ""}
-    <div class="row">` + (done ? `<button class="btn" id="pRetry">Recommencer</button>` :
-      `<button class="btn" id="pShow" ${pz.st === "busy" || pz.st === "wrong" ? "disabled" : ""}>Voir la solution</button>`) +
-    `<button class="btn primary" id="pNext">${done ? "Puzzle suivant" : "Passer"}</button></div>`;
+  const html = `<div class="crumbs"><span>${t("pz_title")}${done ? " · " + pz.p.id : ""}</span><button id="pQuit">${t("quit")}</button></div>
+    <div class="prating"><b>${st.rating}</b><span>${t("pz_rating")}</span>${d !== null ? `<span class="delta ${d >= 0 ? "up" : "down"}">${d >= 0 ? "+" : ""}${d}</span>` : ""}</div>
+    <div class="pstats"><span>${t("pz_solved_stat")} <b>${st.solved}/${st.played}</b></span><span>${t("pz_streak")} <b>${st.streak}</b></span><span>${t("pz_best")} <b>${st.best}</b></span></div>
+    <h2>${done ? (pz.failed ? t("pz_failed") : t("pz_success")) : t("pz_find")}</h2>
+    <p class="text">${done ? t("pz_rated", { r: pz.p.rating }) : t("pz_to_move", { c: colorName(pz.side) }) +
+      (pz.p.moves.length > 1 ? t("pz_length", { n: Math.ceil(pz.p.moves.length / 2) }) : "")}</p>
+    ${pz.msg ? `<div class="outcome ${pz.st === "solved" && !pz.failed ? "ok" : "ko"}"><p style="margin:0">${tm(pz.msg)}</p></div>` : ""}
+    ${done ? `<div class="tags">${pz.p.themes.map(t => `<span class="tag">${themeName(t)}</span>`).join("")}</div>` : ""}
+    <div class="row">` + (done ? `<button class="btn" id="pRetry">${t("retry")}</button>` :
+      `<button class="btn" id="pShow" ${pz.st === "busy" || pz.st === "wrong" ? "disabled" : ""}>${t("show_solution")}</button>`) +
+    `<button class="btn primary" id="pNext">${done ? t("pz_next") : t("skip")}</button></div>`;
   if (box.dataset.html === html) return;
   box.innerHTML = html; box.dataset.html = html;
   $("pQuit").onclick = exitPuzzles;
@@ -1835,11 +1865,11 @@ function fgnDate(d = new Date()) { return `${d.getFullYear()}.${String(d.getMont
 function exportData() {
   const r = game.result;
   return { v: 1, game: cfg.game, vela: velaSide() || "", fen: cfg.startFen || "", moves: game.moves.slice(),
-    result: r ? r.score : "*", why: r ? r.why : "", white: playerName("W").name, black: playerName("B").name,
+    result: r ? r.score : "*", why: r ? resWhy(r) : "", white: playerName("W").name, black: playerName("B").name,
     date: fgnDate(), mode: cfg.mode, level: cfg.level, clock: cfg.clock };
 }
 function toFGN(withAnalysis) {
-  const d = exportData(), tags = [["Event", cfg.mode === "computer" ? "Partie contre l'ordinateur" : "Partie"],
+  const d = exportData(), tags = [["Event", cfg.mode === "computer" ? t("fgn_event_computer") : t("fgn_event")],
     ["Site", location.host], ["Date", d.date], ["White", d.white], ["Black", d.black], ["Result", d.result],
     ["Variant", GAME_TAG[d.game]]];
   if (d.vela) tags.push(["Vela", d.vela === "W" ? "Blancs" : "Noirs"]);
@@ -1892,12 +1922,13 @@ function parseFGN(text) {
     if (/^(1-0|0-1|1\/2-1\/2|½-½|\*)$/.test(tok)) { result = tok === "1/2-1/2" ? "½-½" : tok; continue; }
     tok = tok.replace(/^\d+\.(\.\.)?/, "").replace(/[?!]+$/, "").replace(/[-x:]/g, "");
     if (!tok) continue;
-    if (!/^(?:[a-i][1-5][AW]?)+$/.test(tok)) throw new Error(`Coup illisible : « ${tok} »`);
+    if (!/^(?:[a-i][1-5][AW]?)+$/.test(tok)) throw new Error(t("err_unreadable", { m: tok }));
     moves.push(tok);
   }
   const game = Object.keys(GAME_TAG).find(k => GAME_TAG[k] === tags.Variant) || (tags.Variant ? null : "tsivy");
-  if (!game) throw new Error(`Variante inconnue : « ${tags.Variant} »`);
-  const vela = tags.Vela === "Blancs" ? "W" : tags.Vela === "Noirs" ? "B" : "";
+  if (!game) throw new Error(t("err_variant", { v: tags.Variant }));
+  // Valeurs canoniques en français (format de fichier) ; les noms malgaches sont aussi acceptés à l'import.
+  const vela = /^(Blancs|Fotsy)$/i.test(tags.Vela || "") ? "W" : /^(Noirs|Mainty)$/i.test(tags.Vela || "") ? "B" : "";
   return { game, vela, fen: tags.FEN || "", moves, result, why: tags.Termination || "", white: tags.White, black: tags.Black };
 }
 function parseLink(text) {
@@ -1908,8 +1939,8 @@ function parseLink(text) {
     white: c.w, black: c.b };
 }
 async function importGame(d) {
-  if (!GAMES[d.game]) throw new Error("Variante inconnue");
-  if (d.fen && !/^[WB1-9]{1,9}(?:\/[WB1-9]{1,9}){2,4} [wb](?: \d{1,4} \d{1,4})?$/.test(d.fen)) throw new Error("FEN invalide");
+  if (!GAMES[d.game]) throw new Error(t("err_variant", { v: d.game }));
+  if (d.fen && !/^[WB1-9]{1,9}(?:\/[WB1-9]{1,9}){2,4} [wb](?: \d{1,4} \d{1,4})?$/.test(d.fen)) throw new Error(t("err_fen"));
   // Vérification complète par le moteur avant de toucher à la partie en cours.
   const req = { game: d.game, vela: d.game === "tsivy" ? d.vela : "", variant: "free", fen: d.fen || undefined };
   const st = await api("/api/state", { moves: d.moves, ...req });
@@ -1925,12 +1956,12 @@ async function importGame(d) {
   applyServerState(st);
   // Résultat non déductible de la position (abandon, temps) : on reprend celui de la partie.
   if (!game.result && d.result && d.result !== "*") {
-    const map = { "1-0": "Victoire des Blancs", "0-1": "Victoire des Noirs", "½-½": "Partie nulle" };
-    game.result = { score: d.result, text: map[d.result] || d.result, why: d.why || "Résultat de la partie importée" };
+    const map = { "1-0": "res_W", "0-1": "res_B", "½-½": "res_draw" };
+    game.result = { score: d.result, t: map[d.result] || "res_draw", w: "why_imported", raw: d.why || "" };
   }
   importedNames = { W: d.white, B: d.black };
   save(); render();
-  flash(`Partie importée : ${game.moves.length} demi-coups`);
+  flash(t("imported", { n: game.moves.length }));
 }
 let importedNames = null;
 function openShare(tab = "link") {
@@ -1954,7 +1985,7 @@ $("fgnAna").onchange = () => { $("fgnText").value = toFGN($("fgnAna").checked); 
 for (const b of document.querySelectorAll("[data-copy]")) b.onclick = async () => {
   const el = $(b.dataset.copy);
   try { await navigator.clipboard.writeText(el.value); } catch (e) { el.select(); document.execCommand("copy"); }
-  const t = b.textContent; b.textContent = "Copié ✓"; setTimeout(() => (b.textContent = t), 1200);
+  b.textContent = t("copied"); setTimeout(() => (b.textContent = t("copy")), 1200);
 };
 $("fgnDownload").onclick = () => {
   const blob = new Blob([$("fgnText").value], { type: "text/plain;charset=utf-8" });
@@ -1973,7 +2004,7 @@ $("importBtn").onclick = async () => {
     await importGame(parseLink(text) || parseFGN(text));
     $("shareDlg").close();
     $("importText").value = "";
-  } catch (e) { $("importErr").textContent = "Import impossible : " + e.message.replace(/^illegal move (\S+)/, "coup illégal « $1 »"); }
+  } catch (e) { $("importErr").textContent = t("import_failed", { e: trErr(e.message) }); }
 };
 
 // =====================================================================================================
@@ -1996,7 +2027,7 @@ async function takeback() {
   }
   game.moves.splice(game.moves.length - n, n);
   viewPly = game.moves.length; hintMove = null; liveInfo = null;
-  try { await refresh(); } catch (e) { flash(e.message); }
+  try { await refresh(); } catch (e) { flash(trErr(e.message)); }
   save();
   maybeEngine();
 }
@@ -2016,7 +2047,7 @@ async function hint() {
     liveInfo = { ...r.info, side: sideAt(game.moves.length) };
     const m = parseMove(r.bestmove);
     hintMove = [m.from, ...m.steps.map(s => s.to)];
-    flash("Suggestion : " + r.bestmove);
+    flash(t("flash_suggestion", { m: r.bestmove }));
   } catch (e) { if (my === epoch) flash(e.message); }
   finally { if (my === epoch) { busy = false; thinking(false); } }
   render();
@@ -2027,13 +2058,13 @@ function winnerOf() { const r = game.result && game.result.score; return r === "
 function velaWhoFor(color) { return cfg.mode === "computer" ? (color === cfg.color ? "me" : "engine") : color; }
 function nextGame() {
   const w = winnerOf(), vs = velaSide();
-  const normal = { label: "Revanche", title: "Nouvelle partie, couleurs inversées",
+  const normal = { label: t("rematch"), title: t("rematch_title"),
     go: () => { if (cfg.mode === "computer") cfg.color = other(cfg.color); cfg.vela = ""; cfg.velaWho = ""; startGame(); } };
   if (vs && w && w !== vs)  // le bénéficiaire a perdu : la vela continue
-    return { label: "Vela suivante", title: "Nouvelle vela, même bénéficiaire", go: () => startGame() };
+    return { label: t("vela_next"), title: t("vela_next_title"), go: () => startGame() };
   if (!vs && w && cfg.game === "tsivy" && cfg.mode !== "auto") {
     const loser = other(w);
-    normal.vela2 = { title: `Vela : les ${colorName(loser)} (perdants) commencent et sont avantagés`,
+    normal.vela2 = { title: t("vela_offer_title", { c: colorName(loser) }),
       go: () => { cfg.vela = loser; cfg.velaWho = velaWhoFor(loser); startGame(); } };
   }
   return normal;
@@ -2047,7 +2078,7 @@ async function startGame() {
   flipped = cfg.mode === "computer" && cfg.color === "B";
   applyGeometry(); rebuildPositions(); viewPly = 0;
   buildBoard();
-  try { await refresh(); } catch (e) { flash("Serveur injoignable : " + e.message); }
+  try { await refresh(); } catch (e) { flash(t("flash_server", { e: trErr(e.message) })); }
   save(); render();
   maybeEngine();
 }
@@ -2066,25 +2097,21 @@ function syncDialog() {
   for (const b of $("segMode").children) b.classList.toggle("on", b.dataset.v === draft.mode);
   $("segLevel").innerHTML = levels.map(l => `<button data-v="${l.id}" class="${l.id === draft.level ? "on" : ""}">${l.id}</button>`).join("");
   for (const b of $("segLevel").children) b.onclick = () => { draft.level = +b.dataset.v; syncDialog(); };
-  $("lvlName").textContent = levelName(draft.level) + (levels.find(l => l.id === draft.level && !l.timed) ? " — le temps de réflexion n'a pas d'effet" : "");
+  $("lvlName").textContent = levelName(draft.level) + (levels.find(l => l.id === draft.level && !l.timed) ? t("level_no_time") : "");
   $("fLevel").classList.toggle("hidden", draft.mode !== "computer");
   $("dClock").value = draft.clock; $("dMovetime").value = String(draft.movetime); $("dNet").value = draft.net; $("dVariant").value = draft.variant;
   $("colorRow").classList.toggle("hidden", draft.mode !== "computer");
   $("startRow").classList.toggle("hidden", draft.mode === "computer");
-  $("dlgTitle").textContent = draft.mode === "computer" ? "Jouer contre l'ordinateur" : draft.mode === "friend" ? "Partie à deux" : "Ordinateur contre ordinateur";
+  $("dlgTitle").textContent = t("dlg_" + draft.mode);
   for (const b of $("segGame").children) b.classList.toggle("on", b.dataset.v === draft.game);
-  $("gameNote").textContent = {
-    tsivy: "Le jeu complet : 22 pions chacun, captures par approche et retrait.",
-    dimy: "Même règles sur un plateau 5 × 5 : 12 pions chacun.",
-    telo: "Pose puis déplacement de 3 pions chacun : aligner ses 3 pions gagne (pas de capture).",
-  }[draft.game];
+  $("gameNote").textContent = t("game_note_" + draft.game);
   const isT = draft.game === "tsivy";
   $("fVela").classList.toggle("hidden", !isT);
   $("fNet").classList.toggle("hidden", !isT);
   $("fVariant").classList.toggle("hidden", draft.game === "telo");
   const opts = draft.mode === "computer"
-    ? [["", "Non (partie normale)"], ["me", "Oui, j'en bénéficie"], ["engine", "Oui, le moteur en bénéficie"]]
-    : [["", "Non (partie normale)"], ["W", "Oui, Blancs bénéficiaires"], ["B", "Oui, Noirs bénéficiaires"]];
+    ? [["", t("vela_no")], ["me", t("vela_me")], ["engine", t("vela_engine")]]
+    : [["", t("vela_no")], ["W", t("vela_W")], ["B", t("vela_B")]];
   $("dVela").innerHTML = opts.map(([v, t]) => `<option value="${v}">${t}</option>`).join("");
   if (!opts.some(o => o[0] === draft.velaWho)) draft.velaWho = "";
   $("dVela").value = draft.velaWho;
@@ -2111,7 +2138,7 @@ $("navNew").onclick = openDialog;
 $("navLearn").onclick = openLearn;
 $("navAnalyse").onclick = () => {
   if (over()) { if (!analysis) runAnalysis(); else $("analysisBox").scrollIntoView({ behavior: "smooth" }); }
-  else flash("L'analyse est disponible à la fin de la partie");
+  else flash(t("flash_analysis_end"));
 };
 
 // ---------- Contrôles et raccourcis ----------
@@ -2159,7 +2186,16 @@ document.addEventListener("click", e => {
 for (const b of $("segTheme").children) b.onclick = () => { theme = b.dataset.v; applyTheme(); save(); };
 for (const b of $("boardTiles").children) b.onclick = () => { boardTheme = b.dataset.v; applyTheme(); save(); };
 $("autoNight").onchange = e => { autoNight = e.target.checked; applyTheme(); save(); };
-function applySoundBtn() { $("soundBtn").innerHTML = cfg.sound ? SOUND_ON : SOUND_OFF; $("soundBtn").title = cfg.sound ? "Sons activés" : "Sons coupés"; }
+for (const b of $("segLang").children) b.onclick = () => {
+  lang = b.dataset.v;
+  try { localStorage.setItem("fanorona-lang", lang); } catch (e) { /* stockage indisponible */ }
+  applyStaticI18n(); applySoundBtn();
+  if ($("dlg").open) syncDialog();
+  for (const id of ["learnBox", "retroBox", "puzzleBox"]) $(id).dataset.html = "";
+  $("actions").dataset.html = "";
+  render();
+};
+function applySoundBtn() { $("soundBtn").innerHTML = cfg.sound ? SOUND_ON : SOUND_OFF; $("soundBtn").title = cfg.sound ? t("sounds_on") : t("sounds_off"); }
 $("soundBtn").onclick = () => { cfg.sound = !cfg.sound; applySoundBtn(); save(); if (cfg.sound) sound("move"); };
 
 // ---------- Persistance (confort local uniquement) ----------
@@ -2175,13 +2211,19 @@ function load() {
 }
 
 (async function init() {
+  try { I18N = await (await fetch("/i18n.json")).json(); } catch (e) { /* textes français du HTML en repli */ }
+  let savedLang = null;
+  try { savedLang = localStorage.getItem("fanorona-lang"); } catch (e) { /* stockage indisponible */ }
+  lang = savedLang || ((navigator.language || "").toLowerCase().startsWith("mg") ? "mg" : "fr");
+  if (!I18N || !I18N[lang]) lang = "fr";
+  applyStaticI18n();
   try {
     const c = await api("/api/config");
     nets = c.nets || [];
     for (const n of nets) { const o = document.createElement("option"); o.value = n; o.textContent = "NNUE " + n; $("dNet").appendChild(o); }
     if (c.levels) levels = c.levels;
     cfg.net = c.defaultNet || "";
-  } catch (e) { flash("Serveur injoignable : " + e.message); }
+  } catch (e) { flash(t("flash_server", { e: trErr(e.message) })); }
   const saved = load();
   if (saved) {
     Object.assign(cfg, saved.cfg || {});
@@ -2213,7 +2255,7 @@ async function openLinkFromHash() {
   if (!location.hash.startsWith("#g=")) return;
   if ($("dlg").open) $("dlg").close();
   try { await importGame(parseLink(location.hash)); }
-  catch (e) { flash("Lien de partie invalide : " + e.message.replace(/^illegal move (\S+)/, "coup illégal « $1 »")); }
+  catch (e) { flash(t("link_invalid", { e: trErr(e.message) })); }
   history.replaceState(null, "", location.pathname);
 }
 window.addEventListener("hashchange", openLinkFromHash);

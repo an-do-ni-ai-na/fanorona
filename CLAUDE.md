@@ -64,6 +64,7 @@ g++ -g -O0 -std=c++17 -Isrc -fsanitize=address,undefined src/{bitboard,position,
 | `tools/gui/index.html` | page unique façon lichess : plateau SVG (clic/glisser), pendules, coups navigables, analyse d'après-partie. `positions[k]` est rejoué localement avec des identifiants de pièces stables (animations) ; la logique de capture JS ne sert qu'à l'affichage, le moteur valide |
 | `tools/gui/CHARTE.md` | charte graphique (typographie, palettes des 3 thèmes, plateaux bois/granite) : tout passe par les variables CSS de `:root` |
 | `tools/gui/lessons.json` | leçons du tutoriel (chapitres, exercices : FEN de départ, objectif `reach`/`clear`/`captures`/`telo_win`/`win`, texte, indice) |
+| `tools/gui/i18n.json` | tous les textes de l'interface, `fr` (référence) et `mg` (malgache) ; paramètres `{n}` |
 | `tools/gui/verify_lessons.py` | vérifie chaque exercice contre le moteur (solution et nombre minimal de coups `par` des exercices solo, position gagnante pour ceux contre le moteur) — à relancer après toute modification des leçons |
 | `tools/gui/puzzles.json` | puzzles tactiques générés (FEN, ligne solution, coups acceptés par étape, classement, thèmes) |
 | `tools/puzzles/gen_puzzles.py` | génération des puzzles depuis `gensfen` (faute aléatoire, coup unique entre « familles » de chaînes, second avis NNUE, `--verify-only` pour refiltrer) |
@@ -89,6 +90,9 @@ g++ -g -O0 -std=c++17 -Isrc -fsanitize=address,undefined src/{bitboard,position,
   `value_to_tt` / `value_from_tt` obligatoire pour les scores de mat dans la TT.
 - **Historique de répétition** : `Search::think()` reçoit les clés de la partie, la dernière = position racine.
 - **GUI** : ne jamais fermer stdin du moteur avant `bestmove` (fin de stdin = `quit` = arrêt immédiat de la recherche).
+- **GUI multilingue** : aucun texte affiché en dur dans `index.html` — passer par `t("clé", {param})` (JS) ou
+  `data-i18n` / `data-i18n-title` / `-placeholder` / `-aria` (HTML), et ajouter la clé en `fr` ET `mg` dans
+  `i18n.json`. Les résultats de partie sont stockés en codes (`t`, `w`), traduits à l'affichage.
 - Commentaires en français, identifiants en anglais, style Stockfish (clang-format Google, largeur 120).
 
 ## Valeurs de référence (régressions)

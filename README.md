@@ -45,6 +45,9 @@ lui-même ; reprise de coup, indice, abandon, revanche. En fin de partie, « Ana
 ≥ 0,1 / 0,2 / 0,3 comme sur lichess), perte moyenne en centipions, meilleur coup affiché sur le plateau.
 « Apprendre de ses erreurs » rejoue ensuite chaque erreur ou gaffe du joueur : il faut trouver un coup
 aussi bon que celui du moteur (moins de 0,1 de chances de gain perdues), avec la solution à la demande.
+Interface en français ou en malgache (menu Apparence > Langue ; malgache par défaut si le navigateur l'est).
+Textes dans `tools/gui/i18n.json`, leçons dans `lessons.json` (bloc `mg`) — la traduction malgache est à faire
+relire par un locuteur natif.
 Partage (bouton ⤴ sous la liste des coups) : lien contenant toute la partie, export FGN (avec analyse en option),
 FEN de la position affichée, import d'un FGN, d'une liste de coups ou d'un lien.
 Puzzles tactiques (« Puzzles ») : ~950 positions où un seul coup gagne nettement (chaînes, rafles, coups calmes,

@@ -18,7 +18,13 @@
             "max": 8,
             "par": 4
           },
-          "success": "Le centre (e3) est le seul point vide au début d'une partie."
+          "success": "Le centre (e3) est le seul point vide au début d'une partie.",
+          "mg": {
+            "title": "Mamindra vato",
+            "text": "Isaky ny anjara, vato iray no mandroso toerana iray mankany amin'ny toerana mifanakaiky malalaka, manaraka tsipika. Ento any afovoan'ny takelaka, ao amin'ny e3, ny vato fotsy.",
+            "hint": "Mahafohy lalana ny tsipika mitsivalana : avy ao amin'ny a1, mandehana any b2 dia c3.",
+            "success": "Ny afovoany (e3) no hany toerana malalaka amin'ny fiandohan'ny lalao."
+          }
         },
         {
           "id": "plateau-2",
@@ -32,9 +38,19 @@
             "max": 6,
             "par": 3
           },
-          "success": "Un pion sur un point fort contrôle deux fois plus de lignes : c'est un vrai avantage."
+          "success": "Un pion sur un point fort contrôle deux fois plus de lignes : c'est un vrai avantage.",
+          "mg": {
+            "title": "Toerana matanjaka, toerana malemy",
+            "text": "Ny toerana « matanjaka » ihany no misy tsipika mitsivalana (tsipika 8) ; ny toerana « malemy » kosa tsipika 4 ihany. Avy ao amin'ny b1, toerana malemy, mankanesa any d3.",
+            "hint": "Tsy misy tsipika mitsivalana ao amin'ny b1 : mandalova aloha amin'ny toerana matanjaka (c1 na b2).",
+            "success": "Vato eo amin'ny toerana matanjaka dia mifehy tsipika avo roa heny : tombony tokoa izany."
+          }
         }
-      ]
+      ],
+      "mg": {
+        "title": "Ny takelaka",
+        "intro": "Toerana 45 mifamatotra amin'ny tsipika : eo amin'ny fihaonan'ny tsipika no ilalaovana, fa tsy ao anaty efamira."
+      }
     },
     {
       "id": "captures",
@@ -52,7 +68,13 @@
             "max": 1,
             "par": 1
           },
-          "success": "C'est une approche (notée A) : c3d3A a pris e3 et f3 d'un seul coup."
+          "success": "C'est une approche (notée A) : c3d3A a pris e3 et f3 d'un seul coup.",
+          "mg": {
+            "title": "Fihinanana amin'ny fanatonana",
+            "text": "Manatona vaton'ny mpifanandrina mba ho eo mialoha ny toerana iantsorohanao izy, amin'ny lalan'ny fihetsikao : voahinana izy, miaraka amin'ny vaton'ny mpifanandrina rehetra manaraka azy amin'io tsipika io. Hano ireo vato mainty roa.",
+            "hint": "Ampandrosoy toerana iray miankavanana ny vato fotsy.",
+            "success": "Fanatonana (A) izany : c3d3A no nihinana e3 sy f3 indray mandeha."
+          }
         },
         {
           "id": "captures-2",
@@ -65,7 +87,13 @@
             "max": 1,
             "par": 1
           },
-          "success": "C'est un retrait (noté W) : e3f3W a pris d3 et c3."
+          "success": "C'est un retrait (noté W) : e3f3W a pris d3 et c3.",
+          "mg": {
+            "title": "Fihinanana amin'ny fialana",
+            "text": "Mialà amin'ny vaton'ny mpifanandrina mifanila aminao, mahitsy ny lalana : voahinana izy sy ny andalany. Hano ireo vato mainty roa.",
+            "hint": "Ahemory toerana iray miankavanana ny vato fotsy, mifanohitra amin'ny vato mainty.",
+            "success": "Fialana (W) izany : e3f3W no nihinana d3 sy c3."
+          }
         },
         {
           "id": "captures-3",
@@ -79,7 +107,13 @@
             "max": 1,
             "par": 1
           },
-          "success": "Quand approche et retrait sont possibles, l'interface vous demande de cliquer la pièce à prendre."
+          "success": "Quand approche et retrait sont possibles, l'interface vous demande de cliquer la pièce à prendre.",
+          "mg": {
+            "title": "Fanatonana sa fialana ?",
+            "text": "Mety ahafahana manao ireo roa ireo ny dia iray : tsy maintsy misafidy ianao. Hano vato telo farafahakeliny indray mandeha.",
+            "hint": "Mankany e3 ny vato d3 : fidio ny fanatonana (andalana misy telo), fa tsy ny fialana.",
+            "success": "Rehefa azo atao ny fanatonana sy ny fialana, ny interface no mangataka anao hanindry ny vato hohanina."
+          }
         },
         {
           "id": "captures-4",
@@ -92,9 +126,19 @@
             "max": 1,
             "par": 1
           },
-          "success": "Tant qu'une capture existe, elle est obligatoire : c'est ce qui rend le Fanorona si tactique."
+          "success": "Tant qu'une capture existe, elle est obligatoire : c'est ce qui rend le Fanorona si tactique.",
+          "mg": {
+            "title": "Tsy maintsy mihinana",
+            "text": "Raha misy fihinanana azo atao, tsy maintsy mihinana ianao : voarara ny dia tsotra. Andramo afindra ny vato h4, avy eo hano ny vato mainty.",
+            "hint": "Ny vato a1 ihany no afaka mihinana : manatona c1 izy.",
+            "success": "Raha mbola misy fihinanana, tsy maintsy atao izy : izany no mahatonga ny fanorona ho feno tetika."
+          }
         }
-      ]
+      ],
+      "mg": {
+        "title": "Ny fihinanana",
+        "intro": "Mihinana amin'ny fanatonana na fialana amin'ny vaton'ny mpifanandrina ianao, ary voahinana miaraka ny andalana manontolo."
+      }
     },
     {
       "id": "chaines",
@@ -112,7 +156,13 @@
             "max": 1,
             "par": 1
           },
-          "success": "Pendant une chaîne, continuez à cliquer ; « Arrêter la capture » termine le tour quand vous voulez."
+          "success": "Pendant une chaîne, continuez à cliquer ; « Arrêter la capture » termine le tour quand vous voulez.",
+          "mg": {
+            "title": "Manohy mihinana",
+            "text": "Aorian'ny fihinanana, afaka manao fihinanana hafa ny vato iray ihany, amin'ny lalana hafa. Hano ireo vato mainty roa ao anatin'ny anjara iray.",
+            "hint": "a1 mankany b1 mihinana c1, avy eo tohizo avy ao b1 mankany b2 mba hihinana b3.",
+            "success": "Mandritra ny fihinanana misesy, tohizo ny manindry ; « Ajanony ny fihinanana » no mamarana ny anjara amin'ny fotoana tianao."
+          }
         },
         {
           "id": "chaines-2",
@@ -125,9 +175,19 @@
             "max": 1,
             "par": 1
           },
-          "success": "Trois directions, trois prises : a1b1Ab2Ac3A."
+          "success": "Trois directions, trois prises : a1b1Ab2Ac3A.",
+          "mg": {
+            "title": "Miova lalana",
+            "text": "Ao anatin'ny fihinanana misesy, tsy azo andehanana indroa misesy ny lalana iray, ary tsy azo iverenana ny toerana efa nandalovana. Hano ireo vato mainty telo ao anatin'ny anjara iray.",
+            "hint": "Miankavanana, avy eo miakatra, avy eo mitsivalana : lalana telo samy hafa.",
+            "success": "Lalana telo, fihinanana telo : a1b1Ab2Ac3A."
+          }
         }
-      ]
+      ],
+      "mg": {
+        "title": "Fihinanana misesy",
+        "intro": "Aorian'ny fihinanana iray, afaka mbola mihinana ihany ny vato iray ihany ao anatin'io anjara io."
+      }
     },
     {
       "id": "paika",
@@ -145,7 +205,13 @@
             "max": 2,
             "par": 2
           },
-          "success": "Un bon paika crée une menace que l'adversaire devra parer."
+          "success": "Un bon paika crée une menace que l'adversaire devra parer.",
+          "mg": {
+            "title": "Ny paika",
+            "text": "Tsy misy fihinanana azo atao : manaova paika (dia tsotra) manomana fihinanana, avy eo mihinàna. Hano ny vato mainty ao anatin'ny dia roa.",
+            "hint": "Mandrosoa any b1 : amin'ny dia manaraka, b1 mankany c1 dia manatona d1.",
+            "success": "Paika tsara no mamorona fandrahonana tsy maintsy ialan'ny mpifanandrina."
+          }
         },
         {
           "id": "paika-2",
@@ -158,9 +224,19 @@
             "level": 3,
             "max": 60
           },
-          "success": "Bravo, vous savez gagner une fin de partie."
+          "success": "Bravo, vous savez gagner une fin de partie.",
+          "mg": {
+            "title": "Mandresy ny lalao",
+            "text": "Mandresy ianao rehefa lany ny vaton'ny mpifanandrina, na tsy afa-mihetsika intsony izy. Vato telo ianao manoloana ny iray : ny motera (ambaratonga 3) no miaro ny Mainty. Mandresia !",
+            "hint": "Mandrosoa miaraka, aza avela hitokana eo akaikin'ny vato mainty ny vatonao : tsy mahahinana afa-tsy vato mifanila aminy na eo amin'ny lalany izy.",
+            "success": "Arahaba, hainao ny mandresy faran'ny lalao."
+          }
         }
-      ]
+      ],
+      "mg": {
+        "title": "Paika sy faran'ny lalao",
+        "intro": "Raha tsy misy fihinanana azo atao, dia tsotra no atao : ny paika."
+      }
     },
     {
       "id": "vela",
@@ -181,9 +257,19 @@
             "max": 3,
             "level": 6
           },
-          "success": "Après 17 prises, la vela continue avec les règles normales. Si le bénéficiaire ne peut plus prendre en phase 1, il perd."
+          "success": "Après 17 prises, la vela continue avec les règles normales. Si le bénéficiaire ne peut plus prendre en phase 1, il perd.",
+          "mg": {
+            "title": "Fihinanana iray isaky ny anjara",
+            "text": "Ianao no mahazo tombony amin'ny vela : ianao no manomboka, ary mandra-pahatongan'ny vato 5 sisa amin'ny mpifanandrina, tsy maintsy mihinana vato IRAY monja isaky ny anjara ianao — ilay akaiky indrindra, tsy misesy. Ny mpifanandrina kosa paika ihany no ataony, ka mamela fihinanana ho anao. Manaova fihinanana telo.",
+            "hint": "Tsy maintsy mihinana ny dia tsirairay : mitadiava fanatonana na fialana mikasika vato mainty.",
+            "success": "Rehefa voahinana 17, mitohy amin'ny fitsipika mahazatra ny vela. Raha tsy afaka mihinana intsony ilay mahazo tombony mandritra ny dingana 1, dia resy izy."
+          }
         }
-      ]
+      ],
+      "mg": {
+        "title": "Ny vela",
+        "intro": "Lalao misy tombony, lalaovina araka ny fomba nentin-drazana aorian'ny faharesena : ny resy no mahazo tombony."
+      }
     },
     {
       "id": "telo",
@@ -202,7 +288,13 @@
             "max": 1,
             "par": 1
           },
-          "success": "Les deux diagonales passent par le centre : b2 est la case clé du Telo."
+          "success": "Les deux diagonales passent par le centre : b2 est la case clé du Telo.",
+          "mg": {
+            "title": "Mampitsipika vato telo",
+            "text": "Samy manana vato 3 : apetraka mifandimby aloha, avy eo afindra toerana iray manaraka ny tsipika. Izay mahasitsipika ny vatony telo no mandresy. Mandresia amin'ny dia iray.",
+            "hint": "Vato iray sisa no andrasan'ny tsipika mitsivalana a1, b2, c3.",
+            "success": "Mandalo eo afovoany ny tsipika mitsivalana roa : b2 no toerana manan-danja indrindra amin'ny fanoron-telo."
+          }
         },
         {
           "id": "telo-2",
@@ -216,9 +308,19 @@
             "level": 3,
             "max": 60
           },
-          "success": "Le Fanoron-Telo est résolu : le premier joueur gagne en jouant au centre."
+          "success": "Le Fanoron-Telo est résolu : le premier joueur gagne en jouant au centre.",
+          "mg": {
+            "title": "Lalao feno",
+            "text": "Lalao feno miady amin'ny motera (ambaratonga 3), ianao no mitana ny Fotsy. Apetraho ny vatonao, avy eo afindrao mba hampitsipika azy telo.",
+            "hint": "Manomboka eo afovoany : raha tsy misy diso, mandresy foana ny Fotsy.",
+            "success": "Voavaha tanteraka ny fanoron-telo : mandresy ny mpilalao voalohany raha manomboka eo afovoany."
+          }
         }
-      ]
+      ],
+      "mg": {
+        "title": "Fanoron-telo (3 × 3)",
+        "intro": "Ny fanorona kelin'ny ankizy any Imerina : lalao fampitsipihana, tsy misy fihinanana."
+      }
     }
   ]
 }
