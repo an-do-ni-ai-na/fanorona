@@ -119,6 +119,11 @@ g++ -g -O0 -std=c++17 -Isrc -fsanitize=address,undefined src/{bitboard,position,
   est logé dans les colonnes a..e. Tout ce qui dépend de la taille passe par `Board` (`files`, `ranks`, `mask`) et
   par `ShiftFrom[d]` (cases ayant un voisin dans la direction d), recalculés par `set_variant()` : ne jamais
   réutiliser `ALL_SQUARES` comme « cases vides possibles », utiliser `Board::mask`.
+- **MultiPV** (`SearchLimits::multiPV`, option UCI) : à la racine, les coups des lignes déjà trouvées sont exclus
+  (`Worker::excluded`), et la racine d'une ligne secondaire n'écrit pas dans la TT. Avec MultiPV = 1 l'arbre et la
+  sortie sont strictement ceux d'avant (signature `bench` inchangée) — à préserver.
+- **Analyse en continu (GUI)** : une session serveur par onglet (`/api/analyse`), `go infinite` + `stop` ; le
+  concierge coupe après 120 s ou 6 s sans interrogation. Chaque session tient un créneau de recherche.
 - **NNUE** : le réseau est entraîné sur le 9×5 ; `evaluate()` l'ignore hors Fanoron-Tsivy (HCE à la place).
 - **Vela** : la phase se déduit du plateau (`Position::vela_phase1()`, camp handicapé à plus de 5 pions), pas d'état
   supplémentaire dans `Position`. La quiescence doit rester consciente de la vela (le camp handicapé ne capture

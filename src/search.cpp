@@ -90,6 +90,7 @@ class Worker {
     int selDepth = 0;
     int rootDepth = 0;
 
+    std::vector<Move> excluded;  // MultiPV : coups racine déjà retenus pendant l'itération courante
     Move killers[MAX_PLY + 2][2];
     Move pvTable[MAX_PLY + 1][MAX_PLY + 1];
     int pvLength[MAX_PLY + 1];
@@ -233,6 +234,13 @@ Value Worker::search(const Position& pos, Value alpha, Value beta, int depth, in
 
     MoveList list;
     generate_moves(pos, list);
+    if (ply == 0 && !excluded.empty()) {  // MultiPV : ligne suivante sans les coups déjà retenus
+        int n = 0;
+        for (int i = 0; i < list.size; ++i)
+            if (std::find(excluded.begin(), excluded.end(), list.moves[i]) == excluded.end()) list.moves[n++] = list.moves[i];
+        list.size = n;
+        if (n == 0) return -VALUE_INFINITE;
+    }
     if (list.size == 0) return mated_in(ply);  // bloqué : défaite
 
     bool capturePos = is_capture(list.moves[0]);
@@ -339,7 +347,8 @@ Value Worker::search(const Position& pos, Value alpha, Value beta, int depth, in
     }
 
     Bound b = best >= beta ? BOUND_LOWER : (pvNode && best > oldAlpha) ? BOUND_EXACT : BOUND_UPPER;
-    TT.store(tte, pos.key, value_to_tt(best, ply), b, depth, bestMove, staticEval);
+    // Racine d'une ligne secondaire (coups exclus) : ne pas écraser l'entrée du vrai meilleur coup.
+    if (!(ply == 0 && !excluded.empty())) TT.store(tte, pos.key, value_to_tt(best, ply), b, depth, bestMove, staticEval);
     return best;
 }
 
@@ -370,45 +379,59 @@ SearchResult Worker::run() {
     result.bestMove = rootMoves.moves[0];
 
     int maxDepth = limits.depth > 0 ? std::min(limits.depth, MAX_PLY - 1) : MAX_PLY - 1;
-    Value prevScore = VALUE_NONE;
+    int multiPV = std::clamp(limits.multiPV, 1, std::min(rootMoves.size, 8));
+    std::vector<Value> prevScores(multiPV, VALUE_NONE);
 
     for (rootDepth = 1; rootDepth <= maxDepth; ++rootDepth) {
-        selDepth = 0;
-        Value alpha = -VALUE_INFINITE, beta = VALUE_INFINITE, delta = 25;
-        if (rootDepth >= 5 && prevScore != VALUE_NONE && std::abs(prevScore) < VALUE_MATE_IN_MAX_PLY) {
-            alpha = std::max(prevScore - delta, -VALUE_INFINITE);
-            beta = std::min(prevScore + delta, VALUE_INFINITE);
-        }
-
-        Value score;
-        // Fenêtres d'aspiration
-        while (true) {
-            score = search(rootPos, alpha, beta, rootDepth, 0, true, false);
+        // MultiPV : ligne k = meilleure ligne sans les k premiers coups retenus (façon Stockfish). Avec
+        // multiPV = 1, exactement la recherche normale (même arbre, même signature bench).
+        excluded.clear();
+        std::vector<std::pair<Value, std::vector<Move>>> lines;
+        Value score = VALUE_NONE;
+        for (int pvIdx = 0; pvIdx < multiPV; ++pvIdx) {
+            selDepth = 0;
+            Value prevScore = prevScores[pvIdx];
+            Value alpha = -VALUE_INFINITE, beta = VALUE_INFINITE, delta = 25;
+            if (rootDepth >= 5 && prevScore != VALUE_NONE && std::abs(prevScore) < VALUE_MATE_IN_MAX_PLY) {
+                alpha = std::max(prevScore - delta, -VALUE_INFINITE);
+                beta = std::min(prevScore + delta, VALUE_INFINITE);
+            }
+            // Fenêtres d'aspiration
+            while (true) {
+                score = search(rootPos, alpha, beta, rootDepth, 0, true, false);
+                if (stopped) break;
+                if (score <= alpha) {
+                    beta = (alpha + beta) / 2;
+                    alpha = std::max(score - delta, -VALUE_INFINITE);
+                } else if (score >= beta)
+                    beta = std::min(score + delta, VALUE_INFINITE);
+                else
+                    break;
+                delta += delta / 2 + 5;
+            }
             if (stopped) break;
-            if (score <= alpha) {
-                beta = (alpha + beta) / 2;
-                alpha = std::max(score - delta, -VALUE_INFINITE);
-            } else if (score >= beta)
-                beta = std::min(score + delta, VALUE_INFINITE);
-            else
-                break;
-            delta += delta / 2 + 5;
+            lines.push_back({score, std::vector<Move>(pvTable[0], pvTable[0] + pvLength[0])});
+            if (pvLength[0] > 0) excluded.push_back(pvTable[0][0]);
         }
 
-        if (stopped && rootDepth > 1) break;  // itération incomplète : on garde la précédente
+        if (stopped && (rootDepth > 1 || lines.empty())) break;  // itération incomplète : on garde la précédente
 
         result.depth = rootDepth;
-        result.score = score;
-        result.pv.assign(pvTable[0], pvTable[0] + pvLength[0]);
+        result.score = lines[0].first;
+        result.pv = lines[0].second;
         if (!result.pv.empty()) result.bestMove = result.pv[0];
-        prevScore = score;
+        for (size_t k = 0; k < lines.size(); ++k) prevScores[k] = lines[k].first;
 
         int64_t ms = elapsed();
         if (verbose) {
-            std::cout << "info depth " << rootDepth << " seldepth " << selDepth << " score " << score_to_uci(score)
-                      << " nodes " << nodes << " nps " << (nodes * 1000 / std::max<int64_t>(ms, 1)) << " hashfull "
-                      << TT.hashfull() << " time " << ms << " pv " << pv_string(result.pv) << std::endl;
+            for (size_t k = 0; k < lines.size(); ++k)
+                std::cout << "info depth " << rootDepth << " seldepth " << selDepth
+                          << (multiPV > 1 ? " multipv " + std::to_string(k + 1) : "") << " score "
+                          << score_to_uci(lines[k].first) << " nodes " << nodes << " nps "
+                          << (nodes * 1000 / std::max<int64_t>(ms, 1)) << " hashfull " << TT.hashfull() << " time " << ms
+                          << " pv " << pv_string(lines[k].second) << std::endl;
         }
+        score = result.score;
 
         if (stopped) break;
         if (timeManaged && !limits.infinite) {

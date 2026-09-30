@@ -1,5 +1,6 @@
 #include "uci.h"
 
+#include <algorithm>
 #include <chrono>
 #include <fstream>
 #include <iostream>
@@ -37,6 +38,8 @@ struct Game {
         history.push_back(pos.key);
     }
 };
+
+int multiPV = 1;  // option UCI MultiPV (lignes d'analyse)
 
 bool is_telo() { return Rules::variant == Variant::Telo; }
 
@@ -367,6 +370,7 @@ void loop(int argc, char* argv[]) {
                       << "option name NoCaptureLimit type spin default 100 min 10 max 10000\n"
                       << "option name UseNNUE type check default false\n"
                       << "option name EvalFile type string default <empty>\n"
+                      << "option name MultiPV type spin default 1 min 1 max 8\n"
                       << "option name Variant type combo default tsivy var tsivy var dimy var telo\n"
                       << "option name Vela type combo default none var none var white var black\n"
                       << "uciok" << std::endl;
@@ -383,6 +387,7 @@ void loop(int argc, char* argv[]) {
             while (is >> t && t != "value") name += (name.empty() ? "" : " ") + t;
             is >> value;
             if (name == "Hash") TT.resize(std::stoul(value));
+            else if (name == "MultiPV") multiPV = std::clamp(std::stoi(value), 1, 8);
             else if (name == "MandatoryContinuation") Rules::mandatoryContinuation = value == "true";
             else if (name == "NoCaptureLimit") Rules::noCaptureLimit = std::stoi(value);
             else if (name == "UseNNUE") NNUE::set_enabled(value == "true");
@@ -418,6 +423,7 @@ void loop(int argc, char* argv[]) {
         } else if (token == "go") {
             join();
             SearchLimits limits = parse_limits(is);
+            limits.multiPV = multiPV;
             Search::stopSignal = false;
             Game snapshot = game;
             searchThread = std::thread([snapshot, limits]() {

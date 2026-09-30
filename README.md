@@ -45,6 +45,9 @@ lui-même ; reprise de coup, indice, abandon, revanche. En fin de partie, « Ana
 ≥ 0,1 / 0,2 / 0,3 comme sur lichess), perte moyenne en centipions, meilleur coup affiché sur le plateau.
 « Apprendre de ses erreurs » rejoue ensuite chaque erreur ou gaffe du joueur : il faut trouver un coup
 aussi bon que celui du moteur (moins de 0,1 de chances de gain perdues), avec la solution à la demande.
+Analyse en continu (panneau de gauche, page Jouer) : le moteur cherche sans fin sur la position affichée et montre
+ses 1 à 3 meilleures lignes (flèches sur le plateau, barre d'évaluation) ; relancée à chaque changement de position,
+arrêtée après 2 minutes ; indisponible pendant une partie en cours contre l'ordinateur.
 Profils (puce en haut à droite) : chacun garde ses parties, son classement de puzzles et sa progression du
 tutoriel, sur tous les appareils ; pas de mot de passe (service réservé au réseau local) ; mode invité. Page
 d'accueil (départ rapide par niveau, reprise, puzzles, tutoriel, dernières parties, bilan), onglets Jouer / Puzzles /
@@ -83,6 +86,7 @@ requête (`position startpos moves ...`), le moteur reste seul juge des règles.
 | `setoption name Hash value 256` | taille de la table de transposition (Mo) |
 | `setoption name MandatoryContinuation value true` | variante : séquence de captures obligatoire jusqu'au bout |
 | `setoption name NoCaptureLimit value 100` | nulle après N demi-coups sans capture |
+| `setoption name MultiPV value 3` | analyse : les N meilleures lignes (`info ... multipv k ...`), 1 à 8 |
 | `setoption name Variant value tsivy\|dimy\|telo` | jeu : Fanoron-Tsivy 9×5 (défaut), Fanoron-Dimy 5×5, Fanoron-Telo 3×3 |
 | `setoption name Vela value none\|white\|black` | partie *vela* (Fanoron-Tsivy) : camp bénéficiaire |
 | `d`, `moves`, `eval`, `status` | affichage, coups légaux, évaluation, état de la partie |

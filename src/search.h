@@ -19,6 +19,7 @@ struct SearchLimits {
     int movestogo = 0;
     uint64_t nodes = 0;
     bool infinite = false;
+    int multiPV = 1;         // nombre de meilleures lignes cherchées (analyse) ; 1 = recherche normale
 };
 
 struct SearchResult {
