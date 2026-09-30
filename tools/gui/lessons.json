@@ -1,0 +1,224 @@
+{
+  "version": 1,
+  "chapters": [
+    {
+      "id": "plateau",
+      "title": "Le plateau",
+      "intro": "45 points reliés par des lignes : on joue sur les intersections, pas dans les cases.",
+      "steps": [
+        {
+          "id": "plateau-1",
+          "title": "Se déplacer",
+          "text": "À chaque tour, un pion avance d'un point vers un point voisin libre, en suivant une ligne. Amenez le pion blanc au centre du plateau, en e3.",
+          "hint": "Les diagonales font gagner du temps : de a1, filez vers b2 puis c3.",
+          "fen": "9/9/9/9/W8 w",
+          "goal": {
+            "type": "reach",
+            "target": "e3",
+            "max": 8,
+            "par": 4
+          },
+          "success": "Le centre (e3) est le seul point vide au début d'une partie."
+        },
+        {
+          "id": "plateau-2",
+          "title": "Points forts, points faibles",
+          "text": "Seuls les points « forts » ont des diagonales (8 lignes) ; les points « faibles » n'en ont que 4. Depuis b1, un point faible, rejoignez d3.",
+          "hint": "b1 ne permet pas de diagonale : passez d'abord par un point fort (c1 ou b2).",
+          "fen": "9/9/9/9/1W7 w",
+          "goal": {
+            "type": "reach",
+            "target": "d3",
+            "max": 6,
+            "par": 3
+          },
+          "success": "Un pion sur un point fort contrôle deux fois plus de lignes : c'est un vrai avantage."
+        }
+      ]
+    },
+    {
+      "id": "captures",
+      "title": "Les captures",
+      "intro": "On capture en s'approchant d'une pièce adverse ou en s'en éloignant, et toute la file suit.",
+      "steps": [
+        {
+          "id": "captures-1",
+          "title": "Capture par approche",
+          "text": "Avancez vers une pièce adverse pour qu'elle se trouve juste devant votre point d'arrivée, dans le prolongement du mouvement : elle est prise, avec toute la file de pièces adverses qui la suit. Prenez les deux pièces noires.",
+          "hint": "Avancez le pion blanc d'un point vers la droite.",
+          "fen": "9/9/2W1BB3/9/9 w",
+          "goal": {
+            "type": "clear",
+            "max": 1,
+            "par": 1
+          },
+          "success": "C'est une approche (notée A) : c3d3A a pris e3 et f3 d'un seul coup."
+        },
+        {
+          "id": "captures-2",
+          "title": "Capture par retrait",
+          "text": "Éloignez-vous d'une pièce adverse collée à vous, en ligne droite : elle est prise, avec toute sa file. Prenez les deux pièces noires.",
+          "hint": "Reculez le pion blanc d'un point vers la droite, à l'opposé des pièces noires.",
+          "fen": "9/9/2BBW4/9/9 w",
+          "goal": {
+            "type": "clear",
+            "max": 1,
+            "par": 1
+          },
+          "success": "C'est un retrait (noté W) : e3f3W a pris d3 et c3."
+        },
+        {
+          "id": "captures-3",
+          "title": "Approche ou retrait ?",
+          "text": "Un même déplacement peut permettre les deux prises : il faut alors choisir. Prenez au moins trois pièces en un seul coup.",
+          "hint": "Le pion d3 va en e3 : choisissez l'approche (la file de trois), pas le retrait.",
+          "fen": "9/9/2BW1BBB1/9/9 w",
+          "goal": {
+            "type": "captures",
+            "n": 3,
+            "max": 1,
+            "par": 1
+          },
+          "success": "Quand approche et retrait sont possibles, l'interface vous demande de cliquer la pièce à prendre."
+        },
+        {
+          "id": "captures-4",
+          "title": "La capture est obligatoire",
+          "text": "Si une capture est possible, vous devez capturer : les déplacements simples sont interdits. Essayez de bouger le pion h4, puis prenez la pièce noire.",
+          "hint": "Seul le pion a1 peut prendre : il s'approche de c1.",
+          "fen": "9/7W1/9/9/W1B6 w",
+          "goal": {
+            "type": "clear",
+            "max": 1,
+            "par": 1
+          },
+          "success": "Tant qu'une capture existe, elle est obligatoire : c'est ce qui rend le Fanorona si tactique."
+        }
+      ]
+    },
+    {
+      "id": "chaines",
+      "title": "Les chaînes de captures",
+      "intro": "Après une prise, la même pièce peut continuer à capturer pendant le même tour.",
+      "steps": [
+        {
+          "id": "chaines-1",
+          "title": "Enchaîner",
+          "text": "Après une capture, la même pièce peut en faire une autre, dans une autre direction. Prenez les deux pièces noires en un seul tour.",
+          "hint": "a1 vers b1 prend c1, puis continuez de b1 vers b2 pour prendre b3.",
+          "fen": "9/9/1B7/9/W1B6 w",
+          "goal": {
+            "type": "clear",
+            "max": 1,
+            "par": 1
+          },
+          "success": "Pendant une chaîne, continuez à cliquer ; « Arrêter la capture » termine le tour quand vous voulez."
+        },
+        {
+          "id": "chaines-2",
+          "title": "Changer de direction",
+          "text": "Dans une chaîne, on ne peut ni aller deux fois de suite dans la même direction, ni repasser par un point déjà visité. Prenez les trois pièces noires en un seul tour.",
+          "hint": "Vers la droite, puis vers le haut, puis en diagonale : trois directions différentes.",
+          "fen": "9/3B5/1B7/9/W1B6 w",
+          "goal": {
+            "type": "clear",
+            "max": 1,
+            "par": 1
+          },
+          "success": "Trois directions, trois prises : a1b1Ab2Ac3A."
+        }
+      ]
+    },
+    {
+      "id": "paika",
+      "title": "Paika et fin de partie",
+      "intro": "Sans capture possible, on joue un déplacement simple : le paika.",
+      "steps": [
+        {
+          "id": "paika-1",
+          "title": "Le paika",
+          "text": "Aucune capture n'est possible : jouez un paika (déplacement simple) qui prépare une prise, puis capturez. Prenez la pièce noire en deux coups.",
+          "hint": "Avancez en b1 : au coup suivant, b1 vers c1 s'approche de d1.",
+          "fen": "9/9/9/9/W2B5 w",
+          "goal": {
+            "type": "clear",
+            "max": 2,
+            "par": 2
+          },
+          "success": "Un bon paika crée une menace que l'adversaire devra parer."
+        },
+        {
+          "id": "paika-2",
+          "title": "Gagner la partie",
+          "text": "On gagne en prenant toutes les pièces adverses, ou en bloquant l'adversaire. Vous avez trois pions contre un : le moteur (niveau 3) défend les Noirs. Gagnez !",
+          "hint": "Avancez ensemble, sans laisser de pion isolé à portée de la pièce noire : elle ne peut prendre qu'un pion collé à elle ou dans son prolongement.",
+          "fen": "4B4/9/9/9/2W1W1W2 w",
+          "goal": {
+            "type": "win",
+            "level": 3,
+            "max": 60
+          },
+          "success": "Bravo, vous savez gagner une fin de partie."
+        }
+      ]
+    },
+    {
+      "id": "vela",
+      "title": "La vela",
+      "intro": "La partie à handicap jouée traditionnellement après une défaite : le perdant en bénéficie.",
+      "steps": [
+        {
+          "id": "vela-1",
+          "title": "Une seule prise par tour",
+          "text": "Vous êtes le bénéficiaire de la vela : vous commencez, et jusqu'à ce que l'adversaire n'ait plus que 5 pions, vous devez prendre exactement UNE pièce par tour — la plus proche, sans enchaîner. L'adversaire, lui, ne fait que des paika qui vous laissent une prise. Faites trois prises.",
+          "hint": "Chaque coup doit capturer : cherchez une approche ou un retrait qui touche une pièce noire.",
+          "game": "tsivy",
+          "vela": "W",
+          "fen": "BBBBBBBBB/BBBBBBBBB/BWBW1BWBW/WWWWWWWWW/WWWWWWWWW w",
+          "goal": {
+            "type": "captures",
+            "n": 3,
+            "max": 3,
+            "level": 6
+          },
+          "success": "Après 17 prises, la vela continue avec les règles normales. Si le bénéficiaire ne peut plus prendre en phase 1, il perd."
+        }
+      ]
+    },
+    {
+      "id": "telo",
+      "title": "Fanoron-Telo (3 × 3)",
+      "intro": "Le petit Fanorona des enfants de l'Imerina : un jeu d'alignement, sans capture.",
+      "steps": [
+        {
+          "id": "telo-1",
+          "title": "Aligner trois pions",
+          "text": "Chacun a 3 pions : on les pose à tour de rôle, puis on les déplace d'un point le long des lignes. Aligner ses trois pions gagne. Gagnez en un coup.",
+          "hint": "La diagonale a1, b2, c3 n'attend plus qu'un pion.",
+          "game": "telo",
+          "fen": "BB1/BWW/W2 w",
+          "goal": {
+            "type": "telo_win",
+            "max": 1,
+            "par": 1
+          },
+          "success": "Les deux diagonales passent par le centre : b2 est la case clé du Telo."
+        },
+        {
+          "id": "telo-2",
+          "title": "Une partie complète",
+          "text": "Partie complète contre le moteur (niveau 3), vous avez les Blancs. Posez vos pions puis déplacez-les pour aligner les trois.",
+          "hint": "Commencez au centre : avec un jeu parfait, les Blancs gagnent toujours.",
+          "game": "telo",
+          "fen": "3/3/3 w",
+          "goal": {
+            "type": "win",
+            "level": 3,
+            "max": 60
+          },
+          "success": "Le Fanoron-Telo est résolu : le premier joueur gagne en jouant au centre."
+        }
+      ]
+    }
+  ]
+}

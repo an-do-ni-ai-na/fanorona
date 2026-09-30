@@ -33,6 +33,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 MOVE_RE = re.compile(r"^[a-i][1-5](?:[a-i][1-5][AW]?)*$")  # une case seule = pose (Fanoron-Telo)
 GAMES = {"tsivy", "dimy", "telo"}
+FEN_RE = re.compile(r"^[WB1-9]{1,9}(?:/[WB1-9]{1,9}){2,4} [wb](?: \d{1,4} \d{1,4})?$")
 MAX_MOVETIME = 30000
 MAX_PLIES = 2000
 
@@ -80,11 +81,23 @@ def net_options(req):
     return [f"setoption name EvalFile value {nets[net]}", "setoption name UseNNUE value true"]
 
 
+def position_cmd(req, moves):
+    """`position startpos` ou, pour une position de départ imposée (tutoriel, éditeur), `position fen`."""
+    fen = req.get("fen")
+    if fen:
+        if not isinstance(fen, str) or not FEN_RE.match(fen):
+            raise EngineError("FEN invalide")
+        base = f"position fen {fen}"
+    else:
+        base = "position startpos"
+    return base + (" moves " + " ".join(moves) if moves else "")
+
+
 def preamble(req):
     """Commandes communes : règles, puis position."""
     moves = check_moves(req.get("moves", []))
     cmds = rule_options(req)
-    cmds.append("position startpos" + (" moves " + " ".join(moves) if moves else ""))
+    cmds.append(position_cmd(req, moves))
     return cmds
 
 
@@ -273,7 +286,7 @@ def evaluate_plies(req):
         try:
             eng.send(opts)
             for k in plies:
-                pos = "position startpos" + (" moves " + " ".join(moves[:k]) if k else "")
+                pos = position_cmd(req, moves[:k])
                 # "ucinewgame" : chaque position est analysée sans dépendre de la précédente (TT vidée).
                 # Fanoron-Telo : le jeu est résolu, "go" sans profondeur donne la valeur exacte.
                 go = "go" if req.get("game") == "telo" else f"go depth {depth}"
@@ -312,7 +325,15 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         path = self.path.split("?")[0]
-        if path in ("/", "/index.html"):
+        if path == "/lessons.json":
+            body = (HERE / "lessons.json").read_bytes()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Cache-Control", "no-cache")
+            self.end_headers()
+            self.wfile.write(body)
+        elif path in ("/", "/index.html"):
             body = (HERE / "index.html").read_bytes()
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
