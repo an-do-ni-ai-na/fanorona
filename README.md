@@ -45,6 +45,9 @@ lui-même ; reprise de coup, indice, abandon, revanche. En fin de partie, « Ana
 ≥ 0,1 / 0,2 / 0,3 comme sur lichess), perte moyenne en centipions, meilleur coup affiché sur le plateau.
 « Apprendre de ses erreurs » rejoue ensuite chaque erreur ou gaffe du joueur : il faut trouver un coup
 aussi bon que celui du moteur (moins de 0,1 de chances de gain perdues), avec la solution à la demande.
+Puzzles tactiques (« Puzzles ») : ~950 positions où un seul coup gagne nettement (chaînes, rafles, coups calmes,
+combinaisons), classement Elo personnel, série de réussites ; générés depuis l'auto-jeu par
+`tools/puzzles/gen_puzzles.py` (voir plus bas).
 Tutoriel interactif (« Apprendre ») : 6 chapitres, du déplacement aux chaînes de captures, à la vela et au
 Fanoron-Telo, avec exercices sur le plateau, indices et étoiles (leçons dans `tools/gui/lessons.json`).
 Trois jeux (Fanoron-Tsivy 9×5, Dimy 5×5, Telo 3×3) et la partie *vela*, proposée au perdant en fin de
@@ -162,3 +165,18 @@ Choix spécifiques au Fanorona :
    amélioration.
 5. Bases de finales (le Fanorona a été résolu : nulle avec un jeu parfait,
    Schadd et al., 2008).
+
+## Puzzles
+
+```sh
+python3 tools/puzzles/gen_puzzles.py data/gensfen_gen3.txt --count 1000 --workers 5   # -> tools/gui/puzzles.json
+```
+
+Comme sur lichess, un puzzle naît d'une faute : depuis une position d'auto-jeu, l'adversaire joue un coup au
+hasard, puis le moteur évalue chaque réponse. On garde la position si un seul coup gagne nettement (au moins
++200 cp, 200 cp d'écart avec les autres coups) ; la solution est prolongée tant que le coup suivant reste unique
+(jusqu'à 3 coups). Les coups d'une même chaîne arrêtée plus tôt forment une « famille » : l'unicité se juge entre
+familles, et s'arrêter trop tôt dans la bonne chaîne est une erreur. Second avis : le réseau NNUE (profondeur 10)
+doit jouer un coup accepté, sinon le puzzle est écarté (~3 %). La difficulté est une estimation (nombre de coups,
+longueur de chaîne, coup calme, solution en plusieurs coups), à recalibrer d'après les résultats réels.
+

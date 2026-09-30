@@ -65,6 +65,8 @@ g++ -g -O0 -std=c++17 -Isrc -fsanitize=address,undefined src/{bitboard,position,
 | `tools/gui/CHARTE.md` | charte graphique (typographie, palettes des 3 thèmes, plateaux bois/granite) : tout passe par les variables CSS de `:root` |
 | `tools/gui/lessons.json` | leçons du tutoriel (chapitres, exercices : FEN de départ, objectif `reach`/`clear`/`captures`/`telo_win`/`win`, texte, indice) |
 | `tools/gui/verify_lessons.py` | vérifie chaque exercice contre le moteur (solution et nombre minimal de coups `par` des exercices solo, position gagnante pour ceux contre le moteur) — à relancer après toute modification des leçons |
+| `tools/gui/puzzles.json` | puzzles tactiques générés (FEN, ligne solution, coups acceptés par étape, classement, thèmes) |
+| `tools/puzzles/gen_puzzles.py` | génération des puzzles depuis `gensfen` (faute aléatoire, coup unique entre « familles » de chaînes, second avis NNUE, `--verify-only` pour refiltrer) |
 | `tools/metrics_logger.py` | journalisation JSONL des lignes UCI `info` + résultats, pour Grafana/Loki |
 | `tools/nnue/train.py` | entraînement PyTorch du réseau NNUE à partir des données `gensfen` |
 | `tools/nnue/verify.py` | vérifie que `src/nnue.cpp` donne EXACTEMENT le même score qu'une référence numpy |

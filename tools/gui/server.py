@@ -325,8 +325,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         path = self.path.split("?")[0]
-        if path == "/lessons.json":
-            body = (HERE / "lessons.json").read_bytes()
+        if path in ("/lessons.json", "/puzzles.json"):
+            body = (HERE / path[1:]).read_bytes()
             self.send_response(200)
             self.send_header("Content-Type", "application/json; charset=utf-8")
             self.send_header("Content-Length", str(len(body)))

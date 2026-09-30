@@ -168,6 +168,15 @@ button, select { font: inherit; color: inherit; }
 .map .dot.s3 { background: var(--accent); border-color: var(--accent); }
 .map .dot.cur { outline: 2px solid var(--info); outline-offset: 2px; }
 body.retro #metaBox, body.retro #engineBox, body.retro #analysisBox, body.retro #actions { display: none; }
+body.puzzle #metaBox, body.puzzle #engineBox, body.puzzle #analysisBox, body.puzzle #actions { display: none; }
+.prating { display: flex; align-items: baseline; gap: 10px; }
+.prating b { font: 600 30px var(--font-brand); color: var(--strong); }
+.prating .delta { font-weight: 600; font-variant-numeric: tabular-nums; }
+.prating .delta.up { color: var(--accent); } .prating .delta.down { color: var(--j-blun); }
+.pstats { display: flex; gap: 14px; font-size: 12.5px; color: var(--muted); }
+.pstats b { color: var(--strong); }
+.tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.tag { font-size: 12px; padding: 3px 8px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--border); color: var(--text); }
 .map .dot.ko { background: var(--j-blun); border-color: var(--j-blun); }
 body.learning #metaBox, body.learning #engineBox, body.learning #analysisBox, body.learning #actions { display: none; }
 .panel h3 { margin: 0 0 10px; font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .07em; color: var(--muted);
@@ -360,6 +369,7 @@ dialog::backdrop { background: rgba(10, 8, 6, .55); backdrop-filter: blur(2px); 
   <nav>
     <button id="navNew">Jouer</button>
     <button id="navAnalyse">Analyse</button>
+    <button id="navPuzzle">Puzzles</button>
     <button id="navLearn">Apprendre</button>
   </nav>
   <div class="spacer"></div>
@@ -379,6 +389,7 @@ dialog::backdrop { background: rgba(10, 8, 6, .55); backdrop-filter: blur(2px); 
   <aside class="side">
     <section class="box panel learn hidden" id="learnBox"></section>
     <section class="box panel learn hidden" id="retroBox"></section>
+    <section class="box panel learn hidden" id="puzzleBox"></section>
     <section class="box meta" id="metaBox">
       <div class="head">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="4" y="6" width="16" height="12" rx="2"/><path d="M9 10h.01M15 10h.01M9 14h6M12 3v3M8 21h8"/></svg>
@@ -769,7 +780,7 @@ function renderBoard() {
 // =====================================================================================================
 const humanSide = c => cfg.mode === "friend" || (cfg.mode === "computer" && cfg.color === c);
 const canInput = () => live() && !over() && !busy && humanSide(sideAt(game.moves.length)) && !(learn && learn.status !== "play")
-  && !(retro && retro.st !== "find");
+  && !(retro && retro.st !== "find") && !(puzzle && puzzle.st !== "play" && puzzle.st !== "wrongdone");
 
 function candidates() {
   return game.legal.map(parseMove).filter(m => m.from === chosen.from &&
@@ -888,6 +899,7 @@ async function commit(m) {
   chosen = null; pendingAW = null; inputView = null; hintMove = null;
   if (learn && learn.solo) return learnSoloMove(m);
   if (retro) return retroTry(m);
+  if (puzzle) return puzzleMove(m);
   await pushMove(m.str, false);
 }
 
@@ -950,7 +962,7 @@ async function refresh() {
   render();
 }
 
-const engineToMove = () => !over() && !retro && !(learn && learn.status !== "play") && (cfg.mode === "auto" || (cfg.mode === "computer" && cfg.color !== sideAt(game.moves.length)));
+const engineToMove = () => !over() && !retro && !puzzle && !(learn && learn.status !== "play") && (cfg.mode === "auto" || (cfg.mode === "computer" && cfg.color !== sideAt(game.moves.length)));
 
 function engineMovetime() {
   const lv = levels.find(l => l.id === cfg.level);
@@ -1201,7 +1213,12 @@ function renderMoves() {
     return `<div class="mv${i === viewPly ? " active" : ""}" data-ply="${i}">${game.moves[i - 1]}` +
       (j ? `<span class="g ${j.cls}" title="${j.name}">${j.g}</span>` : "") + (e ? `<span class="ev">${e.label}</span>` : "") + `</div>`;
   };
-  for (let i = 1; i <= n; i += 2) html += `<div class="idx">${(i + 1) / 2}</div>${cell(i)}${cell(i + 1)}`;
+  // Si les Noirs commencent (vela, puzzle, tutoriel), la première ligne est « 1. … coup noir ».
+  const off = firstSide() === "B" ? 1 : 0;
+  for (let r = 1 - off; r <= n; r += 2) {
+    const white = r < 1 ? `<div class="mv">…</div>` : cell(r);
+    html += `<div class="idx">${(r + off + 1) / 2}</div>${white}${cell(r + 1)}`;
+  }
   if (over()) html += `<div class="result"><b>${game.result.score}</b><span>${game.result.why} • ${game.result.text}</span></div>`;
   if (box.innerHTML !== html) {
     const atEnd = box.scrollTop + box.clientHeight >= box.scrollHeight - 30;
@@ -1350,7 +1367,7 @@ function flash(msg) {
 
 function render() {
   renderBoard(); renderUsers(); renderClocks(); renderMoves(); renderActions(); renderMeta(); renderEngine(); renderGauge(); renderAnalysis();
-  renderLearn(); renderRetro();
+  renderLearn(); renderRetro(); renderPuzzle();
   $("showEval").checked = cfg.showEval;
 }
 
@@ -1371,6 +1388,7 @@ const soloGoal = g => g.type !== "win" && !g.level;
 
 async function openLearn() {
   if (retro) exitRetro();
+  if (puzzle) { puzzle = null; document.body.classList.remove("puzzle"); Object.assign(cfg, puzzleSavedCfg || {}, { startFen: "" }); }
   if (!lessons) {
     try { lessons = await (await fetch("/lessons.json")).json(); } catch (e) { return flash("Leçons indisponibles"); }
   }
@@ -1612,6 +1630,158 @@ function renderRetro() {
 $("retroBtn").onclick = startRetro;
 
 // =====================================================================================================
+// Puzzles tactiques (tools/gui/puzzles.json, générés par tools/puzzles/gen_puzzles.py) : un seul coup gagne
+// nettement ; la réponse de l'adversaire est jouée automatiquement. Classement Elo local (navigateur) :
+// E = 1 / (1 + 10^((puzzle - joueur) / 400)), K = 60 pour les 20 premiers puzzles puis 30. Un puzzle compte
+// comme raté dès la première erreur ou si l'on demande la solution ; on peut ensuite continuer sans effet.
+// =====================================================================================================
+let puzzles = null, puzzle = null, puzzleSavedCfg = null;
+const THEMES = { chaine: "Chaîne de prises", rafle: "Grande rafle", paika: "Coup calme", combinaison: "Combinaison",
+  decisif: "Coup décisif", approche: "Approche", retrait: "Retrait" };
+function pstate() {
+  let s = null;
+  try { s = JSON.parse(localStorage.getItem("fanorona-puzzles")); } catch (e) { /* stockage indisponible */ }
+  return Object.assign({ rating: 1000, played: 0, solved: 0, streak: 0, best: 0, seen: [] }, s || {});
+}
+function psave(st) { try { localStorage.setItem("fanorona-puzzles", JSON.stringify(st)); } catch (e) { /* idem */ } }
+async function openPuzzles() {
+  if (retro) exitRetro();
+  if (learn) { learn = null; document.body.classList.remove("learning"); Object.assign(cfg, learnSavedCfg || {}); }
+  if (!puzzles) {
+    try { puzzles = (await (await fetch("/puzzles.json")).json()).puzzles; } catch (e) { return flash("Puzzles indisponibles"); }
+  }
+  if (!puzzle) puzzleSavedCfg = { ...cfg, startFen: "" };
+  nextPuzzle();
+}
+function nextPuzzle() {
+  const st = pstate(), seen = new Set(st.seen);
+  let pool = puzzles.filter(p => !seen.has(p.id));
+  if (!pool.length) { st.seen = []; psave(st); pool = puzzles.slice(); }
+  pool.sort((a, b) => Math.abs(a.rating - st.rating) - Math.abs(b.rating - st.rating));
+  const near = pool.slice(0, 12);
+  loadPuzzle(near[Math.floor(Math.random() * near.length)]);
+}
+function loadPuzzle(p) {
+  const side = p.fen.split(" ")[1] === "b" ? "B" : "W";
+  Object.assign(cfg, { game: "tsivy", vela: "", velaWho: "", startFen: p.fen, clock: "0", mode: "friend", color: side, variant: "free" });
+  puzzle = { p, k: 0, st: "play", failed: false, counted: false, msg: "", delta: null, side };
+  startBoard = null;
+  document.body.classList.add("puzzle");
+  startGame().then(() => { flipped = side === "B"; buildBoard(); render(); });
+}
+function exitPuzzles() {
+  puzzle = null; startBoard = null;
+  document.body.classList.remove("puzzle");
+  Object.assign(cfg, puzzleSavedCfg || {}, { startFen: "" });
+  startGame();
+}
+function puzzleScore(win) {
+  if (puzzle.counted) return;
+  puzzle.counted = true;
+  const st = pstate(), K = st.played < 20 ? 60 : 30;
+  const E = 1 / (1 + Math.pow(10, (puzzle.p.rating - st.rating) / 400));
+  const delta = Math.round(K * ((win ? 1 : 0) - E));
+  st.rating = Math.max(400, st.rating + delta);
+  st.played++;
+  if (win) { st.solved++; st.streak++; st.best = Math.max(st.best, st.streak); } else st.streak = 0;
+  st.seen = [...st.seen.filter(id => id !== puzzle.p.id), puzzle.p.id].slice(-800);
+  psave(st);
+  puzzle.delta = delta;
+}
+const pause = ms => new Promise(r => setTimeout(r, ms));
+async function puzzleReply() {
+  const mv = puzzle.p.moves[puzzle.k];
+  await pause(350);
+  if (!puzzle) return;
+  await animateEngine(mv);
+  await pushMove(mv, true);
+  puzzle.k++;
+}
+async function puzzleMove(m) {
+  const pz = puzzle, side = sideAt(game.moves.length), before = liveBoard();
+  const after = applyMove(before, m.str, side, 400 + game.moves.length);
+  const accept = pz.p.accept[pz.k / 2] || [pz.p.moves[pz.k]];
+  const same = a => sameBoard(after, applyMove(before, a, side));
+  if (accept.some(same)) {
+    const onLine = same(pz.p.moves[pz.k]);
+    pz.st = "busy";
+    await pushMove(m.str, false);
+    pz.k++;
+    // Variante acceptée hors de la ligne prévue : la suite scriptée ne s'applique plus, le puzzle est résolu.
+    if (pz.k >= pz.p.moves.length || !onLine) return puzzleDone();
+    pz.msg = "Bien joué, continuez…";
+    render();
+    await puzzleReply();
+    if (puzzle !== pz) return;
+    pz.st = "play";
+    render();
+    return;
+  }
+  // Mauvais coup : on le montre, puis on revient.
+  if (!pz.failed) { pz.failed = true; puzzleScore(false); }
+  pz.st = "wrong";
+  pz.msg = "Ce n'est pas le bon coup. Réessayez, ou voyez la solution.";
+  game.moves.push(m.str); positions.push(after); viewPly = game.moves.length;
+  sound(count(before, other(side)) > count(after, other(side)) ? "capture" : "move");
+  render();
+  await pause(900);
+  if (puzzle !== pz) return;
+  game.moves.pop(); positions.pop(); viewPly = game.moves.length;
+  pz.st = "wrongdone";
+  render();
+}
+function puzzleDone() {
+  puzzle.st = "solved";
+  if (!puzzle.failed) puzzleScore(true);
+  puzzle.msg = puzzle.failed ? "Solution trouvée (après une erreur)." : "Bravo, puzzle réussi !";
+  sound("end");
+  render();
+}
+async function puzzleShow() {
+  const pz = puzzle;
+  if (!pz.failed) { pz.failed = true; puzzleScore(false); }
+  pz.st = "busy";
+  render();
+  while (puzzle === pz && pz.k < pz.p.moves.length) {
+    const mv = pz.p.moves[pz.k];
+    await pause(450);
+    if (puzzle !== pz) return;
+    await animateEngine(mv);
+    await pushMove(mv, true);
+    pz.k++;
+  }
+  if (puzzle !== pz) return;
+  pz.st = "shown";
+  pz.msg = "Voici la solution.";
+  render();
+}
+function renderPuzzle() {
+  const box = $("puzzleBox");
+  box.classList.toggle("hidden", !puzzle);
+  if (!puzzle) return;
+  const st = pstate(), pz = puzzle, done = pz.st === "solved" || pz.st === "shown";
+  const d = pz.delta;
+  const html = `<div class="crumbs"><span>Puzzle${done ? " · " + pz.p.id : ""}</span><button id="pQuit">Quitter ✕</button></div>
+    <div class="prating"><b>${st.rating}</b><span>votre classement</span>${d !== null ? `<span class="delta ${d >= 0 ? "up" : "down"}">${d >= 0 ? "+" : ""}${d}</span>` : ""}</div>
+    <div class="pstats"><span>Réussis <b>${st.solved}/${st.played}</b></span><span>Série <b>${st.streak}</b></span><span>Record <b>${st.best}</b></span></div>
+    <h2>${done ? (pz.failed ? "Puzzle raté" : "Réussi !") : "Trouvez le meilleur coup"}</h2>
+    <p class="text">${done ? `Puzzle classé <b>${pz.p.rating}</b>.` : `Aux ${colorName(pz.side)} de jouer : un seul coup gagne nettement.` +
+      (pz.p.moves.length > 1 ? ` La solution compte ${Math.ceil(pz.p.moves.length / 2)} coups.` : "")}</p>
+    ${pz.msg ? `<div class="outcome ${pz.st === "solved" && !pz.failed ? "ok" : "ko"}"><p style="margin:0">${pz.msg}</p></div>` : ""}
+    ${done ? `<div class="tags">${pz.p.themes.map(t => `<span class="tag">${THEMES[t] || t}</span>`).join("")}</div>` : ""}
+    <div class="row">` + (done ? `<button class="btn" id="pRetry">Recommencer</button>` :
+      `<button class="btn" id="pShow" ${pz.st === "busy" || pz.st === "wrong" ? "disabled" : ""}>Voir la solution</button>`) +
+    `<button class="btn primary" id="pNext">${done ? "Puzzle suivant" : "Passer"}</button></div>`;
+  if (box.dataset.html === html) return;
+  box.innerHTML = html; box.dataset.html = html;
+  $("pQuit").onclick = exitPuzzles;
+  if ($("pShow")) $("pShow").onclick = puzzleShow;
+  if ($("pRetry")) $("pRetry").onclick = () => loadPuzzle(pz.p);
+  $("pNext").onclick = () => { if (!done && !pz.counted) puzzleScore(false); nextPuzzle(); };
+}
+$("navPuzzle").onclick = openPuzzles;
+
+// =====================================================================================================
 // Actions
 // =====================================================================================================
 function setView(k) {
@@ -1690,6 +1860,7 @@ async function startGame() {
 let draft = null;
 function openDialog() {
   if (retro) exitRetro();
+  if (puzzle) { puzzle = null; document.body.classList.remove("puzzle"); Object.assign(cfg, puzzleSavedCfg || {}, { startFen: "" }); }
   if (learn) { learn = null; startBoard = null; document.body.classList.remove("learning"); Object.assign(cfg, learnSavedCfg || {}, { startFen: "" }); }
   draft = { ...cfg };
   syncDialog();
@@ -1797,7 +1968,7 @@ $("soundBtn").onclick = () => { cfg.sound = !cfg.sound; applySoundBtn(); save();
 
 // ---------- Persistance (confort local uniquement) ----------
 function save() {
-  if (learn) return;
+  if (learn || puzzle) return;
   try {
     localStorage.setItem("fanorona-gui-v3", JSON.stringify({ cfg, theme, boardTheme, autoNight, flipped, moves: game.moves, result: game.result, clock,
       analysis: analysis && !analysis.running ? analysis : null }));
