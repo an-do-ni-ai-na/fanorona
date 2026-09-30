@@ -74,6 +74,14 @@ déjà parcourues (`--hl-sel`), tracé de la chaîne en cours (`--hl-path`), mei
 Les teintes sont volontairement vives et de luminosité moyenne : elles restent lisibles dans les trois thèmes,
 y compris en Veille où le filtre assombrit tout le plateau (une marque foncée y disparaîtrait dans les lignes).
 
+## Structure et navigation
+
+En-tête collant : marque, onglets (l'actif est souligné par l'accent), puce de profil ouvrant un menu (profil,
+thème, plateau, langue, veille, sons). Sur mobile (< 800 px), les onglets passent dans une barre fixe en bas,
+avec icônes. Pages : Accueil (cartes), Jouer (plateau en 3 colonnes), Puzzles et Apprendre (plateau + panneau à
+gauche, sous le plateau sur mobile), Parties (historique). Le joueur au trait est surligné (fond accent léger).
+Texte secondaire `--muted` relevé (contraste ≥ 4,5:1 sur Papier), corps de texte 15 px, boutons ≥ 40 px de haut.
+
 ## Formes et espacements
 
 Rayons 10 px (cartes) et 6 px (contrôles) ; bordures 1 px plutôt que des ombres marquées ; ombres légères

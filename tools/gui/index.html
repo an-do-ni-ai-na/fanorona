@@ -20,7 +20,7 @@
   --font-brand: "Fraunces", Georgia, "Times New Roman", serif;
   --r: 10px; --r-sm: 6px;
   /* Papier */
-  --bg: #f2efe9; --surface: #fdfcfa; --surface-2: #f5f2ec; --border: #e4ded4; --text: #4a443b; --strong: #1f1b16; --muted: #8b8377;
+  --bg: #f2efe9; --surface: #fdfcfa; --surface-2: #f5f2ec; --border: #e4ded4; --text: #4a443b; --strong: #1f1b16; --muted: #756d61;
   --accent: #a84f28; --accent-ink: #ffffff; --accent-soft: rgba(168, 79, 40, .10);
   --info: #3e6a8a; --active-move: rgba(62, 106, 138, .14);
   --clock: #f5f2ec; --clock-ink: #4a443b; --clock-run: #1f1b16; --clock-run-ink: #fdfcfa; --clock-low: #a8322a;
@@ -56,7 +56,7 @@
 }
 /* Veille : pour jouer la nuit — tons ambrés, aucun blanc pur, plateau assombri et réchauffé. */
 :root[data-theme="night"] {
-  --bg: #0a0807; --surface: #120f0c; --surface-2: #19150f; --border: #262019; --text: #9c8b74; --strong: #c4b08e; --muted: #66594a;
+  --bg: #0a0807; --surface: #120f0c; --surface-2: #19150f; --border: #262019; --text: #9c8b74; --strong: #c4b08e; --muted: #7a6b58;
   --accent: #b0703a; --accent-ink: #0a0807; --accent-soft: rgba(176, 112, 58, .14);
   --info: #a58458; --active-move: rgba(176, 112, 58, .16);
   --clock: #19150f; --clock-ink: #9c8b74; --clock-run: #3a2c1c; --clock-run-ink: #d9c29c; --clock-low: #8e3a2e;
@@ -80,30 +80,46 @@
 
 * { box-sizing: border-box; }
 html, body { margin: 0; }
-body { background: var(--bg); color: var(--text); font: 14px/1.5 var(--font-ui); -webkit-font-smoothing: antialiased;
+body { background: var(--bg); color: var(--text); font: 15px/1.5 var(--font-ui); -webkit-font-smoothing: antialiased;
   transition: background .25s, color .25s; }
 button, select { font: inherit; color: inherit; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .hidden { display: none !important; }
 
-/* ---------- En-tête ---------- */
-.site { display: flex; align-items: center; gap: 22px; height: 60px; padding: 0 20px; max-width: 1500px; margin: 0 auto; }
+/* ---------- En-tête : marque, onglets (actif souligné), puce de profil avec menu de réglages ---------- */
+.topbar { position: sticky; top: 0; z-index: 30; display: flex; align-items: center; gap: 26px; height: 60px; padding: 0 20px;
+  background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(8px); border-bottom: 1px solid var(--border); }
 .brand { display: flex; align-items: center; gap: 10px; font: 600 24px/1 var(--font-brand); color: var(--strong); text-decoration: none; letter-spacing: -.01em; }
 .brand svg { width: 30px; height: 30px; color: var(--accent); }
-.site nav { display: flex; gap: 2px; min-width: 0; overflow-x: auto; scrollbar-width: none; }
-.site nav button { white-space: nowrap; }
-.site nav button { background: none; border: 0; padding: 8px 12px; border-radius: var(--r-sm); cursor: pointer; font-weight: 500; color: var(--text); }
-.site nav button:hover { background: var(--surface-2); color: var(--strong); }
-.site .spacer { flex: 1; }
+.tabs { display: flex; gap: 4px; height: 100%; }
+.tabs button { background: none; border: 0; padding: 0 12px; cursor: pointer; font-weight: 500; font-size: 15px; color: var(--text);
+  border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap; }
+.tabs button:hover { color: var(--strong); }
+.tabs button.active { color: var(--strong); border-bottom-color: var(--accent); font-weight: 600; }
+.topbar .spacer { flex: 1; }
 .icon-btn { background: none; border: 0; width: 38px; height: 38px; border-radius: var(--r-sm); cursor: pointer; color: var(--muted);
   display: inline-flex; align-items: center; justify-content: center; }
 .icon-btn:hover, .icon-btn.on { color: var(--strong); background: var(--surface-2); }
 .icon-btn svg { width: 20px; height: 20px; }
-
-/* Menu Apparence */
-.appearance { position: absolute; right: 16px; top: 58px; z-index: 20; width: 300px; padding: 16px; display: flex; flex-direction: column; gap: 14px;
+.profile-chip { display: flex; align-items: center; gap: 8px; border: 1px solid var(--border); background: var(--surface); border-radius: 999px;
+  padding: 4px 10px 4px 4px; cursor: pointer; color: var(--strong); font-weight: 500; max-width: 220px; }
+.profile-chip:hover, .profile-chip.on { border-color: var(--accent); }
+.profile-chip .chip-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.profile-chip .chev { width: 16px; height: 16px; color: var(--muted); flex: none; }
+.avatar { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 50%; flex: none;
+  color: #fff; font: 600 12.5px var(--font-ui); letter-spacing: .02em; background: var(--muted); }
+.avatar.big { width: 64px; height: 64px; font-size: 22px; }
+.menu { position: absolute; right: 16px; top: 64px; z-index: 40; width: 320px; max-height: calc(100vh - 80px); overflow-y: auto; padding: 8px 16px;
   background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); box-shadow: 0 16px 40px rgba(0, 0, 0, .25); }
-.appearance h4 { margin: 0 0 6px; font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); }
+.menu-sec { padding: 12px 0; display: flex; flex-direction: column; gap: 8px; }
+.menu-sec + .menu-sec { border-top: 1px solid var(--border); }
+.menu h4 { margin: 0; font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); }
+.menu-profiles { display: flex; flex-direction: column; gap: 2px; }
+.menu-profiles button, .menu-link { display: flex; align-items: center; gap: 10px; border: 0; background: none; padding: 6px 8px; border-radius: var(--r-sm);
+  cursor: pointer; text-align: left; color: var(--strong); font-size: 14px; }
+.menu-profiles button:hover, .menu-link:hover { background: var(--surface-2); }
+.menu-profiles .avatar { width: 26px; height: 26px; font-size: 11px; }
+.menu-link { color: var(--accent); font-weight: 500; }
 .tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .tile { border: 2px solid var(--border); border-radius: var(--r-sm); background: var(--surface-2); padding: 6px; cursor: pointer; text-align: center;
   font-size: 13px; color: var(--text); }
@@ -114,6 +130,74 @@ button, select { font: inherit; color: inherit; }
   radial-gradient(circle at 60% 70%, #f1efea 0 1px, transparent 1.5px) 0 0/11px 8px, linear-gradient(135deg, #a7a39c, #85817a); }
 .tile .sw::after { content: ""; position: absolute; left: 50%; top: 50%; width: 16px; height: 16px; margin: -8px 0 0 -22px; border-radius: 50%;
   background: #f4efe4; box-shadow: 22px 0 0 #221d19; }
+/* Barre d'onglets du bas (mobile) */
+.tabbar { display: none; }
+
+/* ---------- Pages : une seule visible à la fois (body[data-page]) ---------- */
+.page { display: none; max-width: 1180px; margin: 0 auto; padding: 22px 20px 40px; }
+body[data-page="home"] .home-page, body[data-page="games"] .games-page { display: block; }
+body[data-page="home"] .round, body[data-page="games"] .round { display: none; }
+.page-head h1, .home-hero h1 { margin: 0; font: 600 30px var(--font-brand); color: var(--strong); letter-spacing: -.01em; }
+.home-hero { margin-bottom: 20px; }
+.home-hero p { margin: 4px 0 0; color: var(--muted); }
+.home-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); box-shadow: var(--shadow); padding: 18px;
+  display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.card.wide { grid-column: 1 / -1; }
+.card.accent { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset, var(--shadow); }
+.card h2 { margin: 0; font: 600 19px var(--font-brand); color: var(--strong); display: flex; align-items: center; gap: 10px; }
+.card h2 svg { width: 22px; height: 22px; color: var(--accent); flex: none; }
+.card .sub { margin: 0; color: var(--muted); font-size: 14px; }
+.card .big { font: 600 38px/1 var(--font-brand); color: var(--strong); }
+.card .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.card .spacer { flex: 1; }
+.levels { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
+.levels button { border: 1px solid var(--border); background: var(--surface-2); border-radius: var(--r-sm); padding: 10px 2px 8px; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; gap: 2px; color: var(--strong); }
+.levels button b { font: 600 20px var(--font-brand); }
+.levels button span { font-size: 10.5px; color: var(--muted); text-align: center; line-height: 1.2; }
+.levels button:hover { border-color: var(--accent); background: var(--accent-soft); }
+.chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.chips button { border: 1px solid var(--border); background: var(--surface-2); border-radius: 999px; padding: 5px 12px; cursor: pointer; font-size: 13px; color: var(--text); }
+.chips button.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
+.progress-line { height: 8px; background: var(--surface-2); border-radius: 4px; overflow: hidden; }
+.progress-line i { display: block; height: 100%; background: var(--accent); border-radius: 4px; }
+.mini-list { display: flex; flex-direction: column; }
+.mini-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid var(--border); font-size: 14px; cursor: pointer; }
+.mini-row:first-child { border-top: 0; }
+.mini-row:hover .who { color: var(--accent); }
+.mini-row .who { flex: 1; min-width: 0; color: var(--strong); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mini-row .when { color: var(--muted); font-size: 12.5px; white-space: nowrap; }
+.link-btn { border: 0; background: none; color: var(--accent); cursor: pointer; font-weight: 500; padding: 0; font-size: 14px; }
+.games-page .page-head { margin-bottom: 16px; }
+.games-page > * + * { margin-top: 14px; }
+.games-page #histStats { padding: 16px 18px; }
+/* Profils */
+#profileDlg { width: min(560px, calc(100vw - 32px)); }
+.profile-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 12px; }
+.ptile { position: relative; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 16px 8px 12px; border: 1px solid var(--border);
+  border-radius: var(--r); background: var(--surface-2); cursor: pointer; color: var(--strong); font-weight: 500; text-align: center; }
+.ptile:hover { border-color: var(--accent); }
+.ptile.current { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+.ptile small { color: var(--muted); font-weight: 400; font-size: 12px; }
+.ptile.add .avatar { background: var(--surface); color: var(--accent); border: 2px dashed var(--accent); font-size: 28px; }
+.ptile .tools { display: flex; gap: 4px; }
+.ptile .tools button { border: 1px solid var(--border); background: var(--surface); border-radius: var(--r-sm); padding: 3px 8px; font-size: 12px; cursor: pointer; color: var(--text); }
+.profile-form { display: flex; flex-direction: column; gap: 12px; }
+.profile-form input { width: 100%; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r-sm); padding: 9px 10px; color: var(--strong); font: inherit; }
+.swatches { display: flex; gap: 8px; flex-wrap: wrap; }
+.swatches button { width: 30px; height: 30px; border-radius: 50%; border: 2px solid transparent; cursor: pointer; }
+.swatches button.on { border-color: var(--strong); box-shadow: 0 0 0 2px var(--surface) inset; }
+/* Volet repliable du moteur */
+details.panel > summary { list-style: none; cursor: pointer; }
+details.panel > summary::-webkit-details-marker { display: none; }
+details.panel > summary h3 { margin: 0; }
+details.panel > summary h3::after { content: "▸"; margin-left: auto; transition: transform .15s; }
+details.panel[open] > summary h3::after { transform: rotate(90deg); }
+details.panel[open] > summary { margin-bottom: 10px; }
+/* Joueur au trait : bien visible */
+.ruser.turn { background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent); }
+.btn { min-height: 40px; }
 
 /* ---------- Disposition principale ---------- */
 .round { display: grid; grid-template-columns: minmax(220px, 280px) minmax(0, 1fr) minmax(260px, 320px);
@@ -334,8 +418,6 @@ dialog::backdrop { background: rgba(10, 8, 6, .55); backdrop-filter: blur(2px); 
 #shareDlg .share-pane.hidden { display: none; }
 .err { color: var(--j-blun); font-size: 13px; min-height: 1em; }
 /* ---------- Historique ---------- */
-#histDlg { width: min(780px, calc(100vw - 32px)); }
-#histDlg .dlg-body { max-height: calc(100vh - 140px); overflow-y: auto; }
 .hist-sum { font-size: 13px; color: var(--muted); margin-bottom: 6px; }
 .hist-stats { width: 100%; border-collapse: collapse; font-size: 13px; }
 .hist-stats th { text-align: left; color: var(--muted); font-weight: 500; padding: 4px 6px; border-bottom: 1px solid var(--border); }
@@ -363,11 +445,22 @@ dialog::backdrop { background: rgba(10, 8, 6, .55); backdrop-filter: blur(2px); 
 @media (max-width: 1100px) {
   .round { grid-template-columns: minmax(0, 1fr) minmax(250px, 300px); grid-template-areas: "board table" "side table"; }
 }
-@media (max-width: 480px) { .brand-text { display: none; } }
 @media (max-width: 800px) {
-  .site { padding: 0 12px; gap: 10px; height: 54px; } .site nav button { padding: 8px 8px; } .brand { font-size: 21px; }
-  .appearance { right: 8px; left: 8px; width: auto; }
-  .site { gap: 6px; } .site nav button { padding: 8px 7px; font-size: 13.5px; }
+  .topbar { height: 54px; padding: 0 12px; gap: 10px; } .brand { font-size: 21px; }
+  .tabs { display: none; }
+  .menu { right: 8px; left: 8px; width: auto; top: 58px; }
+  .profile-chip { max-width: 160px; }
+  .tabbar { display: flex; position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; background: var(--surface); border-top: 1px solid var(--border);
+    padding: 4px 4px calc(4px + env(safe-area-inset-bottom)); }
+  .tabbar button { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; border: 0; background: none; padding: 6px 0 4px;
+    color: var(--muted); font-size: 11px; font-weight: 500; cursor: pointer; min-width: 0; }
+  .tabbar button svg { width: 22px; height: 22px; }
+  .tabbar button span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tabbar button.active { color: var(--accent); font-weight: 600; }
+  body { padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
+  .page { padding: 16px 16px 28px; }
+  .page-head h1, .home-hero h1 { font-size: 25px; }
+  .levels button span { display: none; }
   .round { grid-template-columns: minmax(0, 1fr); grid-template-areas: "ptop" "board" "pbot" "think" "nav" "act" "moves" "side";
     padding: 6px 16px 24px; gap: 0; }
   .table { display: contents; }
@@ -388,47 +481,66 @@ dialog::backdrop { background: rgba(10, 8, 6, .55); backdrop-filter: blur(2px); 
   .board-wrap { width: 100%; }
   .tview { height: auto; max-height: 230px; }
   /* Tutoriel : la consigne juste sous le plateau, la liste des coups (peu utile ici) masquée. */
-  body.learning .round { grid-template-areas: "ptop" "board" "pbot" "side" "think" "nav" "act" "moves"; }
-  body.learning .side { margin-top: 4px; margin-bottom: 12px; }
-  body.learning .moves-box { display: none; }
+  body.learning .round, body.puzzle .round, body.retro .round { grid-template-areas: "ptop" "board" "pbot" "side" "think" "nav" "act" "moves"; }
+  body.learning .side, body.puzzle .side, body.retro .side { margin-top: 4px; margin-bottom: 12px; }
+  body.learning .moves-box, body.puzzle .moves-box { display: none; }
 }
-/* Petits écrans : la navigation (5 onglets, plus longs en malgache) passe sur sa propre ligne, pleine largeur,
-   et revient à la ligne si besoin plutôt que de cacher des onglets. En fin de feuille pour primer sur le bloc 800 px. */
-@media (max-width: 640px) {
-  .site { flex-wrap: wrap; height: auto; row-gap: 0; padding-top: 8px; padding-bottom: 6px; }
-  .site .brand-text { display: inline; }
-  .site nav { order: 3; width: 100%; flex-wrap: wrap; overflow-x: visible; gap: 0 14px; }
-  .site nav button { padding: 6px 0; font-size: 13.5px; }
-}
+@media (max-width: 420px) { .brand-text { display: none; } }
 </style>
 </head>
 <body>
-<header class="site">
-  <a class="brand" href="#" onclick="return false">
+<header class="topbar">
+  <a class="brand" href="#" id="brandHome">
     <svg viewBox="0 0 32 32" aria-hidden="true" fill="none" stroke="currentColor"><rect x="3" y="8" width="26" height="16" rx="2.5" stroke-width="2"/>
       <path d="M3 16h26M9.5 8v16M16 8v16M22.5 8v16M3 8l13 16M16 8l13 16M29 8L16 24M16 8L3 24" stroke-width="1.1" opacity=".55"/>
       <circle cx="9.5" cy="16" r="3.2" fill="currentColor" stroke="none"/><circle cx="22.5" cy="16" r="3" fill="var(--surface)" stroke-width="1.6"/></svg>
     <span class="brand-text">Fanorona</span></a>
-  <nav>
-    <button id="navNew" data-i18n="nav_play">Jouer</button>
-    <button id="navAnalyse" data-i18n="nav_analyse">Analyse</button>
-    <button id="navPuzzle" data-i18n="nav_puzzles">Puzzles</button>
-    <button id="navLearn" data-i18n="nav_learn">Apprendre</button>
-    <button id="navGames" data-i18n="nav_games">Parties</button>
+  <nav class="tabs" id="topTabs">
+    <button data-page="play" data-i18n="nav_play">Jouer</button>
+    <button data-page="puzzles" data-i18n="nav_puzzles">Puzzles</button>
+    <button data-page="learn" data-i18n="nav_learn">Apprendre</button>
+    <button data-page="games" data-i18n="nav_games">Parties</button>
   </nav>
   <div class="spacer"></div>
-  <button class="icon-btn" id="soundBtn" title="Sons" data-i18n-title="sounds"></button>
-  <button class="icon-btn" id="themeBtn" title="Apparence" data-i18n-title="appearance" aria-haspopup="true"></button>
-  <div class="appearance hidden" id="appearance" role="dialog" aria-label="Apparence" data-i18n-aria="appearance">
-    <div><h4 data-i18n="theme">Thème</h4><div class="seg" id="segTheme">
+  <button class="profile-chip" id="profileChip" aria-haspopup="true"><span class="avatar" id="chipAvatar"></span><span class="chip-name" id="chipName"></span>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="chev"><path d="M6 9l6 6 6-6"/></svg></button>
+  <div class="menu hidden" id="profileMenu" role="dialog">
+    <div class="menu-sec"><h4 data-i18n="switch_profile">Changer de profil</h4><div class="menu-profiles" id="menuProfiles"></div>
+      <button class="menu-link" id="manageProfiles" data-i18n="manage_profiles">Gérer les profils…</button></div>
+    <div class="menu-sec"><h4 data-i18n="theme">Thème</h4><div class="seg" id="segTheme">
       <button data-v="auto" data-i18n="theme_auto">Auto</button><button data-v="light" data-i18n="theme_light">Papier</button><button data-v="dark" data-i18n="theme_dark">Ardoise</button><button data-v="night" data-i18n="theme_night">Veille</button></div></div>
-    <div><h4 data-i18n="board">Plateau</h4><div class="tiles" id="boardTiles">
+    <div class="menu-sec"><h4 data-i18n="board">Plateau</h4><div class="tiles" id="boardTiles">
       <button class="tile" data-v="wood"><div class="sw wood"></div><span data-i18n="board_wood">Bois</span></button>
       <button class="tile" data-v="granite"><div class="sw granite"></div><span data-i18n="board_granite">Granite</span></button></div></div>
-    <label class="switch"><span data-i18n="auto_night">Veille automatique de 22 h à 7 h</span> <input type="checkbox" id="autoNight"></label>
-    <div><h4 data-i18n="language">Langue</h4><div class="seg" id="segLang"><button data-v="fr">Français</button><button data-v="mg">Malagasy</button></div></div>
+    <div class="menu-sec"><h4 data-i18n="language">Langue</h4><div class="seg" id="segLang"><button data-v="fr">Français</button><button data-v="mg">Malagasy</button></div></div>
+    <div class="menu-sec">
+      <label class="switch"><span data-i18n="auto_night">Veille automatique de 22 h à 7 h</span> <input type="checkbox" id="autoNight"></label>
+      <label class="switch"><span data-i18n="sounds_label">Sons</span> <input type="checkbox" id="soundToggle"></label>
+    </div>
   </div>
 </header>
+<nav class="tabbar" id="tabBar">
+  <button data-page="home"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/></svg><span data-i18n="nav_home">Accueil</span></button>
+  <button data-page="play"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M3 12h18M9 6v12M15 6v12"/><circle cx="9" cy="12" r="2" fill="currentColor"/></svg><span data-i18n="nav_play">Jouer</span></button>
+  <button data-page="puzzles"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 3h6v3a2 2 0 1 0 4 0h2v6h-3a2 2 0 1 0 0 4h3v5H9v-3a2 2 0 1 0-4 0v3H3v-6h3a2 2 0 1 0 0-4H3V3h6z"/></svg><span data-i18n="nav_puzzles">Puzzles</span></button>
+  <button data-page="learn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 8l10-5 10 5-10 5z"/><path d="M6 10v5c0 1.7 2.7 3 6 3s6-1.3 6-3v-5"/></svg><span data-i18n="nav_learn">Apprendre</span></button>
+  <button data-page="games"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span data-i18n="nav_games">Parties</span></button>
+</nav>
+
+<section class="page home-page" id="homePage"></section>
+
+<section class="page games-page" id="gamesPage">
+  <div class="page-head"><h1 data-i18n="hist_title">Historique des parties</h1></div>
+  <div class="box panel" id="histStats"></div>
+  <div class="hist-filters">
+    <label><span data-i18n="hist_profile">Profil</span><select id="hfProfile"><option value="me" data-i18n="hist_mine">Mes parties</option><option value="" data-i18n="hist_all_profiles">Tous les profils</option><option value="guest" data-i18n="hist_guest">Invité</option></select></label>
+    <label><span data-i18n="hist_game">Jeu</span><select id="hfGame"><option value="" data-i18n="hist_any">Tous</option><option value="tsivy">Tsivy 9 × 5</option><option value="dimy">Dimy 5 × 5</option><option value="telo">Telo 3 × 3</option></select></label>
+    <label><span data-i18n="hist_mode">Adversaire</span><select id="hfMode"><option value="" data-i18n="hist_any">Tous</option><option value="computer" data-i18n="computer">Ordinateur</option><option value="friend" data-i18n="two_players">Deux joueurs</option><option value="auto" data-i18n="mode_auto">Ordinateur contre ordinateur</option></select></label>
+    <label><span data-i18n="hist_outcome">Résultat</span><select id="hfOutcome"><option value="" data-i18n="hist_any">Tous</option><option value="win" data-i18n="out_win">Victoire</option><option value="draw" data-i18n="out_draw">Nulle</option><option value="loss" data-i18n="out_loss">Défaite</option></select></label>
+  </div>
+  <div class="hist-list box" id="histList"></div>
+  <button class="btn hidden" id="histMore" data-i18n="hist_more">Voir plus</button>
+</section>
 
 <main class="round">
   <aside class="side">
@@ -445,8 +557,8 @@ dialog::backdrop { background: rgba(10, 8, 6, .55); backdrop-filter: blur(2px); 
       <div class="status hidden" id="metaStatus"></div>
     </section>
 
-    <section class="box panel" id="engineBox">
-      <h3><span data-i18n="engine">Moteur</span> <span id="engineState"></span></h3>
+    <details class="box panel" id="engineBox">
+      <summary><h3><span data-i18n="engine_details">Détails du moteur</span> <span id="engineState"></span></h3></summary>
       <div class="kv">
         <div><b id="sDepth">–</b><small data-i18n="depth">profondeur</small></div>
         <div><b id="sNodes">–</b><small data-i18n="nodes">nœuds</small></div>
@@ -456,7 +568,7 @@ dialog::backdrop { background: rgba(10, 8, 6, .55); backdrop-filter: blur(2px); 
       <div class="toggles">
         <label class="switch"><span data-i18n="show_eval">Afficher l'évaluation</span> <input type="checkbox" id="showEval"></label>
       </div>
-    </section>
+    </details>
 
     <section class="box panel hidden" id="analysisBox">
       <h3><span data-i18n="analysis">Analyse</span> <span id="anaState"></span></h3>
@@ -486,6 +598,7 @@ dialog::backdrop { background: rgba(10, 8, 6, .55); backdrop-filter: blur(2px); 
       <button id="bPrev" title="Précédent (←)" data-i18n-title="nav_prev"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M17 5v14L6 12z"/></svg></button>
       <button id="bNext" title="Suivant (→)" data-i18n-title="nav_next"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 5v14l11-7z"/></svg></button>
       <button id="bLast" title="Fin (Fin)" data-i18n-title="nav_last"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 5h2v14h-2zM4 5v14l11-7z"/></svg></button>
+      <button id="bNew" title="Nouvelle partie" data-i18n-title="new_game"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg></button>
       <button id="bShare" title="Partager, exporter, importer" data-i18n-title="share_btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/></svg></button>
       <button id="bFlip" title="Retourner le plateau (f)" data-i18n-title="flip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 4v16M7 20l-3-3M7 20l3-3M17 20V4M17 4l-3 3M17 4l3 3"/></svg></button>
     </div>
@@ -530,17 +643,18 @@ dialog::backdrop { background: rgba(10, 8, 6, .55); backdrop-filter: blur(2px); 
   </div>
 </dialog>
 
-<dialog id="histDlg">
-  <div class="dlg-head"><span data-i18n="hist_title">Historique des parties</span><button class="icon-btn" id="histClose" title="Fermer" data-i18n-title="close">✕</button></div>
+<dialog id="profileDlg">
+  <div class="dlg-head"><span data-i18n="who_plays">Qui joue ?</span><button class="icon-btn" id="profileClose" title="Fermer" data-i18n-title="close">✕</button></div>
   <div class="dlg-body">
-    <div id="histStats"></div>
-    <div class="hist-filters">
-      <label><span data-i18n="hist_game">Jeu</span><select id="hfGame"><option value="" data-i18n="hist_any">Tous</option><option value="tsivy">Tsivy 9 × 5</option><option value="dimy">Dimy 5 × 5</option><option value="telo">Telo 3 × 3</option></select></label>
-      <label><span data-i18n="hist_mode">Adversaire</span><select id="hfMode"><option value="" data-i18n="hist_any">Tous</option><option value="computer" data-i18n="computer">Ordinateur</option><option value="friend" data-i18n="two_players">Deux joueurs</option><option value="auto" data-i18n="mode_auto">Ordinateur contre ordinateur</option></select></label>
-      <label><span data-i18n="hist_outcome">Résultat</span><select id="hfOutcome"><option value="" data-i18n="hist_any">Tous</option><option value="win" data-i18n="out_win">Victoire</option><option value="draw" data-i18n="out_draw">Nulle</option><option value="loss" data-i18n="out_loss">Défaite</option></select></label>
-    </div>
-    <div class="hist-list" id="histList"></div>
-    <button class="btn hidden" id="histMore" data-i18n="hist_more">Voir plus</button>
+    <p class="note" data-i18n="who_plays_sub"></p>
+    <div class="profile-grid" id="profileGrid"></div>
+    <form class="profile-form hidden" id="profileForm">
+      <div class="field"><label data-i18n="profile_name">Nom</label><input id="pfName" maxlength="30" autocomplete="off"></div>
+      <div class="field"><label data-i18n="profile_color">Couleur</label><div class="swatches" id="pfColors"></div></div>
+      <div class="err" id="pfErr"></div>
+      <div class="row2"><button type="button" class="btn" id="pfCancel" data-i18n="cancel">Annuler</button><button type="submit" class="btn primary" id="pfSubmit" data-i18n="create">Créer</button></div>
+    </form>
+    <button class="btn" id="guestBtn" data-i18n="play_as_guest">Jouer en invité</button>
   </div>
 </dialog>
 
@@ -1275,7 +1389,7 @@ function playerName(c) {
   if (importedNames && importedNames[c] && cfg.mode === "friend") return { name: importedNames[c], sub: "", short: "" };
   if (cfg.mode === "friend") return { name: colorName(c), sub: "" };
   if (cfg.mode === "auto") return { name: "Fanorona-Engine", sub: t("full_strength"), short: "" };
-  if (cfg.color === c) return { name: t("you"), sub: "" };
+  if (cfg.color === c) return { name: profile ? profile.name : t("you"), sub: "" };
   return { name: "Fanorona-Engine", sub: t("level_n", { n: cfg.level }) + " · " + levelName(cfg.level), short: t("level_n", { n: cfg.level }) };
 }
 function renderUsers() {
@@ -1494,23 +1608,56 @@ function render() {
 // Exercices solo : les Noirs ne jouent pas, le trait revient aux Blancs après chaque coup (nouvelle FEN).
 // Exercices contre le moteur : partie normale depuis la position de l'exercice, au niveau indiqué.
 // =====================================================================================================
-let lessons = null, learn = null, learnSavedCfg = null;
-const learnProgress = () => { try { return JSON.parse(localStorage.getItem("fanorona-learn")) || {}; } catch (e) { return {}; } };
+let lessons = null, learn = null;
+// Progression : dans le profil (serveur) s'il y en a un, sinon dans le navigateur (invité).
+const localLearn = () => { try { return JSON.parse(localStorage.getItem("fanorona-learn")) || {}; } catch (e) { return {}; } };
+const learnProgress = () => (profile ? profile.learn : localLearn());
 function learnStore(id, stars) {
-  const p = learnProgress();
+  if (profile) {
+    profile.learn[id] = Math.max(profile.learn[id] || 0, stars);
+    api(`/api/profiles/${profile.id}/learn`, { step: id, stars }).catch(e => console.warn("progression non enregistrée", e));
+    return;
+  }
+  const p = localLearn();
   p[id] = Math.max(p[id] || 0, stars);
   try { localStorage.setItem("fanorona-learn", JSON.stringify(p)); } catch (e) { /* stockage indisponible */ }
+}
+// Partie en cours mise de côté pendant le tutoriel ou les puzzles, restaurée au retour sur « Jouer ».
+let parked = null;
+function parkGame() {
+  if (parked) return;
+  parked = { cfg: { ...cfg }, game: { ...game, moves: game.moves.slice() }, clock: clock && { ...clock }, analysis, flipped,
+    names: importedNames, viewPly };
+}
+function dropModes() {
+  learn = null; puzzle = null; startBoard = null;
+  document.body.classList.remove("learning", "puzzle");
+}
+async function unparkGame() {
+  const p = parked;
+  parked = null;
+  dropModes();
+  if (!p) { cfg.startFen = ""; return startGame(); }
+  epoch++; busy = false; thinking(false);
+  Object.assign(cfg, p.cfg);
+  game = p.game; clock = p.clock; analysis = p.analysis; flipped = p.flipped; importedNames = p.names;
+  chosen = null; pendingAW = null; inputView = null; hintMove = null; anim = null;
+  applyGeometry(); rebuildPositions(); buildBoard();
+  viewPly = Math.min(p.viewPly, game.moves.length);
+  clockMark = performance.now();
+  if (!game.result) { try { await refresh(); } catch (e) { flash(trErr(e.message)); } }
+  render(); maybeEngine();
 }
 const allSteps = () => lessons.chapters.flatMap((c, ci) => c.steps.map((s, si) => ({ ci, si, s })));
 const soloGoal = g => g.type !== "win" && !g.level;
 
 async function openLearn() {
   if (retro) exitRetro();
-  if (puzzle) { puzzle = null; document.body.classList.remove("puzzle"); Object.assign(cfg, puzzleSavedCfg || {}, { startFen: "" }); }
+  if (puzzle) { puzzle = null; document.body.classList.remove("puzzle"); }
   if (!lessons) {
     try { lessons = await (await fetch("/lessons.json")).json(); } catch (e) { return flash(t("lessons_unavailable")); }
   }
-  if (!learn) learnSavedCfg = { ...cfg };
+  if (!learn) parkGame();
   const p = learnProgress();
   const next = allSteps().find(x => !p[x.s.id]) || allSteps()[0];
   loadStep(next.ci, next.si);
@@ -1526,12 +1673,7 @@ function loadStep(ci, si) {
   document.body.classList.add("learning");
   startGame();
 }
-function exitLearn() {
-  learn = null; startBoard = null;
-  document.body.classList.remove("learning");
-  Object.assign(cfg, learnSavedCfg || {}, { startFen: "" });
-  startGame();
-}
+function exitLearn() { showPage("play"); }
 function goalMet(board) {
   const g = learn.step.goal, blacks = count(board, "B");
   if (g.type === "reach") return !!board[sqOf(g.target)] && board[sqOf(g.target)].c === "W";
@@ -1612,7 +1754,7 @@ function renderLearn() {
     <div class="map">${map}</div>`;
   if (box.dataset.html === html) return;
   box.innerHTML = html; box.dataset.html = html;
-  $("lQuit").onclick = exitLearn;
+  $("lQuit").onclick = () => showPage("play");
   $("lRetry").onclick = () => loadStep(ci, si);
   if ($("lHint")) $("lHint").onclick = () => { learn.showHint = true; renderLearn(); };
   $("lNext").onclick = () => {
@@ -1757,27 +1899,30 @@ $("retroBtn").onclick = startRetro;
 // E = 1 / (1 + 10^((puzzle - joueur) / 400)), K = 60 pour les 20 premiers puzzles puis 30. Un puzzle compte
 // comme raté dès la première erreur ou si l'on demande la solution ; on peut ensuite continuer sans effet.
 // =====================================================================================================
-let puzzles = null, puzzle = null, puzzleSavedCfg = null;
+let puzzles = null, puzzle = null;
 const themeName = th => t("th_" + th);
-function pstate() {
+const PUZZLE_DEFAULT = { rating: 1000, played: 0, solved: 0, streak: 0, best: 0, seen: [] };
+function localPuzzles() {
   let s = null;
   try { s = JSON.parse(localStorage.getItem("fanorona-puzzles")); } catch (e) { /* stockage indisponible */ }
-  return Object.assign({ rating: 1000, played: 0, solved: 0, streak: 0, best: 0, seen: [] }, s || {});
+  return Object.assign({ ...PUZZLE_DEFAULT }, s || {});
 }
+// Classement : dans le profil (serveur) s'il y en a un, sinon dans le navigateur (invité).
+const pstate = () => (profile ? { ...PUZZLE_DEFAULT, ...profile.puzzle } : localPuzzles());
 function psave(st) { try { localStorage.setItem("fanorona-puzzles", JSON.stringify(st)); } catch (e) { /* idem */ } }
 async function openPuzzles() {
   if (retro) exitRetro();
-  if (learn) { learn = null; document.body.classList.remove("learning"); Object.assign(cfg, learnSavedCfg || {}); }
+  if (learn) { learn = null; document.body.classList.remove("learning"); }
   if (!puzzles) {
     try { puzzles = (await (await fetch("/puzzles.json")).json()).puzzles; } catch (e) { return flash(t("puzzles_unavailable")); }
   }
-  if (!puzzle) puzzleSavedCfg = { ...cfg, startFen: "" };
+  if (!puzzle) parkGame();
   nextPuzzle();
 }
 function nextPuzzle() {
   const st = pstate(), seen = new Set(st.seen);
   let pool = puzzles.filter(p => !seen.has(p.id));
-  if (!pool.length) { st.seen = []; psave(st); pool = puzzles.slice(); }
+  if (!pool.length) { if (!profile) { st.seen = []; psave(st); } pool = puzzles.slice(); }
   pool.sort((a, b) => Math.abs(a.rating - st.rating) - Math.abs(b.rating - st.rating));
   const near = pool.slice(0, 12);
   loadPuzzle(near[Math.floor(Math.random() * near.length)]);
@@ -1790,15 +1935,17 @@ function loadPuzzle(p) {
   document.body.classList.add("puzzle");
   startGame().then(() => { flipped = side === "B"; buildBoard(); render(); });
 }
-function exitPuzzles() {
-  puzzle = null; startBoard = null;
-  document.body.classList.remove("puzzle");
-  Object.assign(cfg, puzzleSavedCfg || {}, { startFen: "" });
-  startGame();
-}
+function exitPuzzles() { showPage("play"); }
 function puzzleScore(win) {
   if (puzzle.counted) return;
   puzzle.counted = true;
+  if (profile) {  // Elo calculé par le serveur (même formule), rangé dans le profil
+    const pz = puzzle, prof = profile;
+    api(`/api/profiles/${prof.id}/puzzle`, { puzzle: pz.p.id, rating: pz.p.rating, win })
+      .then(r => { prof.puzzle = r.puzzle; pz.delta = r.delta; if (puzzle === pz) render(); })
+      .catch(e => flash(trErr(e.message)));
+    return;
+  }
   const st = pstate(), K = st.played < 20 ? 60 : 30;
   const E = 1 / (1 + Math.pow(10, (puzzle.p.rating - st.rating) / 400));
   const delta = Math.round(K * ((win ? 1 : 0) - E));
@@ -1895,12 +2042,12 @@ function renderPuzzle() {
     `<button class="btn primary" id="pNext">${done ? t("pz_next") : t("skip")}</button></div>`;
   if (box.dataset.html === html) return;
   box.innerHTML = html; box.dataset.html = html;
-  $("pQuit").onclick = exitPuzzles;
+  $("pQuit").onclick = () => showPage("play");
   if ($("pShow")) $("pShow").onclick = puzzleShow;
   if ($("pRetry")) $("pRetry").onclick = () => loadPuzzle(pz.p);
   $("pNext").onclick = () => { if (!done && !pz.counted) puzzleScore(false); nextPuzzle(); };
 }
-$("navPuzzle").onclick = openPuzzles;
+
 
 // =====================================================================================================
 // Export, partage, import
@@ -1995,7 +2142,7 @@ async function importGame(d) {
   const req = { game: d.game, vela: d.game === "tsivy" ? d.vela : "", variant: "free", fen: d.fen || undefined };
   const st = await api("/api/state", { moves: d.moves, ...req });
   if (retro) exitRetro();
-  if (learn || puzzle) { learn = null; puzzle = null; document.body.classList.remove("learning", "puzzle"); }
+  if (learn || puzzle) { parked = null; dropModes(); }
   epoch++; anaEpoch++; busy = false; thinking(false);
   Object.assign(cfg, { game: d.game, vela: req.vela, velaWho: "", startFen: d.fen || "", mode: "friend", clock: "0", variant: "free" });
   startBoard = null; clock = null; analysis = null; liveInfo = null; hintMove = null; chosen = null; pendingAW = null; inputView = null;
@@ -2069,7 +2216,7 @@ async function archiveGame() {
   const d = exportData();
   const rec = { game: d.game, vela: d.vela, fen: d.fen, moves: d.moves, result: game.result, mode: cfg.mode, level: cfg.level,
     color: cfg.mode === "computer" ? cfg.color : null, clock: cfg.clock, net: cfg.net, variant: cfg.variant,
-    white: d.white, black: d.black, date: new Date().toISOString() };
+    white: d.white, black: d.black, date: new Date().toISOString(), profile_id: profile ? profile.id : null };
   try {
     const r = await api("/api/games", rec);
     game.serverId = r.id;
@@ -2086,14 +2233,16 @@ const histDate = ts => {
   const loc = Intl.DateTimeFormat.supportedLocalesOf([lang === "mg" ? "mg-MG" : "fr-FR"])[0] || "fr-FR";
   return new Date(ts * 1000).toLocaleString(loc, { dateStyle: "medium", timeStyle: "short" });
 };
+// Filtre profil de l'historique : "me" = profil courant (ou les parties invité), "" = toutes, "guest".
+const histProfileParam = () => { const v = $("hfProfile").value; return v === "me" ? (profile ? String(profile.id) : "guest") : v; };
 async function openHistory() {
   histOffset = 0;
-  $("histDlg").showModal();
   await Promise.all([loadHistStats(), loadHistList(false)]);
 }
 async function loadHistStats() {
   try {
-    const st = await api("/api/games/stats");
+    const pp = histProfileParam();
+    const st = await api("/api/games/stats" + (pp ? "?profile=" + pp : ""));
     const rows = st.vs_engine.map(r => {
       const n = r.win + r.draw + r.loss, pct = n ? Math.round((r.win + r.draw / 2) / n * 100) : 0;
       return `<tr><td>${GAMES[r.game].name}</td><td>${r.level ? r.level + " · " + levelName(r.level) : "–"}</td><td>${n}</td>` +
@@ -2107,6 +2256,7 @@ async function loadHistStats() {
 }
 async function loadHistList(append) {
   const q = new URLSearchParams({ limit: 25, offset: histOffset });
+  if (histProfileParam()) q.set("profile", histProfileParam());
   for (const [k, id] of [["game", "hfGame"], ["mode", "hfMode"], ["outcome", "hfOutcome"]]) if ($(id).value) q.set(k, $(id).value);
   let res;
   try { res = await api("/api/games?" + q); } catch (e) { $("histList").innerHTML = `<div class="hist-empty">${t("hist_unavailable", { e: trErr(e.message) })}</div>`; return; }
@@ -2143,14 +2293,220 @@ async function openArchived(id) {
     game.serverId = r.id; game.imported = false;
     flipped = r.color === "B"; buildBoard();
     save(); render();
-    $("histDlg").close();
+    markPage("play");
     flash(t("hist_opened", { d: histDate(r.created) }));
   } catch (e) { flash(trErr(e.message)); }
 }
-$("navGames").onclick = openHistory;
-$("histClose").onclick = () => $("histDlg").close();
+
 $("histMore").onclick = () => { histOffset += 25; loadHistList(true); };
-for (const id of ["hfGame", "hfMode", "hfOutcome"]) $(id).onchange = () => { histOffset = 0; loadHistList(false); };
+for (const id of ["hfProfile", "hfGame", "hfMode", "hfOutcome"]) $(id).onchange = () => { histOffset = 0; loadHistList(false); };
+
+// =====================================================================================================
+// Pages : accueil, jouer (plateau), puzzles et apprendre (plateau + panneau), parties (historique).
+// =====================================================================================================
+let page = "home";
+function markPage(p) {
+  page = p;
+  document.body.dataset.page = p;
+  for (const b of document.querySelectorAll("#topTabs [data-page], #tabBar [data-page]")) b.classList.toggle("active", b.dataset.page === p);
+  $("profileMenu").classList.add("hidden"); $("profileChip").classList.remove("on");
+}
+async function showPage(p) {
+  if (retro && p !== "play") exitRetro();
+  markPage(p);
+  window.scrollTo(0, 0);
+  if (p === "puzzles") return openPuzzles();
+  if (p === "learn") return openLearn();
+  if (learn || puzzle) await unparkGame();   // retour à la partie mise de côté
+  if (p === "home") renderHome();
+  else if (p === "games") openHistory();
+  else if (p === "play") { buildBoard(); render(); }
+}
+
+// =====================================================================================================
+// Profils (serveur) : pas de mot de passe, service réservé au réseau local. Sans profil : invité (progression
+// gardée dans le navigateur, parties archivées sans profil).
+// =====================================================================================================
+let profile = null, profileList = [], pfEdit = null, pfColor = null;
+const PCOLORS = ["#a84f28", "#3e6a8a", "#4f7a3a", "#8a5a9e", "#b8860b", "#2f7f7a", "#9e3d4f", "#5b5f66"];
+const esc = x => String(x).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+function avatarHtml(p, cls = "avatar") {
+  if (!p) return `<span class="${cls}">?</span>`;
+  const ini = p.name.trim().split(/\s+/).map(w => [...w][0]).slice(0, 2).join("").toUpperCase();
+  return `<span class="${cls}" style="background:${p.color}">${esc(ini)}</span>`;
+}
+function renderChip() {
+  $("chipAvatar").outerHTML = avatarHtml(profile).replace('class="avatar"', 'class="avatar" id="chipAvatar"');
+  $("chipName").textContent = profile ? profile.name : t("guest");
+}
+function renderMenuProfiles() {
+  const others = profileList.filter(p => !profile || p.id !== profile.id);
+  $("menuProfiles").innerHTML = others.map(p => `<button data-pid="${p.id}">${avatarHtml(p)}${esc(p.name)}</button>`).join("") +
+    (profile ? `<button data-pid="guest">${avatarHtml(null)}${t("guest")}</button>` : "");
+  for (const b of $("menuProfiles").children) b.onclick = () => selectProfile(b.dataset.pid);
+}
+async function loadProfiles() {
+  try { profileList = (await api("/api/profiles")).profiles; } catch (e) { profileList = []; }
+}
+async function selectProfile(id) {
+  try {
+    profile = id === "guest" || id == null ? null : await api(`/api/profiles/${id}`);
+  } catch (e) { profile = null; }
+  try { localStorage.setItem("fanorona-profile", profile ? String(profile.id) : "guest"); } catch (e) { /* idem */ }
+  $("profileMenu").classList.add("hidden"); $("profileChip").classList.remove("on");
+  if ($("profileDlg").open) $("profileDlg").close();
+  renderChip();
+  // Les modes liés au profil se rechargent avec ses données.
+  if (puzzle) nextPuzzle();
+  if (learn) $("learnBox").dataset.html = "";
+  render();
+  if (page === "home") renderHome();
+  if (page === "games") openHistory();
+}
+// Première création de profil : reprise de la progression gardée jusque-là dans ce navigateur.
+async function importLocalProgress(p) {
+  let done = null;
+  try { done = localStorage.getItem("fanorona-progress-imported"); } catch (e) { /* idem */ }
+  const learnL = localLearn(), puzL = localPuzzles();
+  if (done || (!Object.keys(learnL).length && !puzL.played)) return;
+  try {
+    await api(`/api/profiles/${p.id}/import`, { learn: learnL, puzzle: puzL });
+    localStorage.setItem("fanorona-progress-imported", "1");
+    flash(t("progress_imported"));
+  } catch (e) { console.warn("reprise de la progression impossible", e); }
+}
+function openProfiles(manage = false) {
+  $("profileMenu").classList.add("hidden");
+  $("profileForm").classList.add("hidden");
+  $("profileGrid").classList.remove("hidden");
+  $("guestBtn").classList.toggle("hidden", manage);
+  $("profileGrid").innerHTML = profileList.map(p => `<div class="ptile${profile && profile.id === p.id ? " current" : ""}" data-pid="${p.id}">
+      ${avatarHtml(p, "avatar big")}<span>${esc(p.name)}</span><small>${t("profile_games", { n: p.games })} · ${p.rating}</small>
+      ${manage ? `<span class="tools"><button data-edit="${p.id}">${t("edit")}</button><button data-del="${p.id}">✕</button></span>` : ""}
+    </div>`).join("") + `<div class="ptile add" data-add="1"><span class="avatar big">+</span><span>${t("new_profile")}</span></div>`;
+  for (const el of $("profileGrid").querySelectorAll(".ptile")) el.onclick = e => {
+    if (e.target.closest("[data-edit]")) return editProfile(+e.target.closest("[data-edit]").dataset.edit);
+    if (e.target.closest("[data-del]")) return deleteProfile(+e.target.closest("[data-del]").dataset.del);
+    if (el.dataset.add) return editProfile(null);
+    if (!manage) selectProfile(el.dataset.pid);
+  };
+  if (!$("profileDlg").open) $("profileDlg").showModal();
+}
+function editProfile(id) {
+  pfEdit = id;
+  const p = id ? profileList.find(x => x.id === id) : null;
+  pfColor = p ? p.color : PCOLORS[profileList.length % PCOLORS.length];
+  $("pfName").value = p ? p.name : "";
+  $("pfErr").textContent = "";
+  $("pfSubmit").textContent = id ? t("save_btn") : t("create");
+  $("pfColors").innerHTML = PCOLORS.map(c => `<button type="button" data-c="${c}" style="background:${c}" class="${c === pfColor ? "on" : ""}"></button>`).join("");
+  for (const b of $("pfColors").children) b.onclick = () => { pfColor = b.dataset.c; for (const x of $("pfColors").children) x.classList.toggle("on", x === b); };
+  $("profileGrid").classList.add("hidden"); $("guestBtn").classList.add("hidden");
+  $("profileForm").classList.remove("hidden");
+  $("pfName").focus();
+}
+$("profileForm").onsubmit = async e => {
+  e.preventDefault();
+  try {
+    const first = !profileList.length;
+    const body = { name: $("pfName").value, color: pfColor };
+    const p = pfEdit ? await api(`/api/profiles/${pfEdit}`, body) : await api("/api/profiles", body);
+    await loadProfiles();
+    if (!pfEdit) { if (first) await importLocalProgress(p); await selectProfile(p.id); }
+    else { if (profile && profile.id === p.id) { profile = { ...profile, name: p.name, color: p.color }; renderChip(); render(); } openProfiles(true); }
+  } catch (err) { $("pfErr").textContent = trErr(err.message); }
+};
+$("pfCancel").onclick = () => openProfiles(!!pfEdit);
+async function deleteProfile(id) {
+  const p = profileList.find(x => x.id === id);
+  if (!p || !confirm(t("delete_profile_confirm", { name: p.name }))) return;
+  await api(`/api/profiles/${id}`, null, "DELETE");
+  await loadProfiles();
+  if (profile && profile.id === id) await selectProfile("guest");
+  openProfiles(true);
+}
+$("manageProfiles").onclick = () => openProfiles(true);
+$("guestBtn").onclick = () => selectProfile("guest");
+$("profileClose").onclick = () => $("profileDlg").close();
+
+// =====================================================================================================
+// Accueil : départs rapides, reprise, puzzles, tutoriel, dernières parties, bilan.
+// =====================================================================================================
+let homeGame = "tsivy";
+const HOME_ICON = {
+  cpu: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="5" y="5" width="14" height="14" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3"/></svg>',
+  resume: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>',
+  friend: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="8" cy="8" r="3"/><circle cx="16" cy="8" r="3"/><path d="M2 20c0-3.3 2.7-6 6-6s6 2.7 6 6M12 20c0-3.3 2.7-6 6-6s4 1.5 4 3"/></svg>',
+  puzzle: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 3h6v3a2 2 0 1 0 4 0h2v6h-3a2 2 0 1 0 0 4h3v5H9v-3a2 2 0 1 0-4 0v3H3v-6h3a2 2 0 1 0 0-4H3V3h6z"/></svg>',
+  learn: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 8l10-5 10 5-10 5z"/><path d="M6 10v5c0 1.7 2.7 3 6 3s6-1.3 6-3v-5"/></svg>',
+  games: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
+  chart: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>',
+};
+function quickStart(opts) {
+  if (retro) exitRetro();
+  if (learn || puzzle) { if (parked) Object.assign(cfg, parked.cfg); parked = null; dropModes(); }
+  Object.assign(cfg, { startFen: "", vela: "", velaWho: "", clock: cfg.clock || "0" }, opts);
+  markPage("play");
+  startGame();
+}
+async function renderHome() {
+  const el = $("homePage");
+  if (!lessons) { try { lessons = await (await fetch("/lessons.json")).json(); } catch (e) { /* carte simplifiée */ } }
+  const pz = pstate(), prog = learnProgress();
+  const live = parked ? parked.game : game;
+  const resumable = live.moves.length > 0 && !live.result;
+  const steps = lessons ? allSteps() : [];
+  const stars = steps.reduce((n, x) => n + (prog[x.s.id] || 0), 0), maxStars = steps.length * 3;
+  const nextStep = steps.find(x => !prog[x.s.id]);
+  const lvlBtns = [1, 2, 3, 4, 5, 6].map(l => `<button data-level="${l}"><b>${l}</b><span>${levelName(l)}</span></button>`).join("");
+  el.innerHTML = `<div class="home-hero"><h1>${profile ? t("hello", { name: esc(profile.name) }) : t("hello_guest")}</h1><p>${t("home_sub")}</p></div>
+  <div class="home-grid">
+    ${resumable ? `<div class="card accent wide"><h2>${HOME_ICON.resume}${t("home_resume")}</h2>
+      <p class="sub">${t("home_resume_sub", { g: GAMES[(parked ? parked.cfg : cfg).game].name, n: live.moves.length })}</p>
+      <div class="row"><button class="btn primary" id="hResume">${t("home_continue")}</button></div></div>` : ""}
+    <div class="card wide"><h2>${HOME_ICON.cpu}${t("home_vs_engine")}</h2><p class="sub">${t("home_vs_engine_sub")}</p>
+      <div class="chips" id="hGames">${["tsivy", "dimy", "telo"].map(g => `<button data-g="${g}" class="${g === homeGame ? "on" : ""}">${GAMES[g].name} ${GAMES[g].size}</button>`).join("")}</div>
+      <div class="levels" id="hLevels">${lvlBtns}</div>
+      <div class="row"><button class="link-btn" id="hOptions">${t("home_more_options")}</button></div></div>
+    <div class="card"><h2>${HOME_ICON.puzzle}${t("nav_puzzles")}</h2><p class="sub">${t("home_puzzles_sub")}</p>
+      <div class="row"><span class="big">${pz.rating}</span><span class="spacer"></span><span class="sub">${t("pz_streak")} <b>${pz.streak}</b> · ${t("pz_best")} <b>${pz.best}</b></span></div>
+      <div class="row"><button class="btn primary" id="hPuzzles">${t("home_solve")}</button></div></div>
+    <div class="card"><h2>${HOME_ICON.learn}${t("nav_learn")}</h2>
+      <p class="sub">${nextStep ? t("home_next_lesson", { t: esc(L(nextStep.s, "title")) }) : t("home_learn_done")}</p>
+      <div class="progress-line"><i style="width:${maxStars ? Math.round(stars / maxStars * 100) : 0}%"></i></div>
+      <div class="row"><span class="sub">${t("home_learn_sub", { s: stars, m: maxStars })}</span><span class="spacer"></span><button class="btn primary" id="hLearn">${t("home_continue")}</button></div></div>
+    <div class="card"><h2>${HOME_ICON.friend}${t("home_friend")}</h2><p class="sub">${t("home_friend_sub")}</p>
+      <div class="row"><button class="btn" id="hFriend">${t("home_start")}</button></div></div>
+    <div class="card"><h2>${HOME_ICON.games}${t("home_recent")}</h2><div class="mini-list" id="hRecent"><span class="sub">…</span></div>
+      <div class="row"><button class="link-btn" id="hAll">${t("home_see_all")}</button></div></div>
+    <div class="card"><h2>${HOME_ICON.chart}${t("home_record")}</h2><div id="hRecord"><span class="sub">…</span></div></div>
+  </div>`;
+  if ($("hResume")) $("hResume").onclick = () => showPage("play");
+  for (const b of $("hGames").children) b.onclick = () => { homeGame = b.dataset.g; renderHome(); };
+  for (const b of $("hLevels").children) b.onclick = () => quickStart({ mode: "computer", game: homeGame, level: +b.dataset.level });
+  $("hOptions").onclick = openDialog;
+  $("hPuzzles").onclick = () => showPage("puzzles");
+  $("hLearn").onclick = () => showPage("learn");
+  $("hFriend").onclick = () => quickStart({ mode: "friend", game: homeGame });
+  $("hAll").onclick = () => showPage("games");
+  const pp = profile ? String(profile.id) : "guest";
+  try {
+    const [list, st] = await Promise.all([api(`/api/games?limit=5&profile=${pp}`), api(`/api/games/stats?profile=${pp}`)]);
+    if (page !== "home") return;
+    $("hRecent").innerHTML = list.games.length ? list.games.map(g => {
+      const opp = g.mode === "computer" ? `Fanorona-Engine · ${t("hist_level", { n: g.level })}` : t("mode_" + g.mode);
+      const badge = g.outcome ? `<span class="badge ${g.outcome}">${t("out_" + g.outcome)}</span>` : `<span class="badge">${g.result}</span>`;
+      return `<div class="mini-row" data-id="${g.id}">${badge}<span class="who">${esc(opp)}</span><span class="when">${histDate(g.created)}</span></div>`;
+    }).join("") : `<span class="sub">${t("home_no_games")}</span>`;
+    for (const r of $("hRecent").querySelectorAll("[data-id]")) r.onclick = () => openArchived(+r.dataset.id);
+    const rows = st.vs_engine.filter(r => r.game === homeGame);
+    $("hRecord").innerHTML = rows.length ? rows.map(r => {
+      const n = r.win + r.draw + r.loss, pct = n ? Math.round((r.win + r.draw / 2) / n * 100) : 0;
+      return `<div class="mini-row" style="cursor:default"><span class="who">${r.level} · ${levelName(r.level)}</span>
+        <span class="when">${r.win} / ${r.draw} / ${r.loss}</span><span class="hist-bar"><i style="width:${pct}%"></i></span><span class="when">${pct} %</span></div>`;
+    }).join("") : `<span class="sub">${t("hist_no_stats")}</span>`;
+  } catch (e) { $("hRecent").innerHTML = `<span class="sub">${t("hist_unavailable", { e: trErr(e.message) })}</span>`; $("hRecord").innerHTML = ""; }
+}
 
 // =====================================================================================================
 // Actions
@@ -2232,8 +2588,7 @@ async function startGame() {
 let draft = null;
 function openDialog() {
   if (retro) exitRetro();
-  if (puzzle) { puzzle = null; document.body.classList.remove("puzzle"); Object.assign(cfg, puzzleSavedCfg || {}, { startFen: "" }); }
-  if (learn) { learn = null; startBoard = null; document.body.classList.remove("learning"); Object.assign(cfg, learnSavedCfg || {}, { startFen: "" }); }
+  if (puzzle || learn) { if (parked) Object.assign(cfg, parked.cfg); parked = null; dropModes(); cfg.startFen = ""; }
   draft = { ...cfg };
   syncDialog();
   $("dlg").showModal();
@@ -2274,19 +2629,17 @@ function launch(color) {
   const who = cfg.game === "tsivy" ? cfg.velaWho : "";
   cfg.vela = who === "me" ? cfg.color : who === "engine" ? other(cfg.color) : who === "W" || who === "B" ? who : "";
   $("dlg").close();
+  markPage("play");
   startGame();
 }
 for (const b of $("colorRow").children) b.onclick = () => launch(b.dataset.c);
 $("startBtn").onclick = () => launch(null);
 $("dlgClose").onclick = () => $("dlg").close();
-$("navNew").onclick = openDialog;
-$("navLearn").onclick = openLearn;
-$("navAnalyse").onclick = () => {
-  if (over()) { if (!analysis) runAnalysis(); else $("analysisBox").scrollIntoView({ behavior: "smooth" }); }
-  else flash(t("flash_analysis_end"));
-};
+for (const b of document.querySelectorAll("#topTabs [data-page], #tabBar [data-page]")) b.onclick = () => showPage(b.dataset.page);
+$("brandHome").onclick = e => { e.preventDefault(); showPage("home"); };
 
 // ---------- Contrôles et raccourcis ----------
+$("bNew").onclick = openDialog;
 $("bFirst").onclick = () => setView(0);
 $("bPrev").onclick = () => setView(viewPly - 1);
 $("bNext").onclick = () => setView(viewPly + 1);
@@ -2306,9 +2659,6 @@ document.addEventListener("keydown", e => {
   else if (e.key === "f") $("bFlip").click();
 });
 
-const SOUND_ON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 9v6h4l5 4V5L8 9z"/><path d="M16 9a4 4 0 0 1 0 6M19 6a8 8 0 0 1 0 12"/></svg>';
-const SOUND_OFF = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 9v6h4l5 4V5L8 9z"/><path d="M17 9l5 6M22 9l-5 6"/></svg>';
-const PALETTE_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3a9 9 0 1 0 0 18c1.1 0 1.8-.8 1.8-1.7 0-.5-.2-.9-.5-1.2-.3-.3-.5-.7-.5-1.2 0-1 .8-1.7 1.8-1.7H17a4 4 0 0 0 4-4c0-4.5-4-8.2-9-8.2z"/><circle cx="7.5" cy="11" r="1.2" fill="currentColor"/><circle cx="10.5" cy="7" r="1.2" fill="currentColor"/><circle cx="15.5" cy="7.5" r="1.2" fill="currentColor"/></svg>';
 let boardTheme = "wood", autoNight = false;
 const nightHours = () => { const h = new Date().getHours(); return h >= 22 || h < 7; };
 function applyTheme() {
@@ -2317,16 +2667,22 @@ function applyTheme() {
   if (eff === "auto") root.removeAttribute("data-theme"); else root.setAttribute("data-theme", eff);
   const boardChanged = root.dataset.board !== boardTheme;
   root.dataset.board = boardTheme;
-  $("themeBtn").innerHTML = PALETTE_ICON;
   for (const b of $("segTheme").children) b.classList.toggle("on", b.dataset.v === theme);
   for (const b of $("boardTiles").children) b.classList.toggle("on", b.dataset.v === boardTheme);
   $("autoNight").checked = autoNight;
   if (boardChanged && positions.length) { buildBoard(); render(); }
 }
 setInterval(applyTheme, 60000);   // bascule Veille automatique à l'heure dite
-$("themeBtn").onclick = e => { e.stopPropagation(); $("appearance").classList.toggle("hidden"); $("themeBtn").classList.toggle("on"); };
+$("profileChip").onclick = e => {
+  e.stopPropagation();
+  renderMenuProfiles();
+  $("profileMenu").classList.toggle("hidden");
+  $("profileChip").classList.toggle("on", !$("profileMenu").classList.contains("hidden"));
+};
 document.addEventListener("click", e => {
-  if (!$("appearance").contains(e.target) && e.target !== $("themeBtn")) { $("appearance").classList.add("hidden"); $("themeBtn").classList.remove("on"); }
+  if (!$("profileMenu").contains(e.target) && !$("profileChip").contains(e.target)) {
+    $("profileMenu").classList.add("hidden"); $("profileChip").classList.remove("on");
+  }
 });
 for (const b of $("segTheme").children) b.onclick = () => { theme = b.dataset.v; applyTheme(); save(); };
 for (const b of $("boardTiles").children) b.onclick = () => { boardTheme = b.dataset.v; applyTheme(); save(); };
@@ -2334,14 +2690,16 @@ $("autoNight").onchange = e => { autoNight = e.target.checked; applyTheme(); sav
 for (const b of $("segLang").children) b.onclick = () => {
   lang = b.dataset.v;
   try { localStorage.setItem("fanorona-lang", lang); } catch (e) { /* stockage indisponible */ }
-  applyStaticI18n(); applySoundBtn();
+  applyStaticI18n(); applySoundBtn(); renderChip();
   if ($("dlg").open) syncDialog();
+  if (page === "home") renderHome();
+  if (page === "games") openHistory();
   for (const id of ["learnBox", "retroBox", "puzzleBox"]) $(id).dataset.html = "";
   $("actions").dataset.html = "";
   render();
 };
-function applySoundBtn() { $("soundBtn").innerHTML = cfg.sound ? SOUND_ON : SOUND_OFF; $("soundBtn").title = cfg.sound ? t("sounds_on") : t("sounds_off"); }
-$("soundBtn").onclick = () => { cfg.sound = !cfg.sound; applySoundBtn(); save(); if (cfg.sound) sound("move"); };
+function applySoundBtn() { $("soundToggle").checked = !!cfg.sound; }
+$("soundToggle").onchange = e => { cfg.sound = e.target.checked; save(); if (cfg.sound) sound("move"); };
 
 // ---------- Persistance (confort local uniquement) ----------
 function save() {
@@ -2379,6 +2737,20 @@ function load() {
     autoNight = !!saved.autoNight;
   }
   applyTheme(); applySoundBtn();
+  await restoreOrStart(saved);
+  // Profil : celui choisi sur cet appareil, sinon « Qui joue ? » (ou invité s'il n'y a encore aucun profil).
+  await loadProfiles();
+  let pid = null;
+  try { pid = localStorage.getItem("fanorona-profile"); } catch (e) { /* idem */ }
+  if (pid && pid !== "guest" && profileList.some(p => String(p.id) === pid)) await selectProfile(pid);
+  else { profile = null; renderChip(); }
+  if (location.hash.startsWith("#g=")) markPage("play");
+  else {
+    showPage("home");
+    if (!pid) openProfiles(false);
+  }
+})().then(openLinkFromHash);
+async function restoreOrStart(saved) {
   if (saved && Array.isArray(saved.moves) && saved.moves.length) {
     game.moves = saved.moves; game.result = saved.result || null; clock = saved.clock || null;
     game.serverId = saved.serverId || null; game.imported = !!saved.imported;
@@ -2393,8 +2765,7 @@ function load() {
     } catch (e) { game.moves = []; game.result = null; analysis = null; }
   }
   await startGame();
-  if (!saved && !location.hash.startsWith("#g=")) openDialog();
-})().then(openLinkFromHash);
+}
 // Lien de partage : au chargement, ou collé dans la barre d'adresse d'un onglet déjà ouvert (seule l'ancre
 // change, la page n'est pas rechargée). On nettoie ensuite l'URL pour qu'un rechargement ne réimporte pas.
 async function openLinkFromHash() {

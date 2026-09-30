@@ -20,6 +20,8 @@ API :
     GET  /api/games[?game=&mode=&outcome=&limit=&offset=]  -> historique (plus récentes d'abord)
     POST /api/games {partie}              -> enregistre une partie terminée ; GET/DELETE /api/games/<id>
     POST /api/games/<id>/analysis {depth, evals}  -> ajoute l'analyse ; GET /api/games/stats -> bilan
+    (liste et bilan : ?profile=<id> ou ?profile=guest)
+    GET/POST /api/profiles ; GET/POST/DELETE /api/profiles/<id> ; POST /api/profiles/<id>/{puzzle,learn,import}
 """
 
 import argparse
@@ -337,6 +339,17 @@ def init_db():
             analysed INTEGER NOT NULL DEFAULT 0,
             record TEXT NOT NULL)""")
         con.execute("CREATE INDEX IF NOT EXISTS games_created ON games(created DESC)")
+        con.execute("""CREATE TABLE IF NOT EXISTS profiles (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL UNIQUE COLLATE NOCASE,
+            color TEXT NOT NULL,
+            created REAL NOT NULL,
+            puzzle TEXT NOT NULL DEFAULT '{}',   -- classement Elo et séries des puzzles (JSON)
+            learn TEXT NOT NULL DEFAULT '{}')""")  # étoiles du tutoriel par exercice (JSON)
+        cols = [r["name"] for r in con.execute("PRAGMA table_info(games)")]
+        if "profile_id" not in cols:  # migration : les parties d'avant les profils restent « invité » (NULL)
+            con.execute("ALTER TABLE games ADD COLUMN profile_id INTEGER")
+        con.execute("CREATE INDEX IF NOT EXISTS games_profile ON games(profile_id, created DESC)")
 
 
 def clean_record(rec):
@@ -380,12 +393,16 @@ def outcome_of(r):
 
 def save_game(rec):
     r = clean_record(rec)
+    pid = rec.get("profile_id")
+    pid = int(pid) if isinstance(pid, int) or (isinstance(pid, str) and pid.isdigit()) else None
     with db() as con:
+        if pid is not None and not con.execute("SELECT 1 FROM profiles WHERE id = ?", (pid,)).fetchone():
+            pid = None
         cur = con.execute(
-            "INSERT INTO games (created, game, mode, level, color, result, outcome, plies, white, black, analysed, record)"
-            " VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+            "INSERT INTO games (created, game, mode, level, color, result, outcome, plies, white, black, analysed, record,"
+            " profile_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (time.time(), r["game"], r["mode"], r["level"], r["color"], r["result"].get("score", "*"), outcome_of(r),
-             len(r["moves"]), r["white"], r["black"], int("analysis" in r), json.dumps(r, ensure_ascii=False)))
+             len(r["moves"]), r["white"], r["black"], int("analysis" in r), json.dumps(r, ensure_ascii=False), pid))
         return {"id": cur.lastrowid}
 
 
@@ -401,8 +418,19 @@ def update_analysis(gid, ana):
     return {"id": gid}
 
 
+def profile_filter(q, where, params):
+    """?profile=<id> : parties de ce profil ; ?profile=guest : parties sans profil ; absent : toutes."""
+    p = q.get("profile", [""])[0]
+    if p == "guest":
+        where.append("profile_id IS NULL")
+    elif p.isdigit():
+        where.append("profile_id = ?")
+        params.append(int(p))
+
+
 def list_games(q):
     where, params = [], []
+    profile_filter(q, where, params)
     for key in ("game", "mode", "outcome"):
         v = q.get(key, [""])[0]
         if v:
@@ -434,14 +462,136 @@ def delete_game(gid):
     return {"deleted": gid}
 
 
-def game_stats():
+def game_stats(q=None):
     """Bilan contre l'ordinateur par jeu et niveau (point de vue du joueur), et total des parties."""
+    where, params = [], []
+    profile_filter(q or {}, where, params)
+    cond = " AND ".join(where)
     with db() as con:
         rows = [dict(r) for r in con.execute(
             "SELECT game, level, SUM(outcome = 'win') AS win, SUM(outcome = 'draw') AS draw, SUM(outcome = 'loss') AS loss"
-            " FROM games WHERE outcome IS NOT NULL GROUP BY game, level ORDER BY game, level")]
-        total = con.execute("SELECT COUNT(*) FROM games").fetchone()[0]
+            " FROM games WHERE outcome IS NOT NULL" + (" AND " + cond if cond else "")
+            + " GROUP BY game, level ORDER BY game, level", params)]
+        total = con.execute("SELECT COUNT(*) FROM games" + (" WHERE " + cond if cond else ""), params).fetchone()[0]
     return {"total": total, "vs_engine": rows}
+
+
+# ---------------------------------------------------------------------------------------------------------
+# Profils : pas d'authentification (service réservé au réseau local) ; un profil regroupe ses parties, son
+# classement de puzzles (Elo calculé ici, même formule que la page auparavant) et ses étoiles du tutoriel.
+# ---------------------------------------------------------------------------------------------------------
+PROFILE_COLORS = {"#a84f28", "#3e6a8a", "#4f7a3a", "#8a5a9e", "#b8860b", "#2f7f7a", "#9e3d4f", "#5b5f66"}
+PUZZLE_DEFAULT = {"rating": 1000, "played": 0, "solved": 0, "streak": 0, "best": 0, "seen": []}
+
+
+def profile_row(con, pid):
+    row = con.execute("SELECT * FROM profiles WHERE id = ?", (pid,)).fetchone()
+    if not row:
+        raise EngineError("profil introuvable")
+    games = con.execute("SELECT COUNT(*) FROM games WHERE profile_id = ?", (pid,)).fetchone()[0]
+    return {"id": row["id"], "name": row["name"], "color": row["color"], "created": row["created"], "games": games,
+            "puzzle": {**PUZZLE_DEFAULT, **json.loads(row["puzzle"])}, "learn": json.loads(row["learn"])}
+
+
+def clean_profile(req, partial=False):
+    out = {}
+    if "name" in req or not partial:
+        name = " ".join(str(req.get("name", "")).split())[:30]
+        if not name:
+            raise EngineError("nom de profil vide")
+        out["name"] = name
+    if "color" in req or not partial:
+        color = req.get("color")
+        out["color"] = color if color in PROFILE_COLORS else "#a84f28"
+    return out
+
+
+def list_profiles():
+    with db() as con:
+        ids = [r["id"] for r in con.execute("SELECT id FROM profiles ORDER BY name COLLATE NOCASE")]
+        out = []
+        for i in ids:
+            p = profile_row(con, i)
+            out.append({k: p[k] for k in ("id", "name", "color", "games")} | {"rating": p["puzzle"]["rating"]})
+    return {"profiles": out}
+
+
+def create_profile(req):
+    p = clean_profile(req)
+    with db() as con:
+        try:
+            cur = con.execute("INSERT INTO profiles (name, color, created) VALUES (?,?,?)", (p["name"], p["color"], time.time()))
+        except sqlite3.IntegrityError:
+            raise EngineError("ce nom de profil existe déjà")
+        return profile_row(con, cur.lastrowid)
+
+
+def update_profile(pid, req):
+    p = clean_profile(req, partial=True)
+    with db() as con:
+        profile_row(con, pid)
+        try:
+            for k, v in p.items():
+                con.execute(f"UPDATE profiles SET {k} = ? WHERE id = ?", (v, pid))
+        except sqlite3.IntegrityError:
+            raise EngineError("ce nom de profil existe déjà")
+        return profile_row(con, pid)
+
+
+def delete_profile(pid):
+    with db() as con:
+        con.execute("UPDATE games SET profile_id = NULL WHERE profile_id = ?", (pid,))  # parties gardées, sans profil
+        con.execute("DELETE FROM profiles WHERE id = ?", (pid,))
+    return {"deleted": pid}
+
+
+def puzzle_result(pid, req):
+    """Résultat d'un puzzle : E = 1 / (1 + 10^((puzzle - joueur) / 400)), K = 60 pour les 20 premiers puis 30."""
+    pz_id = str(req.get("puzzle", ""))[:12]
+    pz_rating = int(req.get("rating", 1000))
+    win = bool(req.get("win"))
+    with db() as con:
+        st = profile_row(con, pid)["puzzle"]
+        k = 60 if st["played"] < 20 else 30
+        e = 1 / (1 + 10 ** ((pz_rating - st["rating"]) / 400))
+        delta = round(k * ((1 if win else 0) - e))
+        st["rating"] = max(400, st["rating"] + delta)
+        st["played"] += 1
+        if win:
+            st["solved"] += 1
+            st["streak"] += 1
+            st["best"] = max(st["best"], st["streak"])
+        else:
+            st["streak"] = 0
+        st["seen"] = ([s for s in st["seen"] if s != pz_id] + [pz_id])[-800:]
+        con.execute("UPDATE profiles SET puzzle = ? WHERE id = ?", (json.dumps(st), pid))
+    return {"puzzle": st, "delta": delta}
+
+
+def learn_result(pid, req):
+    step, stars = str(req.get("step", ""))[:40], max(0, min(3, int(req.get("stars", 0))))
+    with db() as con:
+        learn = profile_row(con, pid)["learn"]
+        if step:
+            learn[step] = max(learn.get(step, 0), stars)
+        con.execute("UPDATE profiles SET learn = ? WHERE id = ?", (json.dumps(learn), pid))
+    return {"learn": learn}
+
+
+def import_progress(pid, req):
+    """Reprise, dans un profil, de la progression gardée jusqu'ici dans le navigateur (au plus fort des deux)."""
+    with db() as con:
+        p = profile_row(con, pid)
+        learn = p["learn"]
+        for step, stars in (req.get("learn") or {}).items():
+            if isinstance(stars, int):
+                learn[str(step)[:40]] = max(learn.get(str(step)[:40], 0), max(0, min(3, stars)))
+        pz, loc = p["puzzle"], req.get("puzzle") or {}
+        if isinstance(loc, dict) and int(loc.get("played", 0)) > pz["played"]:
+            pz = {**PUZZLE_DEFAULT, **{k: loc[k] for k in PUZZLE_DEFAULT if k in loc}}
+            pz["seen"] = [str(s)[:12] for s in pz["seen"]][-800:]
+        con.execute("UPDATE profiles SET learn = ?, puzzle = ? WHERE id = ?", (json.dumps(learn), json.dumps(pz), pid))
+        return profile_row(con, pid)
 
 
 def available_nets():
@@ -469,12 +619,20 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         path, _, query = self.path.partition("?")
+        if path.startswith("/api/profiles"):
+            try:
+                if path == "/api/profiles":
+                    return self.send_json(200, list_profiles())
+                with db() as con:
+                    return self.send_json(200, profile_row(con, int(path.split("/")[3])))
+            except (EngineError, ValueError) as e:
+                return self.send_json(400, {"error": str(e)})
         if path.startswith("/api/games"):
             try:
                 if path == "/api/games":
                     return self.send_json(200, list_games(parse_qs(query)))
                 if path == "/api/games/stats":
-                    return self.send_json(200, game_stats())
+                    return self.send_json(200, game_stats(parse_qs(query)))
                 return self.send_json(200, get_game(int(path.rsplit("/", 1)[1])))
             except (EngineError, ValueError) as e:
                 return self.send_json(400, {"error": str(e)})
@@ -516,6 +674,15 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json(200, save_game(req))
             elif self.path.startswith("/api/games/") and self.path.endswith("/analysis"):
                 self.send_json(200, update_analysis(int(self.path.split("/")[3]), req))
+            elif self.path == "/api/profiles":
+                self.send_json(200, create_profile(req))
+            elif self.path.startswith("/api/profiles/"):
+                parts = self.path.split("/")
+                pid, action = int(parts[3]), (parts[4] if len(parts) > 4 else "")
+                handler = {"": update_profile, "puzzle": puzzle_result, "learn": learn_result, "import": import_progress}.get(action)
+                if not handler:
+                    raise EngineError("action inconnue")
+                self.send_json(200, handler(pid, req))
             elif self.path == "/api/go":
                 res = search(req)
                 res["state"] = get_state({**req, "moves": req.get("moves", []) + [res["bestmove"]]})
@@ -527,6 +694,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_DELETE(self):
         try:
+            if self.path.startswith("/api/profiles/"):
+                return self.send_json(200, delete_profile(int(self.path.split("/")[3])))
             if not self.path.startswith("/api/games/"):
                 return self.send_json(404, {"error": "introuvable"})
             self.send_json(200, delete_game(int(self.path.split("/")[3])))

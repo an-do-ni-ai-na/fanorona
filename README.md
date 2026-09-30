@@ -45,6 +45,11 @@ lui-même ; reprise de coup, indice, abandon, revanche. En fin de partie, « Ana
 ≥ 0,1 / 0,2 / 0,3 comme sur lichess), perte moyenne en centipions, meilleur coup affiché sur le plateau.
 « Apprendre de ses erreurs » rejoue ensuite chaque erreur ou gaffe du joueur : il faut trouver un coup
 aussi bon que celui du moteur (moins de 0,1 de chances de gain perdues), avec la solution à la demande.
+Profils (puce en haut à droite) : chacun garde ses parties, son classement de puzzles et sa progression du
+tutoriel, sur tous les appareils ; pas de mot de passe (service réservé au réseau local) ; mode invité. Page
+d'accueil (départ rapide par niveau, reprise, puzzles, tutoriel, dernières parties, bilan), onglets Jouer / Puzzles /
+Apprendre / Parties (barre d'onglets en bas sur mobile) ; la partie en cours est mise de côté pendant les puzzles
+et le tutoriel.
 Historique (« Parties ») : chaque partie terminée est enregistrée côté serveur (SQLite, `data/gui_games.db`,
 option `--db`) avec son analyse éventuelle ; liste filtrable, bilan contre l'ordinateur par niveau, réouverture
 pour revoir ou analyser, suppression. Pas de comptes : l'historique est commun à tous les appareils.
