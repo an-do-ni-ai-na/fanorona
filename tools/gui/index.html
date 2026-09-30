@@ -333,6 +333,31 @@ dialog::backdrop { background: rgba(10, 8, 6, .55); backdrop-filter: blur(2px); 
 #shareDlg .share-pane { display: flex; flex-direction: column; gap: 12px; }
 #shareDlg .share-pane.hidden { display: none; }
 .err { color: var(--j-blun); font-size: 13px; min-height: 1em; }
+/* ---------- Historique ---------- */
+#histDlg { width: min(780px, calc(100vw - 32px)); }
+#histDlg .dlg-body { max-height: calc(100vh - 140px); overflow-y: auto; }
+.hist-sum { font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+.hist-stats { width: 100%; border-collapse: collapse; font-size: 13px; }
+.hist-stats th { text-align: left; color: var(--muted); font-weight: 500; padding: 4px 6px; border-bottom: 1px solid var(--border); }
+.hist-stats td { padding: 4px 6px; color: var(--strong); font-variant-numeric: tabular-nums; }
+.hist-stats tr + tr td { border-top: 1px solid var(--border); }
+.hist-bar { display: inline-block; width: 80px; height: 6px; border-radius: 3px; background: var(--surface-2); vertical-align: middle; overflow: hidden; margin-right: 6px; }
+.hist-bar i { display: block; height: 100%; background: var(--accent); }
+.hist-filters { display: flex; flex-wrap: wrap; gap: 10px; }
+.hist-filters label { display: flex; flex-direction: column; gap: 4px; font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); flex: 1; min-width: 150px; }
+.hist-filters select { background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r-sm); padding: 7px 8px; text-transform: none; letter-spacing: 0; font-weight: 400; font-size: 13.5px; color: var(--strong); }
+.hist-list { display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: var(--r-sm); overflow: hidden; }
+.hist-row { display: grid; grid-template-columns: 1fr auto; gap: 6px 12px; padding: 10px 12px; align-items: center; }
+.hist-row + .hist-row { border-top: 1px solid var(--border); }
+.hist-row:hover { background: var(--surface-2); }
+.hist-row .who { display: flex; align-items: center; gap: 8px; color: var(--strong); font-weight: 500; flex-wrap: wrap; }
+.hist-row .det { font-size: 12.5px; color: var(--muted); }
+.hist-row .acts { display: flex; gap: 6px; grid-row: span 2; }
+.hist-row .acts .btn { padding: 6px 10px; font-size: 13px; }
+.badge { font-size: 11.5px; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--border); color: var(--text); }
+.badge.win { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.badge.loss { border-color: var(--j-blun); color: var(--j-blun); }
+.hist-empty { padding: 18px; text-align: center; color: var(--muted); font-style: italic; }
 
 /* ---------- Adaptatif ---------- */
 @media (max-width: 1100px) {
@@ -367,6 +392,14 @@ dialog::backdrop { background: rgba(10, 8, 6, .55); backdrop-filter: blur(2px); 
   body.learning .side { margin-top: 4px; margin-bottom: 12px; }
   body.learning .moves-box { display: none; }
 }
+/* Petits écrans : la navigation (5 onglets, plus longs en malgache) passe sur sa propre ligne, pleine largeur,
+   et revient à la ligne si besoin plutôt que de cacher des onglets. En fin de feuille pour primer sur le bloc 800 px. */
+@media (max-width: 640px) {
+  .site { flex-wrap: wrap; height: auto; row-gap: 0; padding-top: 8px; padding-bottom: 6px; }
+  .site .brand-text { display: inline; }
+  .site nav { order: 3; width: 100%; flex-wrap: wrap; overflow-x: visible; gap: 0 14px; }
+  .site nav button { padding: 6px 0; font-size: 13.5px; }
+}
 </style>
 </head>
 <body>
@@ -381,6 +414,7 @@ dialog::backdrop { background: rgba(10, 8, 6, .55); backdrop-filter: blur(2px); 
     <button id="navAnalyse" data-i18n="nav_analyse">Analyse</button>
     <button id="navPuzzle" data-i18n="nav_puzzles">Puzzles</button>
     <button id="navLearn" data-i18n="nav_learn">Apprendre</button>
+    <button id="navGames" data-i18n="nav_games">Parties</button>
   </nav>
   <div class="spacer"></div>
   <button class="icon-btn" id="soundBtn" title="Sons" data-i18n-title="sounds"></button>
@@ -493,6 +527,20 @@ dialog::backdrop { background: rgba(10, 8, 6, .55); backdrop-filter: blur(2px); 
       <button data-c="W" title="Jouer les Blancs" data-i18n-title="play_white"><svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="16" fill="#fbf8f1" stroke="#8e836f" stroke-width="2"/><circle cx="20" cy="20" r="10" fill="none" stroke="#d8cfbe" stroke-width="2"/></svg></button>
     </div>
     <div class="start-row hidden" id="startRow"><button class="btn primary" id="startBtn" data-i18n="start_game">Commencer la partie</button></div>
+  </div>
+</dialog>
+
+<dialog id="histDlg">
+  <div class="dlg-head"><span data-i18n="hist_title">Historique des parties</span><button class="icon-btn" id="histClose" title="Fermer" data-i18n-title="close">✕</button></div>
+  <div class="dlg-body">
+    <div id="histStats"></div>
+    <div class="hist-filters">
+      <label><span data-i18n="hist_game">Jeu</span><select id="hfGame"><option value="" data-i18n="hist_any">Tous</option><option value="tsivy">Tsivy 9 × 5</option><option value="dimy">Dimy 5 × 5</option><option value="telo">Telo 3 × 3</option></select></label>
+      <label><span data-i18n="hist_mode">Adversaire</span><select id="hfMode"><option value="" data-i18n="hist_any">Tous</option><option value="computer" data-i18n="computer">Ordinateur</option><option value="friend" data-i18n="two_players">Deux joueurs</option><option value="auto" data-i18n="mode_auto">Ordinateur contre ordinateur</option></select></label>
+      <label><span data-i18n="hist_outcome">Résultat</span><select id="hfOutcome"><option value="" data-i18n="hist_any">Tous</option><option value="win" data-i18n="out_win">Victoire</option><option value="draw" data-i18n="out_draw">Nulle</option><option value="loss" data-i18n="out_loss">Défaite</option></select></label>
+    </div>
+    <div class="hist-list" id="histList"></div>
+    <button class="btn hidden" id="histMore" data-i18n="hist_more">Voir plus</button>
   </div>
 </dialog>
 
@@ -970,8 +1018,8 @@ async function commit(m) {
 // =====================================================================================================
 // Déroulement de la partie
 // =====================================================================================================
-async function api(path, body) {
-  const r = await fetch(path, { method: body ? "POST" : "GET", headers: { "Content-Type": "application/json" },
+async function api(path, body, method) {
+  const r = await fetch(path, { method: method || (body ? "POST" : "GET"), headers: { "Content-Type": "application/json" },
     body: body ? JSON.stringify(body) : undefined });
   const j = await r.json().catch(() => ({ error: r.statusText }));
   if (!r.ok) throw new Error(j.error || r.statusText);
@@ -1114,6 +1162,7 @@ function finish(status, reason) {
   chosen = null; pendingAW = null; inputView = null;
   sound("end");
   save();
+  archiveGame();
 }
 
 // =====================================================================================================
@@ -1410,6 +1459,7 @@ async function runAnalysis() {
       renderAnalysis(); renderMoves(); renderGauge(); renderBoard();
     }
     analysis.running = false; analysis.done = true;
+    archiveAnalysis();
   } catch (e) {
     if (my !== anaEpoch) return;
     analysis.running = false; flash(t("flash_analysis_stopped", { e: trErr(e.message) }));
@@ -1949,7 +1999,8 @@ async function importGame(d) {
   epoch++; anaEpoch++; busy = false; thinking(false);
   Object.assign(cfg, { game: d.game, vela: req.vela, velaWho: "", startFen: d.fen || "", mode: "friend", clock: "0", variant: "free" });
   startBoard = null; clock = null; analysis = null; liveInfo = null; hintMove = null; chosen = null; pendingAW = null; inputView = null;
-  game = { moves: d.moves.slice(), legal: [], status: "ongoing", fen: startFen(), result: null };
+  // Marquée importée AVANT applyServerState : une position finale y déclenche finish(), qui ne doit pas réarchiver.
+  game = { moves: d.moves.slice(), legal: [], status: "ongoing", fen: startFen(), result: null, serverId: null, imported: true };
   flipped = false;
   applyGeometry(); rebuildPositions(); viewPly = game.moves.length;
   buildBoard();
@@ -1960,6 +2011,8 @@ async function importGame(d) {
     game.result = { score: d.result, t: map[d.result] || "res_draw", w: "why_imported", raw: d.why || "" };
   }
   importedNames = { W: d.white, B: d.black };
+  game.imported = true;
+  if (d.quiet) return;
   save(); render();
   flash(t("imported", { n: game.moves.length }));
 }
@@ -2006,6 +2059,98 @@ $("importBtn").onclick = async () => {
     $("importText").value = "";
   } catch (e) { $("importErr").textContent = t("import_failed", { e: trErr(e.message) }); }
 };
+
+// =====================================================================================================
+// Historique des parties (serveur, SQLite) : chaque partie terminée est enregistrée automatiquement (sauf
+// tutoriel, puzzles, révision et parties importées) ; l'analyse faite ensuite y est rattachée.
+// =====================================================================================================
+async function archiveGame() {
+  if (learn || puzzle || retro || game.imported || game.serverId || !game.moves.length) return;
+  const d = exportData();
+  const rec = { game: d.game, vela: d.vela, fen: d.fen, moves: d.moves, result: game.result, mode: cfg.mode, level: cfg.level,
+    color: cfg.mode === "computer" ? cfg.color : null, clock: cfg.clock, net: cfg.net, variant: cfg.variant,
+    white: d.white, black: d.black, date: new Date().toISOString() };
+  try {
+    const r = await api("/api/games", rec);
+    game.serverId = r.id;
+    save();
+  } catch (e) { console.warn("historique : enregistrement impossible", e); }
+}
+async function archiveAnalysis() {
+  if (!game.serverId || !analysis || !analysis.done) return;
+  try { await api(`/api/games/${game.serverId}/analysis`, { depth: analysis.depth, evals: analysis.evals }); }
+  catch (e) { console.warn("historique : analyse non enregistrée", e); }
+}
+let histOffset = 0;
+const histDate = ts => {
+  const loc = Intl.DateTimeFormat.supportedLocalesOf([lang === "mg" ? "mg-MG" : "fr-FR"])[0] || "fr-FR";
+  return new Date(ts * 1000).toLocaleString(loc, { dateStyle: "medium", timeStyle: "short" });
+};
+async function openHistory() {
+  histOffset = 0;
+  $("histDlg").showModal();
+  await Promise.all([loadHistStats(), loadHistList(false)]);
+}
+async function loadHistStats() {
+  try {
+    const st = await api("/api/games/stats");
+    const rows = st.vs_engine.map(r => {
+      const n = r.win + r.draw + r.loss, pct = n ? Math.round((r.win + r.draw / 2) / n * 100) : 0;
+      return `<tr><td>${GAMES[r.game].name}</td><td>${r.level ? r.level + " · " + levelName(r.level) : "–"}</td><td>${n}</td>` +
+        `<td>${r.win} / ${r.draw} / ${r.loss}</td><td><span class="hist-bar"><i style="width:${pct}%"></i></span>${pct} %</td></tr>`;
+    }).join("");
+    $("histStats").innerHTML = `<div class="hist-sum">${t("hist_total", { n: st.total })}</div>` + (rows
+      ? `<h4 style="margin:0 0 6px;font-size:11.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted)">${t("hist_vs_engine")}</h4>
+         <table class="hist-stats"><tr><th>${t("hist_game")}</th><th>${t("hist_col_level")}</th><th>${t("hist_col_games")}</th><th>${t("hist_col_wdl")}</th><th>${t("hist_col_score")}</th></tr>${rows}</table>`
+      : `<div class="hist-sum">${t("hist_no_stats")}</div>`);
+  } catch (e) { $("histStats").textContent = t("hist_unavailable", { e: trErr(e.message) }); }
+}
+async function loadHistList(append) {
+  const q = new URLSearchParams({ limit: 25, offset: histOffset });
+  for (const [k, id] of [["game", "hfGame"], ["mode", "hfMode"], ["outcome", "hfOutcome"]]) if ($(id).value) q.set(k, $(id).value);
+  let res;
+  try { res = await api("/api/games?" + q); } catch (e) { $("histList").innerHTML = `<div class="hist-empty">${t("hist_unavailable", { e: trErr(e.message) })}</div>`; return; }
+  const rows = res.games.map(g => {
+    const opp = g.mode === "computer" ? `Fanorona-Engine · ${t("hist_level", { n: g.level })}` : t("mode_" + g.mode);
+    const badge = g.outcome ? `<span class="badge ${g.outcome}">${t("out_" + g.outcome)}</span>` : `<span class="badge">${g.result}</span>`;
+    const why = g.res && (g.res.raw || (g.res.w ? t(g.res.w) : ""));
+    return `<div class="hist-row" data-id="${g.id}">
+      <div class="who">${g.color ? `<span class="pdot ${g.color}"></span>` : ""}${badge}<span>${g.mode === "computer" ? t("hist_vs", { o: opp }) : opp}</span></div>
+      <div class="acts"><button class="btn primary" data-open="${g.id}">${t("hist_open")}</button><button class="btn" data-del="${g.id}" title="${t("hist_delete")}">✕</button></div>
+      <div class="det">${histDate(g.created)} · ${GAMES[g.game].name}${g.vela ? " · vela" : ""} · ${g.result} · ${t("hist_plies", { n: g.plies })}${why ? " · " + why : ""}${g.analysed ? " · " + t("hist_analysed") : ""}</div>
+    </div>`;
+  }).join("");
+  if (append) $("histList").insertAdjacentHTML("beforeend", rows);
+  else $("histList").innerHTML = rows || `<div class="hist-empty">${t("hist_empty")}</div>`;
+  $("histMore").classList.toggle("hidden", !res.more);
+  for (const b of $("histList").querySelectorAll("[data-open]")) b.onclick = () => openArchived(+b.dataset.open);
+  for (const b of $("histList").querySelectorAll("[data-del]")) b.onclick = async () => {
+    if (!confirm(t("hist_confirm_delete"))) return;
+    await api(`/api/games/${b.dataset.del}`, null, "DELETE");
+    if (game.serverId === +b.dataset.del) { game.serverId = null; save(); }
+    b.closest(".hist-row").remove();
+    flash(t("hist_deleted"));
+    loadHistStats();
+  };
+}
+async function openArchived(id) {
+  try {
+    const r = await api(`/api/games/${id}`);
+    await importGame({ game: r.game, vela: r.vela, fen: r.fen, moves: r.moves, result: r.result.score, why: "", white: r.white, black: r.black, quiet: true });
+    if (r.result && r.result.score && r.result.score !== "*") game.result = r.result;
+    cfg.level = r.level || cfg.level;
+    analysis = r.analysis ? { depth: r.analysis.depth, evals: r.analysis.evals, running: false, done: true } : null;
+    game.serverId = r.id; game.imported = false;
+    flipped = r.color === "B"; buildBoard();
+    save(); render();
+    $("histDlg").close();
+    flash(t("hist_opened", { d: histDate(r.created) }));
+  } catch (e) { flash(trErr(e.message)); }
+}
+$("navGames").onclick = openHistory;
+$("histClose").onclick = () => $("histDlg").close();
+$("histMore").onclick = () => { histOffset += 25; loadHistList(true); };
+for (const id of ["hfGame", "hfMode", "hfOutcome"]) $(id).onchange = () => { histOffset = 0; loadHistList(false); };
 
 // =====================================================================================================
 // Actions
@@ -2072,7 +2217,7 @@ function nextGame() {
 async function startGame() {
   importedNames = null;
   epoch++; anaEpoch++; busy = false; thinking(false);
-  game = { moves: [], legal: [], status: "ongoing", fen: startFen(), result: null };
+  game = { moves: [], legal: [], status: "ongoing", fen: startFen(), result: null, serverId: null, imported: false };
   analysis = null; liveInfo = null; hintMove = null; chosen = null; pendingAW = null; inputView = null;
   clock = parseClock(cfg.clock); clockMark = performance.now();
   flipped = cfg.mode === "computer" && cfg.color === "B";
@@ -2202,7 +2347,7 @@ $("soundBtn").onclick = () => { cfg.sound = !cfg.sound; applySoundBtn(); save();
 function save() {
   if (learn || puzzle) return;
   try {
-    localStorage.setItem("fanorona-gui-v3", JSON.stringify({ cfg, names: importedNames, theme, boardTheme, autoNight, flipped, moves: game.moves, result: game.result, clock,
+    localStorage.setItem("fanorona-gui-v3", JSON.stringify({ cfg, names: importedNames, theme, boardTheme, autoNight, flipped, moves: game.moves, result: game.result, clock, serverId: game.serverId || null, imported: !!game.imported,
       analysis: analysis && !analysis.running ? analysis : null }));
   } catch (e) { /* stockage indisponible */ }
 }
@@ -2236,6 +2381,7 @@ function load() {
   applyTheme(); applySoundBtn();
   if (saved && Array.isArray(saved.moves) && saved.moves.length) {
     game.moves = saved.moves; game.result = saved.result || null; clock = saved.clock || null;
+    game.serverId = saved.serverId || null; game.imported = !!saved.imported;
     analysis = saved.analysis || null; flipped = !!saved.flipped;
     applyGeometry(); rebuildPositions(); viewPly = game.moves.length;
     buildBoard();

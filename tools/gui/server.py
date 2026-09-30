@@ -17,10 +17,15 @@ API :
     POST /api/go    {moves, variant, movetime, net, level}  -> coup du moteur + infos de recherche, puis nouvel état
                                            (level 1..6, 6 = pleine force ; les indices utilisent toujours 6)
     POST /api/eval  {moves, plies, depth, net, variant}  -> analyse : score + meilleur coup après moves[:ply]
+    GET  /api/games[?game=&mode=&outcome=&limit=&offset=]  -> historique (plus récentes d'abord)
+    POST /api/games {partie}              -> enregistre une partie terminée ; GET/DELETE /api/games/<id>
+    POST /api/games/<id>/analysis {depth, evals}  -> ajoute l'analyse ; GET /api/games/stats -> bilan
 """
 
 import argparse
 import json
+import sqlite3
+import time
 import math
 import os
 import random
@@ -29,6 +34,7 @@ import subprocess
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import parse_qs
 
 HERE = Path(__file__).resolve().parent
 MOVE_RE = re.compile(r"^[a-i][1-5](?:[a-i][1-5][AW]?)*$")  # une case seule = pose (Fanoron-Telo)
@@ -300,6 +306,144 @@ def evaluate_plies(req):
     return {"evals": out}
 
 
+# ---------------------------------------------------------------------------------------------------------
+# Historique des parties (SQLite). Une ligne par partie terminée : colonnes indexées pour les listes et les
+# statistiques, et l'enregistrement complet (coups, résultat, joueurs, analyse éventuelle) en JSON.
+# ---------------------------------------------------------------------------------------------------------
+RESULTS = {"1-0", "0-1", "½-½", "*"}
+MODES = {"computer", "friend", "auto"}
+
+
+def db():
+    con = sqlite3.connect(args.db, timeout=10)
+    con.row_factory = sqlite3.Row
+    return con
+
+
+def init_db():
+    Path(args.db).parent.mkdir(parents=True, exist_ok=True)
+    with db() as con:
+        con.execute("""CREATE TABLE IF NOT EXISTS games (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            created REAL NOT NULL,
+            game TEXT NOT NULL,
+            mode TEXT NOT NULL,
+            level INTEGER,
+            color TEXT,
+            result TEXT NOT NULL,
+            outcome TEXT,          -- point de vue du joueur humain contre l'ordinateur : win / loss / draw
+            plies INTEGER NOT NULL,
+            white TEXT, black TEXT,
+            analysed INTEGER NOT NULL DEFAULT 0,
+            record TEXT NOT NULL)""")
+        con.execute("CREATE INDEX IF NOT EXISTS games_created ON games(created DESC)")
+
+
+def clean_record(rec):
+    """Valide et normalise un enregistrement de partie envoyé par la page."""
+    if not isinstance(rec, dict):
+        raise EngineError("partie invalide")
+    game = rec.get("game", "tsivy")
+    if game not in GAMES:
+        raise EngineError(f"jeu inconnu : {game}")
+    moves = check_moves(rec.get("moves", []))
+    result = rec.get("result") or {}
+    score = result.get("score", "*") if isinstance(result, dict) else "*"
+    if score not in RESULTS:
+        raise EngineError("résultat invalide")
+    mode = rec.get("mode") if rec.get("mode") in MODES else "friend"
+    fen = rec.get("fen") or ""
+    if fen and not FEN_RE.match(fen):
+        raise EngineError("FEN invalide")
+    txt = lambda v, n=60: str(v)[:n] if v is not None else None
+    out = {
+        "game": game, "vela": rec.get("vela") if rec.get("vela") in ("W", "B") else "", "fen": fen, "moves": moves,
+        "result": {k: txt(result.get(k), 200) for k in ("score", "t", "w", "raw") if isinstance(result, dict) and result.get(k)},
+        "mode": mode, "level": int(rec.get("level") or 0) or None, "color": rec.get("color") if rec.get("color") in ("W", "B") else None,
+        "clock": txt(rec.get("clock"), 10), "net": txt(rec.get("net"), 40), "variant": txt(rec.get("variant"), 12),
+        "white": txt(rec.get("white")), "black": txt(rec.get("black")), "date": txt(rec.get("date"), 30),
+    }
+    ana = rec.get("analysis")
+    if isinstance(ana, dict) and isinstance(ana.get("evals"), list) and len(ana["evals"]) <= MAX_PLIES + 1:
+        out["analysis"] = {"depth": int(ana.get("depth") or 0), "evals": ana["evals"]}
+    return out
+
+
+def outcome_of(r):
+    if r["mode"] != "computer" or not r["color"] or r["result"].get("score", "*") == "*":
+        return None
+    sc = r["result"]["score"]
+    if sc == "½-½":
+        return "draw"
+    return "win" if (sc == "1-0") == (r["color"] == "W") else "loss"
+
+
+def save_game(rec):
+    r = clean_record(rec)
+    with db() as con:
+        cur = con.execute(
+            "INSERT INTO games (created, game, mode, level, color, result, outcome, plies, white, black, analysed, record)"
+            " VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+            (time.time(), r["game"], r["mode"], r["level"], r["color"], r["result"].get("score", "*"), outcome_of(r),
+             len(r["moves"]), r["white"], r["black"], int("analysis" in r), json.dumps(r, ensure_ascii=False)))
+        return {"id": cur.lastrowid}
+
+
+def update_analysis(gid, ana):
+    with db() as con:
+        row = con.execute("SELECT record FROM games WHERE id = ?", (gid,)).fetchone()
+        if not row:
+            raise EngineError("partie introuvable")
+        r = json.loads(row["record"])
+        r["analysis"] = clean_record({**r, "analysis": ana}).get("analysis")
+        con.execute("UPDATE games SET record = ?, analysed = ? WHERE id = ?",
+                    (json.dumps(r, ensure_ascii=False), int(bool(r["analysis"])), gid))
+    return {"id": gid}
+
+
+def list_games(q):
+    where, params = [], []
+    for key in ("game", "mode", "outcome"):
+        v = q.get(key, [""])[0]
+        if v:
+            where.append(f"{key} = ?")
+            params.append(v)
+    limit = max(1, min(int(q.get("limit", ["30"])[0]), 200))
+    offset = max(0, int(q.get("offset", ["0"])[0]))
+    sql = ("SELECT id, created, game, mode, level, color, result, outcome, plies, white, black, analysed,"
+           " json_extract(record, '$.result') AS res, json_extract(record, '$.vela') AS vela FROM games"
+           + (" WHERE " + " AND ".join(where) if where else "") + " ORDER BY created DESC LIMIT ? OFFSET ?")
+    with db() as con:
+        rows = [dict(r) for r in con.execute(sql, params + [limit + 1, offset])]
+        for r in rows:
+            r["res"] = json.loads(r["res"]) if r["res"] else {}
+    return {"games": rows[:limit], "more": len(rows) > limit}
+
+
+def get_game(gid):
+    with db() as con:
+        row = con.execute("SELECT id, created, record FROM games WHERE id = ?", (gid,)).fetchone()
+    if not row:
+        raise EngineError("partie introuvable")
+    return {"id": row["id"], "created": row["created"], **json.loads(row["record"])}
+
+
+def delete_game(gid):
+    with db() as con:
+        con.execute("DELETE FROM games WHERE id = ?", (gid,))
+    return {"deleted": gid}
+
+
+def game_stats():
+    """Bilan contre l'ordinateur par jeu et niveau (point de vue du joueur), et total des parties."""
+    with db() as con:
+        rows = [dict(r) for r in con.execute(
+            "SELECT game, level, SUM(outcome = 'win') AS win, SUM(outcome = 'draw') AS draw, SUM(outcome = 'loss') AS loss"
+            " FROM games WHERE outcome IS NOT NULL GROUP BY game, level ORDER BY game, level")]
+        total = con.execute("SELECT COUNT(*) FROM games").fetchone()[0]
+    return {"total": total, "vs_engine": rows}
+
+
 def available_nets():
     d = Path(args.nets)
     if not d.is_dir():
@@ -324,7 +468,16 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_GET(self):
-        path = self.path.split("?")[0]
+        path, _, query = self.path.partition("?")
+        if path.startswith("/api/games"):
+            try:
+                if path == "/api/games":
+                    return self.send_json(200, list_games(parse_qs(query)))
+                if path == "/api/games/stats":
+                    return self.send_json(200, game_stats())
+                return self.send_json(200, get_game(int(path.rsplit("/", 1)[1])))
+            except (EngineError, ValueError) as e:
+                return self.send_json(400, {"error": str(e)})
         if path in ("/lessons.json", "/puzzles.json", "/i18n.json"):
             body = (HERE / path[1:]).read_bytes()
             self.send_response(200)
@@ -352,13 +505,17 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         try:
             n = int(self.headers.get("Content-Length", 0))
-            if n > 100_000:
+            if n > (1_000_000 if self.path.startswith("/api/games") else 100_000):
                 raise EngineError("requête trop grande")
             req = json.loads(self.rfile.read(n) or b"{}")
             if self.path == "/api/state":
                 self.send_json(200, get_state(req))
             elif self.path == "/api/eval":
                 self.send_json(200, evaluate_plies(req))
+            elif self.path == "/api/games":
+                self.send_json(200, save_game(req))
+            elif self.path.startswith("/api/games/") and self.path.endswith("/analysis"):
+                self.send_json(200, update_analysis(int(self.path.split("/")[3]), req))
             elif self.path == "/api/go":
                 res = search(req)
                 res["state"] = get_state({**req, "moves": req.get("moves", []) + [res["bestmove"]]})
@@ -366,6 +523,14 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 self.send_json(404, {"error": "introuvable"})
         except (EngineError, ValueError, json.JSONDecodeError) as e:
+            self.send_json(400, {"error": str(e)})
+
+    def do_DELETE(self):
+        try:
+            if not self.path.startswith("/api/games/"):
+                return self.send_json(404, {"error": "introuvable"})
+            self.send_json(200, delete_game(int(self.path.split("/")[3])))
+        except (EngineError, ValueError) as e:
             self.send_json(400, {"error": str(e)})
 
 
@@ -379,10 +544,12 @@ def main():
     ap.add_argument("--port", type=int, default=8090)
     ap.add_argument("--max-searches", type=int, default=max(1, (os.cpu_count() or 2) - 1))
     ap.add_argument("--verbose", action="store_true")
+    ap.add_argument("--db", default=str(root / "data" / "gui_games.db"), help="historique des parties (SQLite)")
     args = ap.parse_args()
     args.engine = str(Path(args.engine).resolve())
     args.cwd = str(root)
     search_slots = threading.BoundedSemaphore(args.max_searches)
+    init_db()
     print(f"Fanorona GUI sur http://{args.host}:{args.port}/ (moteur {args.engine})", flush=True)
     ThreadingHTTPServer((args.host, args.port), Handler).serve_forever()
 
