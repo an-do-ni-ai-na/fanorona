@@ -423,6 +423,13 @@ dialog::backdrop { background: rgba(10, 8, 6, .55); backdrop-filter: blur(2px); 
 .seg button + button { border-left: 1px solid var(--border); }
 .seg button:hover { color: var(--strong); }
 .seg button.on { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
+.strength { margin-top: 12px; display: flex; flex-direction: column; gap: 6px; }
+.strength-lab { display: flex; justify-content: space-between; font-size: 13px; color: var(--text); }
+.strength-lab b { color: var(--accent); font-variant-numeric: tabular-nums; }
+.strength input[type=range] { width: 100%; accent-color: var(--accent); }
+.strength .note { margin: 0; font-size: 12px; color: var(--muted); }
+.elo-delta { font-weight: 600; font-variant-numeric: tabular-nums; font-size: 12.5px; }
+.elo-delta.up { color: var(--accent); } .elo-delta.down { color: var(--j-blun); }
 .lvl-name { color: var(--muted); font-size: 12.5px; margin-top: 6px; text-align: center; }
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .field select { width: 100%; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r-sm); padding: 8px 9px; }
@@ -649,7 +656,9 @@ dialog::backdrop { background: rgba(10, 8, 6, .55); backdrop-filter: blur(2px); 
     <div class="field"><label data-i18n="opponent">Adversaire</label>
       <div class="seg" id="segMode"><button data-v="computer" data-i18n="computer">Ordinateur</button><button data-v="friend" data-i18n="two_players">Deux joueurs</button><button data-v="auto" data-i18n="mode_auto">Ordinateur contre ordinateur</button></div></div>
     <div class="field" id="fLevel"><label data-i18n="level">Niveau</label>
-      <div class="seg" id="segLevel"></div><div class="lvl-name" id="lvlName"></div></div>
+      <div class="seg" id="segLevel"></div><div class="lvl-name" id="lvlName"></div>
+      <div class="strength hidden" id="strengthRow"><label class="strength-lab"><span data-i18n="strength_label">Force précise (Elo)</span> <b id="strengthVal"></b></label>
+        <input type="range" id="strengthRange" min="0" step="1"><p class="note" data-i18n="strength_hint"></p></div></div>
     <div class="grid2">
       <div class="field"><label data-i18n="time_control">Cadence</label>
         <select id="dClock">
@@ -1230,9 +1239,29 @@ async function refresh() {
 
 const engineToMove = () => !over() && !retro && !puzzle && !(learn && learn.status !== "play") && (cfg.mode === "auto" || (cfg.mode === "computer" && cfg.color !== sideAt(game.moves.length)));
 
+// Force du moteur : un réglage précis de l'échelle (cfg.strength, choisi par Elo) ou un niveau prédéfini.
+// Le niveau 6 n'est classé qu'à 1 s par coup (conditions de calibration).
+let strengths = [];
+function effectiveStrength(c = cfg) {
+  if (c.mode !== "computer") return null;
+  if (c.strength != null) return c.strength;
+  const lv = levels.find(l => l.id === c.level);
+  if (!lv) return null;
+  return lv.id === 6 ? (+c.movetime === 1000 ? lv.strength : null) : lv.strength;
+}
+const strengthElo = k => (k != null && strengths[k] ? strengths[k].elo : null);
+const levelElo = l => { const lv = levels.find(x => x.id === l); return lv ? strengthElo(lv.strength) : null; };
+// Réglages triés par Elo croissant, sans ceux qu'un réglage plus faible dépasse (courbe monotone pour le curseur).
+function strengthLadder() {
+  const s = strengths.filter(x => x.elo != null).slice().sort((a, b) => a.elo - b.elo);
+  return s.filter((x, i) => i === 0 || x.elo > s[i - 1].elo);
+}
+const nearestStrength = elo => strengthLadder().reduce((b, x) => (!b || Math.abs(x.elo - elo) < Math.abs(b.elo - elo) ? x : b), null);
 function engineMovetime() {
   const lv = levels.find(l => l.id === cfg.level);
-  let t = cfg.mode === "auto" ? cfg.movetime : (lv && !lv.timed ? 50 : cfg.movetime);
+  const st = cfg.mode === "computer" && cfg.strength != null ? strengths[cfg.strength] : null;
+  let t = cfg.mode === "auto" ? cfg.movetime : st ? (st.mode === "sample" ? 50 : st.mode === "full" ? st.movetime : cfg.movetime)
+    : (lv && !lv.timed ? 50 : cfg.movetime);
   if (clock) { const side = sideAt(game.moves.length); t = Math.min(t, Math.max(100, clock[side] / 25 + clock.inc * 0.7)); }
   return Math.round(t);
 }
@@ -1244,7 +1273,7 @@ async function maybeEngine() {
   const side = sideAt(game.moves.length);
   try {
     const r = await api("/api/go", { moves: game.moves, ...rulesReq(), movetime: engineMovetime(), net: cfg.net || null,
-      level: cfg.mode === "auto" ? 6 : cfg.level });
+      level: cfg.mode === "auto" ? 6 : cfg.level, strength: cfg.mode === "computer" && cfg.strength != null ? cfg.strength : undefined });
     if (my !== epoch) return;
     liveInfo = { ...r.info, side };
     thinking(false);
@@ -1432,7 +1461,10 @@ function playerName(c) {
   if (cfg.mode === "friend") return { name: colorName(c), sub: "" };
   if (cfg.mode === "auto") return { name: "Fanorona-Engine", sub: t("full_strength"), short: "" };
   if (cfg.color === c) return { name: profile ? profile.name : t("you"), sub: "" };
-  return { name: "Fanorona-Engine", sub: t("level_n", { n: cfg.level }) + " · " + levelName(cfg.level), short: t("level_n", { n: cfg.level }) };
+  const elo = strengthElo(effectiveStrength());
+  if (cfg.strength != null) return { name: "Fanorona-Engine", sub: elo ? t("elo_short", { e: elo }) : "", short: elo ? t("elo_short", { e: elo }) : "" };
+  return { name: "Fanorona-Engine", sub: t("level_n", { n: cfg.level }) + " · " + levelName(cfg.level) + (elo ? " · " + t("elo_short", { e: elo }) : ""),
+    short: elo ? t("elo_short", { e: elo }) : t("level_n", { n: cfg.level }) };
 }
 function renderUsers() {
   const board = shownBoard();
@@ -1492,7 +1524,11 @@ function renderMoves() {
     const white = r < 1 ? `<div class="mv">…</div>` : cell(r);
     html += `<div class="idx">${(r + off + 1) / 2}</div>${white}${cell(r + 1)}`;
   }
-  if (over()) html += `<div class="result"><b>${game.result.score}</b><span>${resWhy(game.result)} • ${resText(game.result)}</span></div>`;
+  if (over()) {
+    const rt = game.rating, dl = rt ? rt.delta : null;
+    html += `<div class="result"><b>${game.result.score}</b><span>${resWhy(game.result)} • ${resText(game.result)}</span>` +
+      (rt ? `<span class="elo-delta ${dl >= 0 ? "up" : "down"}">${t("elo_change", { a: rt.before, b: rt.after, d: (dl >= 0 ? "+" : "") + dl })}</span>` : "") + `</div>`;
+  }
   if (box.innerHTML !== html) {
     const atEnd = box.scrollTop + box.clientHeight >= box.scrollHeight - 30;
     box.innerHTML = html;
@@ -2258,10 +2294,19 @@ async function archiveGame() {
   const d = exportData();
   const rec = { game: d.game, vela: d.vela, fen: d.fen, moves: d.moves, result: game.result, mode: cfg.mode, level: cfg.level,
     color: cfg.mode === "computer" ? cfg.color : null, clock: cfg.clock, net: cfg.net, variant: cfg.variant,
-    white: d.white, black: d.black, date: new Date().toISOString(), profile_id: profile ? profile.id : null };
+    white: d.white, black: d.black, date: new Date().toISOString(), profile_id: profile ? profile.id : null,
+    strength: effectiveStrength() ?? undefined };
   try {
     const r = await api("/api/games", rec);
     game.serverId = r.id;
+    if (r.rating && profile) {
+      game.rating = r.rating;
+      profile.rating = { ...profile.rating, elo: r.rating.after, games: (profile.rating.games || 0) + 1,
+        peak: Math.max(profile.rating.peak || 0, r.rating.after) };
+      const dl = r.rating.delta;
+      flash(t("elo_change", { a: r.rating.before, b: r.rating.after, d: (dl >= 0 ? "+" : "") + dl }));
+      render();
+    }
     save();
   } catch (e) { console.warn("historique : enregistrement impossible", e); }
 }
@@ -2303,8 +2348,9 @@ async function loadHistList(append) {
   let res;
   try { res = await api("/api/games?" + q); } catch (e) { $("histList").innerHTML = `<div class="hist-empty">${t("hist_unavailable", { e: trErr(e.message) })}</div>`; return; }
   const rows = res.games.map(g => {
-    const opp = g.mode === "computer" ? `Fanorona-Engine · ${t("hist_level", { n: g.level })}` : t("mode_" + g.mode);
-    const badge = g.outcome ? `<span class="badge ${g.outcome}">${t("out_" + g.outcome)}</span>` : `<span class="badge">${g.result}</span>`;
+    const opp = g.mode === "computer" ? `Fanorona-Engine · ${g.engine_elo ? t("elo_short", { e: g.engine_elo }) : t("hist_level", { n: g.level })}` : t("mode_" + g.mode);
+    const badge = (g.outcome ? `<span class="badge ${g.outcome}">${t("out_" + g.outcome)}</span>` : `<span class="badge">${g.result}</span>`) +
+      (g.elo_delta != null ? `<span class="elo-delta ${g.elo_delta >= 0 ? "up" : "down"}">${g.elo_delta >= 0 ? "+" : ""}${g.elo_delta}</span>` : "");
     const why = g.res && (g.res.raw || (g.res.w ? t(g.res.w) : ""));
     return `<div class="hist-row" data-id="${g.id}">
       <div class="who">${g.color ? `<span class="pdot ${g.color}"></span>` : ""}${badge}<span>${g.mode === "computer" ? t("hist_vs", { o: opp }) : opp}</span></div>
@@ -2332,7 +2378,7 @@ async function openArchived(id) {
     if (r.result && r.result.score && r.result.score !== "*") game.result = r.result;
     cfg.level = r.level || cfg.level;
     analysis = r.analysis ? { depth: r.analysis.depth, evals: r.analysis.evals, running: false, done: true } : null;
-    game.serverId = r.id; game.imported = false;
+    game.serverId = r.id; game.imported = false; game.rating = r.rating || null;
     flipped = r.color === "B"; buildBoard();
     save(); render();
     markPage("play");
@@ -2571,7 +2617,14 @@ async function renderHome() {
   const steps = lessons ? allSteps() : [];
   const stars = steps.reduce((n, x) => n + (prog[x.s.id] || 0), 0), maxStars = steps.length * 3;
   const nextStep = steps.find(x => !prog[x.s.id]);
-  const lvlBtns = [1, 2, 3, 4, 5, 6].map(l => `<button data-level="${l}"><b>${l}</b><span>${levelName(l)}</span></button>`).join("");
+  const lvlBtns = [1, 2, 3, 4, 5, 6].map(l => { const e = homeGame === "tsivy" ? levelElo(l) : null;
+    return `<button data-level="${l}"><b>${l}</b><span>${levelName(l)}${e ? "<br>" + e : ""}</span></button>`; }).join("");
+  const rt = profile && profile.rating, bal = rt ? nearestStrength(rt.elo) : null;
+  const eloCard = !strengthLadder().length ? "" : `<div class="card"><h2>${HOME_ICON.chart}${t("your_elo")}</h2>` + (profile
+    ? `<div class="row"><span class="big">${rt.elo}</span><span class="spacer"></span></div>
+       <p class="sub">${t("your_elo_sub", { n: rt.games, p: rt.peak })}</p>
+       ${bal ? `<div class="row"><button class="btn primary" id="hBalanced">${t("balanced")}</button><span class="sub">${t("balanced_sub", { e: bal.elo })}</span></div>` : ""}`
+    : `<p class="sub">${t("elo_need_profile")}</p><div class="row"><button class="btn" id="hMakeProfile">${t("create_profile")}</button></div>`) + `</div>`;
   el.innerHTML = `<div class="home-hero"><h1>${profile ? t("hello", { name: esc(profile.name) }) : t("hello_guest")}</h1><p>${t("home_sub")}</p></div>
   <div class="home-grid">
     ${resumable ? `<div class="card accent wide"><h2>${HOME_ICON.resume}${t("home_resume")}</h2>
@@ -2581,6 +2634,7 @@ async function renderHome() {
       <div class="chips" id="hGames">${["tsivy", "dimy", "telo"].map(g => `<button data-g="${g}" class="${g === homeGame ? "on" : ""}">${GAMES[g].name} ${GAMES[g].size}</button>`).join("")}</div>
       <div class="levels" id="hLevels">${lvlBtns}</div>
       <div class="row"><button class="link-btn" id="hOptions">${t("home_more_options")}</button></div></div>
+    ${eloCard}
     <div class="card"><h2>${HOME_ICON.puzzle}${t("nav_puzzles")}</h2><p class="sub">${t("home_puzzles_sub")}</p>
       <div class="row"><span class="big">${pz.rating}</span><span class="spacer"></span><span class="sub">${t("pz_streak")} <b>${pz.streak}</b> · ${t("pz_best")} <b>${pz.best}</b></span></div>
       <div class="row"><button class="btn primary" id="hPuzzles">${t("home_solve")}</button></div></div>
@@ -2596,7 +2650,9 @@ async function renderHome() {
   </div>`;
   if ($("hResume")) $("hResume").onclick = () => showPage("play");
   for (const b of $("hGames").children) b.onclick = () => { homeGame = b.dataset.g; renderHome(); };
-  for (const b of $("hLevels").children) b.onclick = () => quickStart({ mode: "computer", game: homeGame, level: +b.dataset.level });
+  for (const b of $("hLevels").children) b.onclick = () => quickStart({ mode: "computer", game: homeGame, level: +b.dataset.level, strength: null });
+  if ($("hBalanced")) $("hBalanced").onclick = () => quickStart({ mode: "computer", game: "tsivy", strength: bal.id, level: cfg.level });
+  if ($("hMakeProfile")) $("hMakeProfile").onclick = () => { editProfile(null); if (!$("profileDlg").open) $("profileDlg").showModal(); };
   $("hOptions").onclick = openDialog;
   $("hPuzzles").onclick = () => showPage("puzzles");
   $("hLearn").onclick = () => showPage("learn");
@@ -2709,8 +2765,24 @@ function openDialog() {
 function syncDialog() {
   for (const b of $("segMode").children) b.classList.toggle("on", b.dataset.v === draft.mode);
   $("segLevel").innerHTML = levels.map(l => `<button data-v="${l.id}" class="${l.id === draft.level ? "on" : ""}">${l.id}</button>`).join("");
-  for (const b of $("segLevel").children) b.onclick = () => { draft.level = +b.dataset.v; syncDialog(); };
-  $("lvlName").textContent = levelName(draft.level) + (levels.find(l => l.id === draft.level && !l.timed) ? t("level_no_time") : "");
+  if (draft.strength != null) for (const b of $("segLevel").children) b.classList.remove("on");
+  for (const b of $("segLevel").children) b.onclick = () => { draft.level = +b.dataset.v; draft.strength = null; syncDialog(); };
+  const le = levelElo(draft.level);
+  $("lvlName").textContent = draft.strength != null ? "" : levelName(draft.level) + (le ? " · " + t("elo_short", { e: le }) : "") +
+    (levels.find(l => l.id === draft.level && !l.timed) ? t("level_no_time") : "");
+  // Curseur de force par Elo (Fanoron-Tsivy : conditions de calibration).
+  const ladder = strengthLadder();
+  const showRange = draft.mode === "computer" && draft.game === "tsivy" && ladder.length > 1;
+  $("strengthRow").classList.toggle("hidden", !showRange);
+  if (showRange) {
+    const cur = draft.strength != null ? draft.strength : effectiveStrength({ ...draft, mode: "computer", strength: null });
+    let idx = ladder.findIndex(x => x.id === cur);
+    if (idx < 0) idx = ladder.indexOf(nearestStrength(le || 1200));
+    $("strengthRange").max = ladder.length - 1;
+    $("strengthRange").value = idx;
+    $("strengthVal").textContent = t("elo_short", { e: ladder[idx].elo });
+    $("strengthRange").oninput = e => { draft.strength = ladder[+e.target.value].id; syncDialog(); };
+  }
   $("fLevel").classList.toggle("hidden", draft.mode !== "computer");
   $("dClock").value = draft.clock; $("dMovetime").value = String(draft.movetime); $("dNet").value = draft.net; $("dVariant").value = draft.variant;
   $("colorRow").classList.toggle("hidden", draft.mode !== "computer");
@@ -2818,7 +2890,7 @@ $("soundToggle").onchange = e => { cfg.sound = e.target.checked; save(); if (cfg
 function save() {
   if (learn || puzzle) return;
   try {
-    localStorage.setItem("fanorona-gui-v3", JSON.stringify({ cfg, names: importedNames, theme, boardTheme, autoNight, flipped, moves: game.moves, result: game.result, clock, serverId: game.serverId || null, imported: !!game.imported,
+    localStorage.setItem("fanorona-gui-v3", JSON.stringify({ cfg, names: importedNames, theme, boardTheme, autoNight, flipped, moves: game.moves, result: game.result, clock, serverId: game.serverId || null, imported: !!game.imported, rating: game.rating || null,
       analysis: analysis && !analysis.running ? analysis : null }));
   } catch (e) { /* stockage indisponible */ }
 }
@@ -2838,6 +2910,7 @@ function load() {
     nets = c.nets || [];
     for (const n of nets) { const o = document.createElement("option"); o.value = n; o.textContent = "NNUE " + n; $("dNet").appendChild(o); }
     if (c.levels) levels = c.levels;
+    strengths = c.strengths || [];
     cfg.net = c.defaultNet || "";
   } catch (e) { flash(t("flash_server", { e: trErr(e.message) })); }
   const saved = load();
@@ -2868,7 +2941,7 @@ function load() {
 async function restoreOrStart(saved) {
   if (saved && Array.isArray(saved.moves) && saved.moves.length) {
     game.moves = saved.moves; game.result = saved.result || null; clock = saved.clock || null;
-    game.serverId = saved.serverId || null; game.imported = !!saved.imported;
+    game.serverId = saved.serverId || null; game.imported = !!saved.imported; game.rating = saved.rating || null;
     analysis = saved.analysis || null; flipped = !!saved.flipped;
     applyGeometry(); rebuildPositions(); viewPly = game.moves.length;
     buildBoard();

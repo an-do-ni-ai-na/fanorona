@@ -163,14 +163,42 @@ def parse_info(line):
 #              restent favoris, mais les erreurs sont possibles et d'autant plus graves que `temp` est grand ;
 #   "depth"  : recherche normale plafonnée en profondeur (et par le temps choisi) ;
 #   "full"   : recherche normale au temps choisi.
+# Échelle de force continue (index 0 = le plus faible). « full » avec movetime fixe : pleine force à ce temps par coup.
+# Chaque réglage a un Elo calibré par tournoi (tools/elo/calibrate.py -> tools/gui/elo.json, ancre Débutant = 800).
+STRENGTHS = [
+    {"mode": "sample", "depth": 1, "temp": 400},
+    {"mode": "sample", "depth": 1, "temp": 250},   # niveau 1
+    {"mode": "sample", "depth": 1, "temp": 150},
+    {"mode": "sample", "depth": 2, "temp": 120},   # niveau 2
+    {"mode": "sample", "depth": 2, "temp": 80},
+    {"mode": "sample", "depth": 3, "temp": 50},    # niveau 3
+    {"mode": "sample", "depth": 3, "temp": 25},
+    {"mode": "depth", "depth": 3},
+    {"mode": "depth", "depth": 4},                 # niveau 4
+    {"mode": "depth", "depth": 5},                 # niveau 5
+    {"mode": "depth", "depth": 6},
+    {"mode": "full", "movetime": 300},
+    {"mode": "full", "movetime": 1000},            # niveau 6 à 1 s
+]
 LEVELS = {
-    1: {"name": "Débutant", "mode": "sample", "depth": 1, "temp": 250},
-    2: {"name": "Facile", "mode": "sample", "depth": 2, "temp": 120},
-    3: {"name": "Intermédiaire", "mode": "sample", "depth": 3, "temp": 50},
-    4: {"name": "Confirmé", "mode": "depth", "depth": 4},
-    5: {"name": "Expert", "mode": "depth", "depth": 5},
-    6: {"name": "Maître", "mode": "full"},
+    1: {"name": "Débutant", **STRENGTHS[1], "strength": 1},
+    2: {"name": "Facile", **STRENGTHS[3], "strength": 3},
+    3: {"name": "Intermédiaire", **STRENGTHS[5], "strength": 5},
+    4: {"name": "Confirmé", **STRENGTHS[8], "strength": 8},
+    5: {"name": "Expert", **STRENGTHS[9], "strength": 9},
+    6: {"name": "Maître", "mode": "full", "strength": 12},  # pleine force au temps choisi
 }
+ELO_FILE = HERE / "elo.json"
+
+
+def strength_elos():
+    """Elo calibré de chaque réglage (liste alignée sur STRENGTHS), ou None si pas encore calibré."""
+    try:
+        d = json.loads(ELO_FILE.read_text())
+        r = d.get("ratings")
+        return r if isinstance(r, list) and len(r) == len(STRENGTHS) else None
+    except (OSError, ValueError):
+        return None
 MATE_CP = 10000
 
 
@@ -248,9 +276,17 @@ def sample_move(eng, req, legal, lv):
 
 def search(req):
     movetime = max(50, min(int(req.get("movetime", 1000)), MAX_MOVETIME))
-    level = LEVELS.get(int(req.get("level", 6)))
-    if level is None:
-        raise EngineError("niveau inconnu")
+    if req.get("strength") is not None:  # réglage précis de l'échelle (choix par Elo)
+        k = int(req["strength"])
+        if not 0 <= k < len(STRENGTHS):
+            raise EngineError("force inconnue")
+        level = STRENGTHS[k]
+        if level["mode"] == "full":
+            movetime = level["movetime"]
+    else:
+        level = LEVELS.get(int(req.get("level", 6)))
+        if level is None:
+            raise EngineError("niveau inconnu")
     opts = net_options(req)
 
     legal = get_state(req)["legal"] if level["mode"] == "sample" else None
@@ -355,6 +391,9 @@ def init_db():
         if "profile_id" not in cols:  # migration : les parties d'avant les profils restent « invité » (NULL)
             con.execute("ALTER TABLE games ADD COLUMN profile_id INTEGER")
         con.execute("CREATE INDEX IF NOT EXISTS games_profile ON games(profile_id, created DESC)")
+        pcols = [r["name"] for r in con.execute("PRAGMA table_info(profiles)")]
+        if "rating" not in pcols:  # Elo du joueur contre l'ordinateur (JSON : elo, games, peak)
+            con.execute("ALTER TABLE profiles ADD COLUMN rating TEXT NOT NULL DEFAULT '{}'")
 
 
 def clean_record(rec):
@@ -380,6 +419,7 @@ def clean_record(rec):
         "mode": mode, "level": int(rec.get("level") or 0) or None, "color": rec.get("color") if rec.get("color") in ("W", "B") else None,
         "clock": txt(rec.get("clock"), 10), "net": txt(rec.get("net"), 40), "variant": txt(rec.get("variant"), 12),
         "white": txt(rec.get("white")), "black": txt(rec.get("black")), "date": txt(rec.get("date"), 30),
+        "strength": int(rec["strength"]) if isinstance(rec.get("strength"), int) and 0 <= rec["strength"] < len(STRENGTHS) else None,
     }
     ana = rec.get("analysis")
     if isinstance(ana, dict) and isinstance(ana.get("evals"), list) and len(ana["evals"]) <= MAX_PLIES + 1:
@@ -403,12 +443,40 @@ def save_game(rec):
     with db() as con:
         if pid is not None and not con.execute("SELECT 1 FROM profiles WHERE id = ?", (pid,)).fetchone():
             pid = None
+        rated = rate_game(con, pid, r)
+        if rated:
+            r["rating"] = rated
         cur = con.execute(
             "INSERT INTO games (created, game, mode, level, color, result, outcome, plies, white, black, analysed, record,"
             " profile_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (time.time(), r["game"], r["mode"], r["level"], r["color"], r["result"].get("score", "*"), outcome_of(r),
              len(r["moves"]), r["white"], r["black"], int("analysis" in r), json.dumps(r, ensure_ascii=False), pid))
-        return {"id": cur.lastrowid}
+        return {"id": cur.lastrowid, "rating": rated}
+
+
+RATING_START = 1000
+
+
+def rate_game(con, pid, r):
+    """Elo du joueur après une partie classée : profil, contre l'ordinateur, Fanoron-Tsivy sans vela ni position
+    de départ imposée, réglage calibré. E = 1 / (1 + 10^((moteur - joueur) / 400)) ; K = 40 pour les 20 premières
+    parties, puis 24. Renvoie {before, after, delta, engine_elo} ou None (partie non classée)."""
+    outcome = outcome_of(r)
+    elos = strength_elos()
+    if pid is None or outcome is None or r["game"] != "tsivy" or r["vela"] or r["fen"] or r["strength"] is None or not elos:
+        return None
+    row = con.execute("SELECT rating FROM profiles WHERE id = ?", (pid,)).fetchone()
+    st = {"elo": RATING_START, "games": 0, "peak": RATING_START, **json.loads(row["rating"] or "{}")}
+    eng = elos[r["strength"]]
+    e = 1 / (1 + 10 ** ((eng - st["elo"]) / 400))
+    k = 40 if st["games"] < 20 else 24
+    delta = round(k * ({"win": 1, "draw": 0.5, "loss": 0}[outcome] - e))
+    before = st["elo"]
+    st["elo"] = max(100, before + delta)
+    st["games"] += 1
+    st["peak"] = max(st["peak"], st["elo"])
+    con.execute("UPDATE profiles SET rating = ? WHERE id = ?", (json.dumps(st), pid))
+    return {"before": before, "after": st["elo"], "delta": st["elo"] - before, "engine_elo": eng}
 
 
 def update_analysis(gid, ana):
@@ -444,7 +512,8 @@ def list_games(q):
     limit = max(1, min(int(q.get("limit", ["30"])[0]), 200))
     offset = max(0, int(q.get("offset", ["0"])[0]))
     sql = ("SELECT id, created, game, mode, level, color, result, outcome, plies, white, black, analysed,"
-           " json_extract(record, '$.result') AS res, json_extract(record, '$.vela') AS vela FROM games"
+           " json_extract(record, '$.result') AS res, json_extract(record, '$.vela') AS vela,"
+           " json_extract(record, '$.rating.delta') AS elo_delta, json_extract(record, '$.rating.engine_elo') AS engine_elo FROM games"
            + (" WHERE " + " AND ".join(where) if where else "") + " ORDER BY created DESC LIMIT ? OFFSET ?")
     with db() as con:
         rows = [dict(r) for r in con.execute(sql, params + [limit + 1, offset])]
@@ -495,7 +564,8 @@ def profile_row(con, pid):
         raise EngineError("profil introuvable")
     games = con.execute("SELECT COUNT(*) FROM games WHERE profile_id = ?", (pid,)).fetchone()[0]
     return {"id": row["id"], "name": row["name"], "color": row["color"], "created": row["created"], "games": games,
-            "puzzle": {**PUZZLE_DEFAULT, **json.loads(row["puzzle"])}, "learn": json.loads(row["learn"])}
+            "puzzle": {**PUZZLE_DEFAULT, **json.loads(row["puzzle"])}, "learn": json.loads(row["learn"]),
+            "rating": {"elo": RATING_START, "games": 0, "peak": RATING_START, **json.loads(row["rating"] or "{}")}}
 
 
 def clean_profile(req, partial=False):
@@ -517,7 +587,8 @@ def list_profiles():
         out = []
         for i in ids:
             p = profile_row(con, i)
-            out.append({k: p[k] for k in ("id", "name", "color", "games")} | {"rating": p["puzzle"]["rating"]})
+            out.append({k: p[k] for k in ("id", "name", "color", "games")} | {"rating": p["puzzle"]["rating"],
+                                                                             "elo": p["rating"]["elo"], "rated": p["rating"]["games"]})
     return {"profiles": out}
 
 
@@ -792,8 +863,11 @@ class Handler(BaseHTTPRequestHandler):
             nets = list(available_nets())
             default = "net_v3" if "net_v3" in nets else (nets[-1] if nets else None)
             self.send_json(200, {"nets": nets, "defaultNet": default, "maxMovetime": MAX_MOVETIME,
-                                 "levels": [{"id": k, "name": v["name"], "timed": v["mode"] != "sample"}
-                                            for k, v in LEVELS.items()]})
+                                 "levels": [{"id": k, "name": v["name"], "timed": v["mode"] != "sample",
+                                             "strength": v["strength"]} for k, v in LEVELS.items()],
+                                 "strengths": [{"id": i, "elo": (strength_elos() or [None] * len(STRENGTHS))[i],
+                                                "mode": v["mode"], "movetime": v.get("movetime")}
+                                               for i, v in enumerate(STRENGTHS)]})
         else:
             self.send_json(404, {"error": "introuvable"})
 

@@ -318,7 +318,19 @@
     "cont_toggle": "Activer l'analyse en continu",
     "install_app": "Installer l'application",
     "install_ios": "Sur iPhone ou iPad : bouton Partager, puis « Sur l'écran d'accueil ».",
-    "offline": "Hors ligne : le serveur est injoignable."
+    "offline": "Hors ligne : le serveur est injoignable.",
+    "elo_short": "{e} Elo",
+    "strength_label": "Force précise (Elo)",
+    "strength_hint": "Glissez pour choisir la force exacte du moteur ; les niveaux ci-dessus sont des préréglages.",
+    "your_elo": "Votre Elo",
+    "your_elo_sub": "{n} partie(s) classée(s) contre l'ordinateur · record {p}",
+    "elo_need_profile": "Créez un profil pour obtenir votre Elo contre l'ordinateur.",
+    "create_profile": "Créer un profil",
+    "balanced": "Partie équilibrée",
+    "balanced_sub": "Moteur au plus près de votre Elo : {e}",
+    "elo_change": "Elo {a} → {b} ({d})",
+    "elo_unrated": "Partie non classée",
+    "elo_uncalibrated": "Force du moteur pas encore calibrée."
   },
   "mg": {
     "lang_name": "Malagasy",
@@ -638,6 +650,18 @@
     "cont_toggle": "Alefaso ny famakafakana mitohy",
     "install_app": "Hametraka ny rindranasa",
     "install_ios": "Amin'ny iPhone na iPad : tsindrio ny bokotra Zarao, avy eo « Sur l'écran d'accueil ».",
-    "offline": "Tsy misy fifandraisana : tsy tratra ny mpizara."
+    "offline": "Tsy misy fifandraisana : tsy tratra ny mpizara.",
+    "elo_short": "Elo {e}",
+    "strength_label": "Hery marina (Elo)",
+    "strength_hint": "Sariho mba hisafidianana ny tena herin'ny motera ; fanomanana mialoha ireo ambaratonga etsy ambony.",
+    "your_elo": "Ny Elo-nao",
+    "your_elo_sub": "Lalao {n} voaisa tamin'ny solosaina · ambony indrindra {p}",
+    "elo_need_profile": "Mamorona mombamomba mba hahazoana Elo amin'ny solosaina.",
+    "create_profile": "Hamorona mombamomba",
+    "balanced": "Lalao mifandanja",
+    "balanced_sub": "Motera akaiky indrindra ny Elo-nao : {e}",
+    "elo_change": "Elo {a} → {b} ({d})",
+    "elo_unrated": "Lalao tsy voaisa",
+    "elo_uncalibrated": "Mbola tsy voarefy ny herin'ny motera."
   }
 }

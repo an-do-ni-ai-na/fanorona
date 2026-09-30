@@ -45,6 +45,9 @@ lui-même ; reprise de coup, indice, abandon, revanche. En fin de partie, « Ana
 ≥ 0,1 / 0,2 / 0,3 comme sur lichess), perte moyenne en centipions, meilleur coup affiché sur le plateau.
 « Apprendre de ses erreurs » rejoue ensuite chaque erreur ou gaffe du joueur : il faut trouver un coup
 aussi bon que celui du moteur (moins de 0,1 de chances de gain perdues), avec la solution à la demande.
+Elo : la force du moteur est calibrée (13 réglages, `tools/gui/elo.json`) ; les niveaux affichent leur Elo, un
+curseur choisit une force précise, et chaque profil a un Elo mis à jour après chaque partie classée (Fanoron-Tsivy
+contre l'ordinateur, sans vela, niveau calibré) ; « Partie équilibrée » propose le réglage le plus proche.
 Application installable (PWA) : manifeste, service worker (coquille en cache, réseau d abord) et icônes dans
 `tools/gui/pwa/` ; menu du profil > « Installer l application » (Android/Chrome/Edge), ou Partager > « Sur l écran
 d accueil » sur iPhone. Le site doit être servi en HTTPS (c est le cas via nginx-proxy).
@@ -228,4 +231,25 @@ Il n'existe pas de format standard pour noter une partie complète de Fanorona. 
 - Optionnel : annotations `?!`, `?`, `??` et évaluations `{ +1.2 }` (point de vue des Blancs, en pions).
 - À l'import, les tirets, numéros, commentaires `{…}`, variantes `(…)` et annotations sont ignorés ; une simple
   liste de coups (`d3e3A c3d3W`) est acceptée. Chaque coup est vérifié par le moteur.
+
+## Elo du moteur
+
+```sh
+python3 tools/elo/calibrate.py --games 40 --gap2 24 --workers 5    # ~25 min sur fanorona-dev -> tools/gui/elo.json
+```
+
+L'échelle `STRENGTHS` de `tools/gui/server.py` va du tirage au sort pondéré après une recherche de profondeur 1
+à la pleine force à 1 s par coup (NNUE net_v3). Tournoi entre réglages voisins et à deux crans, en réutilisant le
+code de jeu du serveur (2 demi-coups d'ouverture au hasard, couleurs alternées), puis classements Bradley-Terry
+(nulle = demi-point, une nulle virtuelle par paire), ancre : Débutant = 800. Calibration du 2026-09-30 (744 parties) :
+
+| Niveau | 1 Débutant | 2 Facile | 3 Intermédiaire | 4 Confirmé | 5 Expert | 6 Maître (1 s) |
+|---|---|---|---|---|---|---|
+| Elo | 800 | 1371 | 1719 | 1908 | 2376 | 2787 |
+
+L'échelle n'est pas un Elo « officiel » (aucune population de joueurs classés de référence) : elle est interne et
+ne vaut que dans ces conditions (Fanoron-Tsivy, net_v3, 1 s/coup, cette machine). Environ ±100 Elo d'incertitude
+par écart entre réglages voisins (40 parties). Deux inversions mesurées (profondeur 4 < profondeur 3, 300 ms <
+profondeur 6) : le curseur de l'interface n'utilise que les réglages d'Elo strictement croissant. Elo du joueur :
+E = 1/(1+10^((moteur − joueur)/400)), K = 40 pour les 20 premières parties classées puis 24, départ à 1000.
 
