@@ -11,7 +11,7 @@ fanorona-dev, i7-6700T, 1 thread), justesse par `make test`, `perft` et `tools/n
 
 ## 2026-10-01
 
-### Règles — validation par une implémentation indépendante · `{COMMIT}`
+### Règles — validation par une implémentation indépendante · `4e0c9ab`
 - `tools/rules/reference.py` (générateur naïf, d'après les règles) contre le moteur : 60 000 positions
   (Tsivy et Dimy, arrêt libre et continuation obligatoire), ~454 000 coups notés identiques ; perft 1..5
   identiques (Tsivy 431 830, Dimy 34 608). Aucune divergence.
