@@ -11,7 +11,7 @@ fanorona-dev, i7-6700T, 1 thread), justesse par `make test`, `perft` et `tools/n
 
 ## 2026-10-01
 
-### Outils — matchs en parallèle · `{COMMIT}`
+### Outils — matchs en parallèle · `7ad28b3`
 - `tools/match.py --concurrency N` : N paires de moteurs simultanées, SPRT mis à jour à chaque partie.
   12 parties : 47 s -> 22 s (N = 4). Exemple : NNUE (net_v3, accéléré) contre HCE, 30 ms/coup, bornes −30/+30 :
   H1 en 55 parties et 22 s (contre 90 parties lors du premier test NNUE, réseau 4× plus lent à l'époque).
