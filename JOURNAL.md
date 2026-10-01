@@ -11,7 +11,7 @@ fanorona-dev, i7-6700T, 1 thread), justesse par `make test`, `perft` et `tools/n
 
 ## 2026-10-01
 
-### Moteur — recherche : LMP + futilité des coups calmes · `{COMMIT}`
+### Moteur — recherche : LMP + futilité des coups calmes · `c0d27cf`
 - Positions sans capture (que des paika), profondeur <= 3, hors ligne principale : les derniers coups ne sont pas
   examinés (LMP) et les coups calmes sans espoir de remonter alpha sont sautés (futilité).
 - SPRT (net_v3, 100 ms, bornes 0/+5, 3 machines) : H1 en 5362 parties, W1883 D1772 L1707 (51,6 %, ≈ +11 Elo).
