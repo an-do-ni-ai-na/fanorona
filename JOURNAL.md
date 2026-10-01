@@ -11,6 +11,12 @@ fanorona-dev, i7-6700T, 1 thread), justesse par `make test`, `perft` et `tools/n
 
 ## 2026-10-01
 
+### Règles — validation par une implémentation indépendante · `{COMMIT}`
+- `tools/rules/reference.py` (générateur naïf, d'après les règles) contre le moteur : 60 000 positions
+  (Tsivy et Dimy, arrêt libre et continuation obligatoire), ~454 000 coups notés identiques ; perft 1..5
+  identiques (Tsivy 431 830, Dimy 34 608). Aucune divergence.
+- Retour au point de départ pendant une chaîne : interdit (confirmé par l'exemple officiel de l'ICGA).
+
 ### Moteur — accélération NNUE ×4 · `278f080`
 - 420 000 → ~1 700 000 nœuds/s au `bench 8` NNUE, **même signature** (1 121 922 nœuds : recherche identique).
 - Cause réelle : absence de vectorisation (poids W1 lus par sauts de 90 flottants ; couche de sortie en

@@ -60,6 +60,7 @@ g++ -g -O0 -std=c++17 -Isrc -fsanitize=address,undefined src/{bitboard,position,
 | `tests/test_main.cpp` | tests des règles, perft, symétrie, clés, recherche |
 | `tools/match.py` | matchs entre deux binaires : parties fixes ou arrêt SPRT (`--sprt`), suivi live optionnel |
 | `tools/sprt.py` | test séquentiel SPRT (LLR gaussien sur le score moyen, cf. fishtest/cutechess-cli) |
+| `tools/rules/reference.py`, `crosscheck.py` | générateur de coups de référence indépendant ; confrontation exhaustive avec le moteur |
 | `tools/gui/server.py` | interface web : sert `index.html` + API JSON (`/api/state`, `/api/go`, `/api/eval` pour l'analyse), un processus moteur par requête ; niveaux de difficulté `LEVELS` (affaiblissement externe, le moteur n'a pas d'option de force) ; historique des parties `/api/games` (SQLite `data/gui_games.db`, hors git, non sauvegardé ailleurs que par la sauvegarde de la VM) |
 | `tools/gui/index.html` | page unique façon lichess : plateau SVG (clic/glisser), pendules, coups navigables, analyse d'après-partie. `positions[k]` est rejoué localement avec des identifiants de pièces stables (animations) ; la logique de capture JS ne sert qu'à l'affichage, le moteur valide |
 | `tools/gui/CHARTE.md` | charte graphique (typographie, palettes des 3 thèmes, plateaux bois/granite) : tout passe par les variables CSS de `:root` |
@@ -104,7 +105,7 @@ g++ -g -O0 -std=c++17 -Isrc -fsanitize=address,undefined src/{bitboard,position,
 - Fanoron-Telo (3×3) : 1 → 9, 2 → 72, 3 → 504, 4 → 3024, 5 → 15120 ; valeur exacte du départ : gain des Blancs en 9.
 - `bench` : signature inchangée par l'ajout des variantes (876243 nœuds, profondeur 8) — la géométrie
   paramétrable ne doit rien changer au 9×5.
-  (Seule la profondeur 1 est vérifiée à la main ; pas de référence publiée confrontée.)
+  (Confrontées à la référence indépendante `tools/rules/reference.py` jusqu'à la profondeur 5 : identiques.)
 - Toute modification du générateur doit garder ces valeurs, sauf changement de règle volontaire.
 - Toute modification de la recherche ou de l'évaluation change la signature `bench` : c'est normal, mais la
   valider par un match (`tools/match.py`) contre l'ancien binaire.
@@ -140,7 +141,13 @@ g++ -g -O0 -std=c++17 -Isrc -fsanitize=address,undefined src/{bitboard,position,
 
 ## Feuille de route (par priorité)
 
-1. **Validation des règles** contre une source de référence (perft publié ou autre implémentation) si disponible.
+1. ~~**Validation des règles**~~ **fait** (2026-10-01) : `tools/rules/reference.py`, générateur de coups indépendant et
+   naïf (coordonnées, ensembles Python, aucun bitboard), écrit d'après les règles ; `tools/rules/crosscheck.py` compare
+   la liste EXACTE des coups notés du moteur (`moves`) à la référence : 60 000 positions (auto-jeu et parties
+   aléatoires, Tsivy et Dimy, arrêt libre et continuation obligatoire), ~454 000 coups, et perft 1..5 — aucune
+   divergence. Point de règle tranché par l'ICGA : revenir sur son point de DÉPART pendant une chaîne est interdit
+   (exemple officiel « f4-e4W-e3A-f4A » refusé), comme le moteur l'applique. À relancer après toute modification du
+   générateur : `python3 tools/rules/crosscheck.py --positions 3000 --perft 4` (~12 s).
 2. ~~**Tests SPRT**~~ **fait** (2026-09-27) : `tools/match.py --sprt` (LLR gaussien, `tools/sprt.py`), ouvertures
    aléatoires déjà existantes, suivi live JSONL. Parallélisme (plusieurs parties en simultané) pas encore fait.
 3. **Texel tuning** : générer des positions d'auto-jeu avec résultats, optimiser les poids de `evaluate.cpp`.
