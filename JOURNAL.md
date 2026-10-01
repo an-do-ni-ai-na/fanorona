@@ -11,7 +11,7 @@ fanorona-dev, i7-6700T, 1 thread), justesse par `make test`, `perft` et `tools/n
 
 ## 2026-10-02
 
-### NNUE — 4ᵉ cycle de renforcement et réseau 512 : non retenus · `{COMMIT}`
+### NNUE — 4ᵉ cycle de renforcement et réseau 512 : non retenus · `596df65`
 - Données `gensfen_gen4` : 12M positions, `net_v3` comme professeur (profondeur 6), 13 processus sur les
   3 machines, ~18 min (contre 1 h 40 pour les 7,7M de gen3, réseau 4× plus lent à l'époque).
 - Entraînement sur gen3 + gen4 (19,7M positions), 15 epochs : 256 neurones en 17 min (val_loss 0,01259),
