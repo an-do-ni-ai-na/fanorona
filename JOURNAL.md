@@ -11,7 +11,7 @@ fanorona-dev, i7-6700T, 1 thread), justesse par `make test`, `perft` et `tools/n
 
 ## 2026-10-01
 
-### Elo — correction de l'ajustement et recalibration · `{COMMIT}`
+### Elo — correction de l'ajustement et recalibration · `af6ef17`
 - **Bug** : l'ajustement Bradley-Terry de `tools/elo/calibrate.py` (montée de gradient à pas fixe) ne convergeait
   pas : log-vraisemblance −502 contre −380 pour l'algorithme MM de Hunter sur les mêmes parties, écarts du haut de
   l'échelle gonflés de plusieurs centaines d'Elo. Les « non-transitivités » invoquées lors des deux calibrations
