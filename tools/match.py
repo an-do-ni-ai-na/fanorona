@@ -11,6 +11,11 @@ NNUE contre HCE (même binaire, NNUE est une option UCI à l'exécution) :
     python3 tools/match.py ./fanorona ./fanorona --sprt --elo0 0 --elo1 10 --movetime 100 \
         --engine1-opts "UseNNUE=true,EvalFile=checkpoints/net_v1.nnue"
 
+Parties en parallèle (--concurrency N) : N paires de moteurs jouent simultanément, chaque fil prenant la paire de
+parties suivante ; les ouvertures dépendent seulement de la graine et du numéro de paire (pas du parallélisme).
+Garder N <= nombre de cœurs - 1 : avec un temps fixe par coup, des moteurs qui se disputent un cœur jouent plus
+faiblement (des deux côtés, donc sans biais, mais le test mesure alors une autre cadence).
+
 Les parties démarrent depuis des ouvertures aléatoires (quelques coups au hasard, jouées par
 paires pour que chaque moteur ait les deux couleurs). Les lignes UCI "info" de chaque moteur
 sont journalisées en JSONL (/var/log/fanorona/<run_id>.jsonl par défaut) pour suivi live via
@@ -19,6 +24,7 @@ Grafana/Loki ; désactivable avec --no-live-log si le répertoire n'est pas acce
 import argparse
 import random
 import subprocess
+import threading
 
 from metrics_logger import MetricsLogger, new_run_id
 from sprt import Sprt
@@ -110,72 +116,115 @@ def game_result_for_engine1(res, e1_white):
     return "win" if (res == "white wins") == e1_white else "loss"
 
 
-def run_fixed_games(e1, e2, ref, args, rng, metrics):
-    score = {"w": 0, "l": 0, "d": 0}
-    for g in range(args.games):
-        opening = random_opening(ref, args.opening_plies, rng)
-        for swap in (False, True):
-            game_id = 2 * g + swap
-            engines = [e2, e1] if swap else [e1, e2]
-            for e in (e1, e2):
-                e.send("ucinewgame")
-            res = play_game(engines, opening, args.movetime, ref, game_id)
-            e1_white = not swap
-            result = game_result_for_engine1(res, e1_white)
-            score[{"win": "w", "draw": "d", "loss": "l"}[result]] += 1
-            metrics.log("game_result", game=game_id, raw_result=res, engine1_result=result)
-            print(f"partie {game_id + 1}: {res}  | engine1 +{score['w']} ={score['d']} -{score['l']}", flush=True)
-    n = sum(score.values())
-    print(f"Score engine1 : {(score['w'] + score['d'] / 2) / n * 100:.1f}% sur {n} parties")
+class LockedMetrics:
+    """Journal partagé entre fils : une écriture à la fois."""
+
+    def __init__(self, metrics):
+        self.m, self.lock = metrics, threading.Lock()
+        self.enabled, self.run_id = metrics.enabled, metrics.run_id
+
+    def log(self, *a, **k):
+        with self.lock:
+            self.m.log(*a, **k)
+
+    def log_info_line(self, *a, **k):
+        with self.lock:
+            self.m.log_info_line(*a, **k)
+
+    def close(self):
+        self.m.close()
 
 
-def run_sprt(e1, e2, ref, args, rng, metrics):
-    sprt = Sprt(args.elo0, args.elo1, args.alpha, args.beta)
-    print(
-        f"SPRT elo0={args.elo0} elo1={args.elo1} alpha={args.alpha} beta={args.beta} "
-        f"bornes LLR=[{sprt.lower:.3f}, {sprt.upper:.3f}]"
-    )
-    g = 0
-    while args.max_games is None or sprt.n < args.max_games:
-        opening = random_opening(ref, args.opening_plies, rng)
-        for swap in (False, True):
-            game_id = 2 * g + swap
-            engines = [e2, e1] if swap else [e1, e2]
-            for e in (e1, e2):
-                e.send("ucinewgame")
-            res = play_game(engines, opening, args.movetime, ref, game_id)
-            e1_white = not swap
-            result = game_result_for_engine1(res, e1_white)
+def run(args, metrics):
+    """Parties fixes (args.games paires) ou SPRT, avec args.concurrency paires de moteurs en parallèle."""
+    sprt = Sprt(args.elo0, args.elo1, args.alpha, args.beta) if args.sprt else None
+    if sprt:
+        print(f"SPRT elo0={args.elo0} elo1={args.elo1} alpha={args.alpha} beta={args.beta} "
+              f"bornes LLR=[{sprt.lower:.3f}, {sprt.upper:.3f}]")
+    print(f"{args.concurrency} partie(s) en parallèle", flush=True)
+    lock = threading.Lock()
+    state = {"next": 0, "stop": False, "w": 0, "d": 0, "l": 0, "done": None, "error": None}
+
+    def take_pair():
+        with lock:
+            if state["stop"]:
+                return None
+            g = state["next"]
+            if not sprt and g >= args.games:
+                return None
+            if sprt and args.max_games is not None and 2 * g >= args.max_games:
+                return None
+            state["next"] += 1
+            return g
+
+    def record(game_id, res, e1_white):
+        result = game_result_for_engine1(res, e1_white)
+        with lock:
+            if state["stop"]:
+                return
+            state[{"win": "w", "draw": "d", "loss": "l"}[result]] += 1
+            n = state["w"] + state["d"] + state["l"]
+            if not sprt:
+                metrics.log("game_result", game=game_id, raw_result=res, engine1_result=result)
+                print(f"partie {n} (#{game_id + 1}): {res}  | engine1 +{state['w']} ={state['d']} -{state['l']}", flush=True)
+                return
             sprt.add_result(result)
-            xbar, var, n = sprt.stats()
+            xbar, var, _ = sprt.stats()
             llr = sprt.llr()
-            metrics.log(
-                "sprt_update",
-                game=game_id,
-                raw_result=res,
-                engine1_result=result,
-                wins=sprt.wins,
-                draws=sprt.draws,
-                losses=sprt.losses,
-                llr=llr,
-                lower=sprt.lower,
-                upper=sprt.upper,
-                mean_score=xbar,
-            )
-            print(
-                f"partie {game_id + 1}: {res}  | W{sprt.wins} D{sprt.draws} L{sprt.losses}  "
-                f"LLR {llr:+.3f} (bornes [{sprt.lower:.3f}, {sprt.upper:.3f}])",
-                flush=True,
-            )
+            metrics.log("sprt_update", game=game_id, raw_result=res, engine1_result=result, wins=sprt.wins,
+                        draws=sprt.draws, losses=sprt.losses, llr=llr, lower=sprt.lower, upper=sprt.upper,
+                        mean_score=xbar)
+            print(f"partie {sprt.n}: {res}  | W{sprt.wins} D{sprt.draws} L{sprt.losses}  "
+                  f"LLR {llr:+.3f} (bornes [{sprt.lower:.3f}, {sprt.upper:.3f}])", flush=True)
             decision = sprt.decision()
             if decision is not None:
-                verdict = "H1 acceptée (Elo >= elo1)" if decision == "h1" else "H0 acceptée (Elo <= elo0, rejeté)"
-                print(f"\nSPRT terminé : {verdict} après {sprt.n} parties (LLR={llr:+.3f})")
-                metrics.log("sprt_done", decision=decision, games=sprt.n, llr=llr)
-                return
-        g += 1
-    print(f"\nSPRT arrêté (max_games={args.max_games} atteint) sans conclusion tranchée.")
-    metrics.log("sprt_done", decision="inconclusive", games=sprt.n, llr=sprt.llr())
+                state["stop"], state["done"] = True, (decision, sprt.n, llr)
+
+    def worker():
+        e1 = e2 = ref = None
+        try:
+            e1 = Engine(args.engine1, "engine1", metrics, options=parse_opts(args.engine1_opts))
+            e2 = Engine(args.engine2, "engine2", metrics, options=parse_opts(args.engine2_opts))
+            ref = Engine(args.engine1, "referee", metrics)
+            while (g := take_pair()) is not None:
+                opening = random_opening(ref, args.opening_plies, random.Random(args.seed * 1_000_003 + g))
+                for swap in (False, True):
+                    if state["stop"]:
+                        return
+                    for e in (e1, e2):
+                        e.send("ucinewgame")
+                    engines = [e2, e1] if swap else [e1, e2]
+                    res = play_game(engines, opening, args.movetime, ref, 2 * g + swap)
+                    record(2 * g + swap, res, not swap)
+        except Exception as e:  # un moteur qui meurt arrête tout le match
+            with lock:
+                state["stop"], state["error"] = True, e
+        finally:
+            for e in (e1, e2, ref):
+                if e:
+                    try:
+                        e.close()
+                    except Exception:
+                        pass
+
+    threads = [threading.Thread(target=worker) for _ in range(args.concurrency)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    if state["error"]:
+        raise state["error"]
+    if not sprt:
+        n = state["w"] + state["d"] + state["l"]
+        print(f"Score engine1 : {(state['w'] + state['d'] / 2) / n * 100:.1f}% sur {n} parties")
+    elif state["done"]:
+        decision, n, llr = state["done"]
+        verdict = "H1 acceptée (Elo >= elo1)" if decision == "h1" else "H0 acceptée (Elo <= elo0, rejeté)"
+        print(f"\nSPRT terminé : {verdict} après {n} parties (LLR={llr:+.3f})")
+        metrics.log("sprt_done", decision=decision, games=n, llr=llr)
+    else:
+        print(f"\nSPRT arrêté (max_games={args.max_games} atteint) sans conclusion tranchée.")
+        metrics.log("sprt_done", decision="inconclusive", games=sprt.n, llr=sprt.llr())
 
 
 def main():
@@ -196,6 +245,7 @@ def main():
     ap.add_argument("--run-id", default=None, help="identifiant de run pour le suivi live (auto par défaut)")
     ap.add_argument("--engine1-opts", default=None, help="options UCI engine1, ex. UseNNUE=true,EvalFile=net.nnue")
     ap.add_argument("--engine2-opts", default=None, help="options UCI engine2, même format")
+    ap.add_argument("--concurrency", type=int, default=1, help="paires de moteurs jouant en parallèle")
     args = ap.parse_args()
 
     run_type = "sprt" if args.sprt else "match"
@@ -208,18 +258,10 @@ def main():
     if metrics.enabled:
         print(f"suivi live : run_id={metrics.run_id}")
 
-    rng = random.Random(args.seed)
-    e1 = Engine(args.engine1, "engine1", metrics, options=parse_opts(args.engine1_opts))
-    e2 = Engine(args.engine2, "engine2", metrics, options=parse_opts(args.engine2_opts))
-    ref = Engine(args.engine1, "referee", metrics)
+    metrics = LockedMetrics(metrics)
     try:
-        if args.sprt:
-            run_sprt(e1, e2, ref, args, rng, metrics)
-        else:
-            run_fixed_games(e1, e2, ref, args, rng, metrics)
+        run(args, metrics)
     finally:
-        for e in (e1, e2, ref):
-            e.close()
         metrics.close()
 
 

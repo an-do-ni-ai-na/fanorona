@@ -12,7 +12,7 @@ make bench        # ./fanorona bench -> "Nodes searched" et NPS
 ./fanorona perft 5                       # doit donner 431830
 ./fanorona "position startpos" ...        # un argument = une commande, puis sortie
 python3 tools/match.py ./fanorona ./fanorona-old --games 20 --movetime 100   # auto-jeu, parties fixes
-python3 tools/match.py ./fanorona ./fanorona-old --sprt --elo0 0 --elo1 5 --movetime 100  # auto-jeu, arrêt SPRT
+python3 tools/match.py ./fanorona ./fanorona-old --sprt --elo0 0 --elo1 5 --movetime 100 --concurrency 5  # SPRT
 ./fanorona gensfen count 1000000 depth 6 opening-plies 8 out data/gensfen.txt   # données NNUE (auto-jeu)
 python3 tools/nnue/train.py data/gensfen.txt --epochs 20 --out checkpoints/net.pt   # entraînement NNUE (PyTorch, CPU)
 python3 tools/nnue/verify.py checkpoints/net.nnue --samples data/gensfen.txt --n 300   # C++ == référence numpy ?
@@ -149,7 +149,9 @@ g++ -g -O0 -std=c++17 -Isrc -fsanitize=address,undefined src/{bitboard,position,
    (exemple officiel « f4-e4W-e3A-f4A » refusé), comme le moteur l'applique. À relancer après toute modification du
    générateur : `python3 tools/rules/crosscheck.py --positions 3000 --perft 4` (~12 s).
 2. ~~**Tests SPRT**~~ **fait** (2026-09-27) : `tools/match.py --sprt` (LLR gaussien, `tools/sprt.py`), ouvertures
-   aléatoires déjà existantes, suivi live JSONL. Parallélisme (plusieurs parties en simultané) pas encore fait.
+   aléatoires déjà existantes, suivi live JSONL. Parallélisme **fait** (2026-10-01) :
+   `--concurrency N` (N paires de moteurs, ouvertures fonction de la graine et du numéro de paire seulement) ;
+   utiliser N = 5 sur fanorona-dev (6 vCPU).
 3. **Texel tuning** : générer des positions d'auto-jeu avec résultats, optimiser les poids de `evaluate.cpp`.
 4. **NNUE** — en cours (2026-09-27) :
    - ~~générateur de données~~ **fait** : `./fanorona gensfen` (auto-jeu, `depth`/`opening-plies`/`count`/`out`),
