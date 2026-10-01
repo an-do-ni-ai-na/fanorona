@@ -80,6 +80,9 @@ En-tête collant : marque, onglets (l'actif est souligné par l'accent), puce de
 thème, plateau, langue, veille, sons). Sur mobile (< 800 px), les onglets passent dans une barre fixe en bas,
 avec icônes. Pages : Accueil (cartes), Jouer (plateau en 3 colonnes), Puzzles et Apprendre (plateau + panneau à
 gauche, sous le plateau sur mobile), Parties (historique). Le joueur au trait est surligné (fond accent léger).
+Téléphone en paysage (hauteur ≤ 520 px, PWA ou navigateur) : sur les pages à plateau, en-tête et barre d onglets
+masqués, plateau sur toute la hauteur, colonne étroite à droite (pendules, joueurs, coups, contrôles en icônes, ou
+la consigne en puzzles / tutoriel / révision) ; le portrait rend la navigation.
 Texte secondaire `--muted` relevé (contraste ≥ 4,5:1 sur Papier), corps de texte 15 px, boutons ≥ 40 px de haut.
 
 ## Formes et espacements

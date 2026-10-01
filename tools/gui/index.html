@@ -519,6 +519,44 @@ dialog::backdrop { background: rgba(10, 8, 6, .55); backdrop-filter: blur(2px); 
   body.learning .moves-box, body.puzzle .moves-box { display: none; }
 }
 @media (max-width: 420px) { .brand-text { display: none; } }
+/* ---------- Téléphone en paysage (PWA ou navigateur) : plateau plein écran ----------
+   Sur les pages à plateau, plus d'en-tête ni de barre d'onglets : le plateau prend toute la hauteur, une colonne
+   étroite à droite garde joueurs, pendules, coups et contrôles (ou la consigne en puzzles / tutoriel / révision).
+   Revenir en portrait rend la navigation. */
+@media (orientation: landscape) and (max-height: 520px) {
+  body[data-page="play"], body[data-page="puzzles"], body[data-page="learn"] { padding-bottom: 0; }
+  body[data-page="play"] .topbar, body[data-page="puzzles"] .topbar, body[data-page="learn"] .topbar,
+  body[data-page="play"] .tabbar, body[data-page="puzzles"] .tabbar, body[data-page="learn"] .tabbar { display: none; }
+  .round { grid-template-columns: auto minmax(0, 1fr); grid-template-areas: "board table"; height: 100vh; height: 100dvh;
+    max-width: none; padding: 6px 10px 6px 8px; gap: 10px; align-items: stretch; }
+  .board-col { grid-area: board; align-self: center; gap: 4px; }
+  .gauge { width: 6px; }
+  .board-wrap { width: min(calc((100dvh - 12px) * var(--ar)), calc(100vw - 200px)); }
+  svg#board { border-radius: 8px; }
+  .side { display: none; }
+  .table { grid-area: table; display: flex; flex-direction: column; align-self: stretch; min-width: 0; min-height: 0; overflow: hidden; }
+  .pline, .pline.pbot { flex-direction: column; align-items: stretch; margin: 0; }
+  .pline .clock, .pline .clock.top, .pline .clock.bottom { font-size: 19px; min-width: 0; padding: 5px 8px; text-align: right; border: 1px solid var(--border);
+    border-radius: var(--r-sm); align-self: stretch; }
+  .pline .ruser { padding: 5px 8px; min-height: 0; border-radius: var(--r-sm); font-size: 13px; }
+  .ruser .rating, .ruser .mat { display: none; }
+  .ptop .ruser { margin-top: 3px; } .pbot .ruser { margin-bottom: 3px; }
+  .moves-box { flex: 1; min-height: 0; margin: 6px 0 0; border: 1px solid var(--border); border-radius: var(--r-sm) var(--r-sm) 0 0; overflow: hidden; }
+  .tview { height: 100%; max-height: none; font-size: 12px; grid-template-columns: 26px 1fr 1fr; }
+  .tview .mv { padding: 5px 4px; }
+  .ctrls.nav { border-radius: 0; } .ctrls.actions { border-radius: 0 0 var(--r-sm) var(--r-sm); border-bottom: 1px solid var(--border); margin-bottom: 6px; }
+  .ctrls button { padding: 6px 0; min-height: 0; }
+  .ctrls.actions button { font-size: 0; gap: 0; }            /* icônes seules, libellés en infobulle */
+  .ctrls.actions button svg { width: 18px; height: 18px; }
+  /* Puzzles, tutoriel, révision : la consigne remplace la colonne de jeu. */
+  body.learning .round, body.puzzle .round, body.retro .round { grid-template-areas: "board side"; }
+  body.learning .board-wrap, body.puzzle .board-wrap, body.retro .board-wrap { width: min(calc((100dvh - 12px) * var(--ar)), calc(100vw - 290px)); }
+  body.learning .side, body.puzzle .side, body.retro .side { grid-area: side; display: flex; margin: 0; min-height: 0; overflow-y: auto; }
+  body.learning .table, body.puzzle .table, body.retro .table { display: none; }
+  .learn { padding: 10px 12px; gap: 8px; font-size: 13.5px; }
+  .learn h2 { font-size: 17px; }
+  .learn .map { display: none; }
+}
 </style>
 </head>
 <body>
@@ -1554,8 +1592,8 @@ function renderActions() {
     const n = nextGame();
     html = `<button id="aRematch" class="go" title="${n.title}">${ICON.again}${n.label}</button>` +
       (n.vela2 ? `<button id="aVela" title="${n.vela2.title}">${ICON.again}${t("vela")}</button>` : "") +
-      `<button id="aNew">${ICON.plus}${n.vela2 ? t("new_short") : t("new_game")}</button>` +
-      `<button id="aAnalyse" ${analysis && (analysis.running || analysis.done) ? "disabled" : ""}>${ICON.chart}${t("analyse_btn")}</button>`;
+      `<button id="aNew" title="${t("new_game")}">${ICON.plus}${n.vela2 ? t("new_short") : t("new_game")}</button>` +
+      `<button id="aAnalyse" title="${t("analyse_btn")}" ${analysis && (analysis.running || analysis.done) ? "disabled" : ""}>${ICON.chart}${t("analyse_btn")}</button>`;
   } else {
     const canBack = game.moves.length > 0 && cfg.mode !== "auto";
     html = `<button id="aBack" ${canBack ? "" : "disabled"} title="${t("takeback_title")}">${ICON.back}${t("takeback")}</button>` +
