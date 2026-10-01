@@ -140,6 +140,7 @@ def main():
     ap.add_argument("--out", default="checkpoints/net.pt")
     ap.add_argument("--export", default=None, help="chemin du fichier .nnue (float32, optionnel)")
     ap.add_argument("--seed", type=int, default=1)
+    ap.add_argument("--hidden", type=int, default=HIDDEN_SIZE, help="taille de la couche cachée (multiple de 16)")
     args = ap.parse_args()
 
     torch.manual_seed(args.seed)
@@ -152,7 +153,7 @@ def main():
     val_idx, train_idx = perm[:n_val], perm[n_val:]
     n_train = len(train_idx)
 
-    model = NNUE()
+    model = NNUE(hidden=args.hidden)
     opt = torch.optim.Adam(model.parameters(), lr=args.lr)
     loss_fn = nn.MSELoss()
 

@@ -110,7 +110,7 @@ def play_game(engines, opening, movetime, referee, game_id):
             return status
         eng = engines[len(moves) % 2]
         eng.send(position_cmd(moves))
-        best = eng.query(f"go movetime {movetime}", "bestmove", game=game_id, ply=len(moves)).split()[1]
+        best = eng.query(f"go {movetime}", "bestmove", game=game_id, ply=len(moves)).split()[1]
         if best == "(none)":
             return "black wins" if len(moves) % 2 == 0 else "white wins"
         moves.append(best)
@@ -239,7 +239,7 @@ def run(args, metrics):
                     for e in (e1, e2):
                         e.send("ucinewgame")
                     engines = [e2, e1] if swap else [e1, e2]
-                    res = play_game(engines, opening, args.movetime, ref, 2 * g + swap)
+                    res = play_game(engines, opening, f"depth {args.depth}" if args.depth else f"movetime {args.movetime}", ref, 2 * g + swap)
                     record(2 * g + swap, res, not swap)
         except Exception as e:  # un moteur qui meurt arrête tout le match
             with lock:
@@ -280,6 +280,7 @@ def main():
     ap.add_argument("engine2")
     ap.add_argument("--games", type=int, default=10, help="nombre de paires de parties (mode parties fixes)")
     ap.add_argument("--movetime", type=int, default=100)
+    ap.add_argument("--depth", type=int, default=0, help="profondeur fixe au lieu du temps (compare les évaluations à recherche égale)")
     ap.add_argument("--opening-plies", type=int, default=4)
     ap.add_argument("--seed", type=int, default=1)
     ap.add_argument("--sprt", action="store_true", help="arrêt séquentiel au lieu d'un nombre fixe de parties")

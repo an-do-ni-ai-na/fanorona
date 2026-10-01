@@ -9,6 +9,22 @@ fanorona-dev, i7-6700T, 1 thread), justesse par `make test`, `perft` et `tools/n
 
 ---
 
+## 2026-10-02
+
+### NNUE — 4ᵉ cycle de renforcement et réseau 512 : non retenus · `{COMMIT}`
+- Données `gensfen_gen4` : 12M positions, `net_v3` comme professeur (profondeur 6), 13 processus sur les
+  3 machines, ~18 min (contre 1 h 40 pour les 7,7M de gen3, réseau 4× plus lent à l'époque).
+- Entraînement sur gen3 + gen4 (19,7M positions), 15 epochs : 256 neurones en 17 min (val_loss 0,01259),
+  512 neurones en 30 min (val_loss 0,01205). Les deux passent `verify.py` (1000/1000 à ±1 cp).
+- Vitesse `bench 8` : net_v3 1,25M nœuds/s, net_v4 256 1,28M, net_v4 512 0,89M (−30 %).
+- Contre net_v3, 100 ms/coup, bornes 0/+10 : 256 -> W1408 D1376 L1384 (50,3 %, 4168 parties), 512 -> W797
+  D759 L783 (50,4 %, 2339 parties). Aucun gain mesurable, arrêtés sans verdict.
+- À profondeur fixe 7 (nouvelle option `match.py --depth`, 2000 parties) : 256 -> 51,8 %, 512 -> 52,1 %. Le
+  léger gain d'évaluation vient surtout des nouvelles données, pas de la taille, et disparaît à temps égal.
+- Décision : net_v3 reste le réseau par défaut. Leçon : le même professeur à la même profondeur n'apprend plus
+  rien de neuf à l'élève ; il faut un meilleur signal (étiquettes plus profondes) plutôt que plus de neurones.
+- Outils : `tools/nnue/train.py --hidden N`, `tools/match.py --depth N`.
+
 ## 2026-10-01
 
 ### Elo — correction de l'ajustement et recalibration · `af6ef17`

@@ -267,9 +267,19 @@ g++ -g -O0 -std=c++17 -Isrc -fsanitize=address,undefined src/{bitboard,position,
      2 colonnes par pièce prise), d'où aucun gain mesurable (A/B à ±1 %) : pas la peine de fileter l'accumulateur
      dans la récursion. NNUE est maintenant à ~70 % de la vitesse de la HCE (contre 18 %).
      SPRT nouveau binaire contre l'ancien (même net_v3, 100 ms/coup) : H1 acceptée après 229 parties (LLR +3,00, bornes 0/+30), W91 D79 L59 = 57 % soit environ +49 Elo.
+   - ~~4e cycle + réseau plus grand~~ **essayé, non retenu** (2026-10-01/02) : `gensfen_gen4` = 12M positions
+     (`net_v3` professeur, profondeur 6, 13 processus sur les 3 machines, ~18 min), entraînement sur gen3 + gen4
+     (19,7M) en 256 neurones (17 min, val_loss 0,01259) et 512 neurones (`train.py --hidden 512`, 30 min,
+     val_loss 0,01205). Contre `net_v3` à 100 ms/coup : 256 -> 50,3 % (4168 parties), 512 -> 50,4 % (2339
+     parties), aucun des deux tranché en bornes 0/+10. À profondeur fixe 7 (`match.py --depth 7`, 2000 parties) :
+     256 -> 51,8 %, 512 -> 52,1 % : la meilleure val_loss du 512 ne se traduit presque pas en jeu, et son coût
+     (~890k nps contre ~1,25M, −30 %) annule le petit gain d'évaluation. `net_v3` reste le réseau par défaut ;
+     `net_v4_h256/h512.nnue` gardés dans checkpoints/ (non versionnés). Leçon : avec le même professeur à la même
+     profondeur, l'élève réapprend surtout l'évaluation du professeur ; la piste suivante est un meilleur
+     signal (étiquettes à profondeur 8-9, plus de poids au résultat de partie), pas plus de neurones.
    - **reste à faire** : quantification int16 (2× plus de voies par instruction, gain borné : l'évaluation
-     n'est plus qu'une part minoritaire du temps par nœud) ; un 4e cycle de renforcement (gains décroissants
-     mesurés) ; recalibrer l'Elo de l'interface (`tools/elo/calibrate.py`) après tout gain de force.
+     n'est plus qu'une part minoritaire du temps par nœud) ; données à étiquettes plus profondes (voir ci-dessus) ;
+     recalibrer l'Elo de l'interface (`tools/elo/calibrate.py`) après tout gain de force.
 5. **Lazy SMP** : option `Threads`, TT partagée (entrées rendues sûres par XOR clé/données).
 6. Améliorations de recherche — **en cours** (2026-10-01), chaque idée testée par SPRT (net_v3, 100 ms, 3 machines) :
    - **retenu** : LMP + futilité des coups calmes (positions sans capture, profondeur <= 3, hors PV) — séparément
