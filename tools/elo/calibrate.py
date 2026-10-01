@@ -58,27 +58,40 @@ def play(job):
 
 
 def fit(results, n):
-    """Classements Bradley-Terry (échelle Elo) par montée de gradient, a priori : une nulle virtuelle par paire."""
+    """Classements Bradley-Terry (échelle Elo) par l'algorithme MM de Hunter (2004), convergence garantie ;
+    nulle = demi-point, a priori : une nulle virtuelle par paire jouée. Itère jusqu'à stabilité (< 0,01 Elo).
+    (Une première version par montée de gradient à pas fixe ne convergeait pas : écarts gonflés de plusieurs
+    centaines d'Elo dans le haut de l'échelle, vraisemblance nettement moins bonne.)"""
     games = [(r["white"], r["black"], r["score"]) for r in results]
     pairs = {tuple(sorted((w, b))) for w, b, _ in games}
     games += [(i, j, 0.5) for i, j in pairs]
-    R = [0.0] * n
-    c = math.log(10) / 400
-    for it in range(20000):
-        g = [0.0] * n
-        for w, b, sc in games:
-            p = 1 / (1 + 10 ** (-(R[w] - R[b]) / 400))
-            g[w] += c * (sc - p)
-            g[b] -= c * (sc - p)
-        step = 4000 / max(1, len(games))
-        mx = 0
+    wins, count = [0.0] * n, {}
+    for w, b, sc in games:
+        wins[w] += sc
+        wins[b] += 1 - sc
+        k = tuple(sorted((w, b)))
+        count[k] = count.get(k, 0) + 1
+    gamma = [1.0] * n
+    for _ in range(100000):
+        new = []
         for i in range(n):
-            R[i] += step * g[i] * 400
-            mx = max(mx, abs(g[i]))
-        if mx < 1e-7:
+            den = sum(c / (gamma[i] + gamma[j if a == i else a]) for (a, j), c in count.items() if i in (a, j))
+            new.append(wins[i] / den if den else gamma[i])
+        scale = new[ANCHOR]
+        new = [x / scale for x in new]
+        delta = max(abs(400 * math.log10(x / y)) for x, y in zip(new, gamma) if x > 0 and y > 0)
+        gamma = new
+        if delta < 0.01:
             break
-    off = ANCHOR_ELO - R[ANCHOR]
-    return [round(r + off) for r in R]
+    return [round(ANCHOR_ELO + 400 * math.log10(g)) for g in gamma]
+
+
+def log_likelihood(results, ratings):
+    s = 0.0
+    for r in results:
+        p = 1 / (1 + 10 ** (-(ratings[r["white"]] - ratings[r["black"]]) / 400))
+        s += r["score"] * math.log(p) + (1 - r["score"]) * math.log(1 - p)
+    return s
 
 
 def main():
@@ -133,7 +146,7 @@ def main():
         "games": len(done), "date": time.strftime("%Y-%m-%d"), "ratings": ratings,
         "pairs": {k: {"games": v[0], "score_of_stronger": round(v[1] / v[0], 3)} for k, v in sorted(table.items(), key=lambda x: [int(y) for y in x[0].split("-")])},
     }, ensure_ascii=False, indent=2) + "\n")
-    print("Elo :", ratings)
+    print("Elo :", ratings, f"(log-vraisemblance {log_likelihood(done, ratings):.1f})")
     for k, v in sorted(table.items(), key=lambda x: [int(y) for y in x[0].split("-")]):
         print(f"  {k:>6} : {v[1]:.1f}/{v[0]}")
 

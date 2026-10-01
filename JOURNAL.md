@@ -11,6 +11,14 @@ fanorona-dev, i7-6700T, 1 thread), justesse par `make test`, `perft` et `tools/n
 
 ## 2026-10-01
 
+### Elo — correction de l'ajustement et recalibration · `{COMMIT}`
+- **Bug** : l'ajustement Bradley-Terry de `tools/elo/calibrate.py` (montée de gradient à pas fixe) ne convergeait
+  pas : log-vraisemblance −502 contre −380 pour l'algorithme MM de Hunter sur les mêmes parties, écarts du haut de
+  l'échelle gonflés de plusieurs centaines d'Elo. Les « non-transitivités » invoquées lors des deux calibrations
+  précédentes étaient pour l'essentiel cet artefact. Remplacé par MM (convergence garantie, critère < 0,01 Elo).
+- Recalibration complète après LMP + futilité (744 parties) : niveaux 1 à 6 = 800, 1356, 1841, 1993, 2132, 2383
+  (strictement croissants). Pour mémoire, les parties d'avant LMP, réajustées par MM : 800, 1393, 1822, 1958, 2135, 2368.
+
 ### Moteur — recherche : LMP + futilité des coups calmes · `c0d27cf`
 - Positions sans capture (que des paika), profondeur <= 3, hors ligne principale : les derniers coups ne sont pas
   examinés (LMP) et les coups calmes sans espoir de remonter alpha sont sautés (futilité).
