@@ -263,6 +263,9 @@ g++ -g -O0 -std=c++17 -Isrc -fsanitize=address,undefined src/{bitboard,position,
 
 ## Méthode de travail
 
+- **Tenir `JOURNAL.md` à jour** : une entrée par étape significative (moteur, réseau, règles, interface), avec le
+  résultat mesuré (SPRT, bench, perft) et le commit, dans le même commit ou juste après.
+
 - Toujours : `make && make test` avant de committer ; `perft 5` inchangé si le générateur est touché.
 - Changement de force (recherche/éval) : garder l'ancien binaire (`cp fanorona fanorona-old`) et lancer un match.
 - Commits petits et descriptifs, en français.
