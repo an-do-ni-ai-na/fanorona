@@ -2,21 +2,21 @@
   "anchor": "réglage 1 (niveau Débutant) = 800",
   "conditions": "Fanoron-Tsivy, net_v3, 1 s/coup (pleine force)",
   "games": 744,
-  "date": "2026-09-30",
+  "date": "2026-10-01",
   "ratings": [
-    657,
+    663,
     800,
-    991,
-    1371,
-    1542,
-    1719,
-    2097,
-    2117,
-    1908,
-    2376,
-    2764,
-    2518,
-    2787
+    1001,
+    1366,
+    1527,
+    1861,
+    1806,
+    2055,
+    2039,
+    2124,
+    2612,
+    2442,
+    2643
   ],
   "pairs": {
     "0-1": {
@@ -97,19 +97,19 @@
     },
     "9-11": {
       "games": 24,
-      "score_of_stronger": 0.667
+      "score_of_stronger": 0.75
     },
     "10-11": {
       "games": 40,
-      "score_of_stronger": 0.688
+      "score_of_stronger": 0.625
     },
     "10-12": {
       "games": 24,
-      "score_of_stronger": 0.729
+      "score_of_stronger": 0.833
     },
     "11-12": {
       "games": 40,
-      "score_of_stronger": 0.562
+      "score_of_stronger": 0.525
     }
   }
 }

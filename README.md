@@ -241,15 +241,19 @@ python3 tools/elo/calibrate.py --games 40 --gap2 24 --workers 5    # ~25 min sur
 L'échelle `STRENGTHS` de `tools/gui/server.py` va du tirage au sort pondéré après une recherche de profondeur 1
 à la pleine force à 1 s par coup (NNUE net_v3). Tournoi entre réglages voisins et à deux crans, en réutilisant le
 code de jeu du serveur (2 demi-coups d'ouverture au hasard, couleurs alternées), puis classements Bradley-Terry
-(nulle = demi-point, une nulle virtuelle par paire), ancre : Débutant = 800. Calibration du 2026-09-30 (744 parties) :
+(nulle = demi-point, une nulle virtuelle par paire), ancre : Débutant = 800. Calibration du 2026-10-01 (744 parties ; après l accélération NNUE, seules les parties des réglages limités par
+le temps — 300 ms et 1 s — ont été rejouées, les autres réglages jouant exactement les mêmes coups) :
 
 | Niveau | 1 Débutant | 2 Facile | 3 Intermédiaire | 4 Confirmé | 5 Expert | 6 Maître (1 s) |
 |---|---|---|---|---|---|---|
-| Elo | 800 | 1371 | 1719 | 1908 | 2376 | 2787 |
+| Elo | 800 | 1366 | 1861 | 2039 | 2124 | 2643 |
 
 L'échelle n'est pas un Elo « officiel » (aucune population de joueurs classés de référence) : elle est interne et
 ne vaut que dans ces conditions (Fanoron-Tsivy, net_v3, 1 s/coup, cette machine). Environ ±100 Elo d'incertitude
-par écart entre réglages voisins (40 parties). Deux inversions mesurées (profondeur 4 < profondeur 3, 300 ms <
+par écart entre réglages voisins (40 parties). Les résultats ne sont pas transitifs (la profondeur 4
+bat mal la profondeur 3 mais se fait écraser par la profondeur 6) : un Elo unique par réglage est un compromis, les
+écarts du haut de l échelle sont approximatifs (le niveau 6 a gagné en force mais son Elo a baissé à la
+recalibration). Inversions mesurées (profondeur 4 < profondeur 3, 300 ms <
 profondeur 6) : le curseur de l'interface n'utilise que les réglages d'Elo strictement croissant. Elo du joueur :
 E = 1/(1+10^((moteur − joueur)/400)), K = 40 pour les 20 premières parties classées puis 24, départ à 1000.
 
