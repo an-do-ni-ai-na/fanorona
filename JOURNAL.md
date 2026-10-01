@@ -11,6 +11,15 @@ fanorona-dev, i7-6700T, 1 thread), justesse par `make test`, `perft` et `tools/n
 
 ## 2026-10-01
 
+### Moteur — recherche : LMP + futilité des coups calmes · `{COMMIT}`
+- Positions sans capture (que des paika), profondeur <= 3, hors ligne principale : les derniers coups ne sont pas
+  examinés (LMP) et les coups calmes sans espoir de remonter alpha sont sautés (futilité).
+- SPRT (net_v3, 100 ms, bornes 0/+5, 3 machines) : H1 en 5362 parties, W1883 D1772 L1707 (51,6 %, ≈ +11 Elo).
+- Séparément, chacun donnait ~51 % sans pouvoir être tranché en 3000 parties (bornes 0/+15).
+- Essais rejetés de la même série (bornes 0/+15) : IIR 50,0 % (2350 parties), historique des captures 49,4 %
+  (1397), capture unique forcée en quiescence 49,6 % (1537).
+- Nouvelles signatures `bench 8` : HCE 572 736 nœuds, NNUE 933 003 nœuds ; perft inchangé.
+
 ### Outils — matchs répartis sur 3 machines · `25a382d`
 - `tools/match.py --hosts` : moteurs lancés par SSH sur c1 (VMID 3190) et c3 (VMID 3191) en plus de fanorona-dev,
   11 parties simultanées au lieu de 5. 12 parties sur c1 + c3 en 17,5 s, fanorona-dev quasiment inactif.

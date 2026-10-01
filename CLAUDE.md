@@ -135,7 +135,8 @@ g++ -g -O0 -std=c++17 -Isrc -fsanitize=address,undefined src/{bitboard,position,
 
 ## État actuel
 
-- ~2,5 M nœuds/s, profondeur 14 en ~28 s depuis la position initiale (1 thread).
+- HCE ~2,3 M nœuds/s, NNUE ~1,5-1,7 M nœuds/s (1 thread, fanorona-dev). Signatures bench 8 (2026-10-01) :
+  HCE 572 736 nœuds, NNUE net_v3 933 003 nœuds.
 - Évaluation : matériel (100), points forts, connectivité, mobilité, menaces, bonus de simplification, tempo.
   Poids non réglés.
 
@@ -270,7 +271,14 @@ g++ -g -O0 -std=c++17 -Isrc -fsanitize=address,undefined src/{bitboard,position,
      n'est plus qu'une part minoritaire du temps par nœud) ; un 4e cycle de renforcement (gains décroissants
      mesurés) ; recalibrer l'Elo de l'interface (`tools/elo/calibrate.py`) après tout gain de force.
 5. **Lazy SMP** : option `Threads`, TT partagée (entrées rendues sûres par XOR clé/données).
-6. Améliorations de recherche : singular extensions, IIR, history de continuation, meilleur ordre des captures.
+6. Améliorations de recherche — **en cours** (2026-10-01), chaque idée testée par SPRT (net_v3, 100 ms, 3 machines) :
+   - **retenu** : LMP + futilité des coups calmes (positions sans capture, profondeur <= 3, hors PV) — séparément
+     ~51 % non tranché (3000 parties chacun), ensemble H1 acceptée en bornes 0/+5 (5362 parties, 51,6 %, ≈ +11 Elo).
+   - **rejeté** : IIR (50,0 %, 2350 parties) ; historique des captures pour l'ordre des coups (49,4 %, 1397) ;
+     capture unique forcée jouée en quiescence au lieu du stand pat (49,6 %, 1537).
+   - Leçon : les élagages des échecs portent peu, la plupart des nœuds sont des positions de capture obligatoire
+     qu'ils ne touchent pas ; il faut des bornes fines (0/+5) et des milliers de parties pour mesurer leurs gains.
+   - Pistes restantes : singular extensions, history de continuation, LMR dans les positions de capture.
 7. Bases de finales (peu de pièces), livre d'ouvertures.
 
 ## Méthode de travail

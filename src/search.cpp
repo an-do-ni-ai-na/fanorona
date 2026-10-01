@@ -293,6 +293,14 @@ Value Worker::search(const Position& pos, Value alpha, Value beta, int depth, in
         Move m = list.moves[i];
         int moveCount = i + 1;
         bool quiet = !is_capture(m);
+        // Futilité : position calme, faible profondeur, évaluation statique très en dessous d'alpha : les coups
+        // calmes après le premier ont peu de chances de remonter le score.
+        if (!pvNode && !capturePos && depth <= 3 && moveCount > 1 && staticEval + 110 * depth <= alpha &&
+            best > -VALUE_MATE_IN_MAX_PLY)
+            continue;
+        // LMP : position calme (que des paika), faible profondeur, hors ligne principale : les derniers coups
+        // (mal classés par l'historique) ne sont pas examinés.
+        if (!pvNode && !capturePos && depth <= 3 && moveCount > 3 + depth * depth && best > -VALUE_MATE_IN_MAX_PLY) break;
 
         Position child = pos;
         child.do_move(m);
