@@ -11,6 +11,10 @@ fanorona-dev, i7-6700T, 1 thread), justesse par `make test`, `perft` et `tools/n
 
 ## 2026-10-01
 
+### Outils — matchs répartis sur 3 machines · `{COMMIT}`
+- `tools/match.py --hosts` : moteurs lancés par SSH sur c1 (VMID 3190) et c3 (VMID 3191) en plus de fanorona-dev,
+  11 parties simultanées au lieu de 5. 12 parties sur c1 + c3 en 17,5 s, fanorona-dev quasiment inactif.
+
 ### Outils — matchs en parallèle · `7ad28b3`
 - `tools/match.py --concurrency N` : N paires de moteurs simultanées, SPRT mis à jour à chaque partie.
   12 parties : 47 s -> 22 s (N = 4). Exemple : NNUE (net_v3, accéléré) contre HCE, 30 ms/coup, bornes −30/+30 :

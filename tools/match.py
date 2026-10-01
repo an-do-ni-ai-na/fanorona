@@ -13,6 +13,10 @@ NNUE contre HCE (même binaire, NNUE est une option UCI à l'exécution) :
 
 Parties en parallèle (--concurrency N) : N paires de moteurs jouent simultanément, chaque fil prenant la paire de
 parties suivante ; les ouvertures dépendent seulement de la graine et du numéro de paire (pas du parallélisme).
+Plusieurs machines (--hosts "local:5,root@10.10.10.190:4,root@10.10.10.191:2") : chaque fil lance ses deux moteurs
+sur son hôte par SSH (UCI passe par stdin/stdout), après copie des binaires et des fichiers d'options (EvalFile) ;
+les deux moteurs d'une partie sont toujours sur la même machine, la partie reste équitable. Processeurs : même jeu
+d'instructions requis (binaires compilés avec -march=native). Clé : --ssh-key (~/.ssh/id_fanorona_match).
 Garder N <= nombre de cœurs - 1 : avec un temps fixe par coup, des moteurs qui se disputent un cœur jouent plus
 faiblement (des deux côtés, donc sans biais, mais le test mesure alors une autre cadence).
 
@@ -22,9 +26,11 @@ sont journalisées en JSONL (/var/log/fanorona/<run_id>.jsonl par défaut) pour 
 Grafana/Loki ; désactivable avec --no-live-log si le répertoire n'est pas accessible.
 """
 import argparse
+import os
 import random
 import subprocess
 import threading
+import uuid
 
 from metrics_logger import MetricsLogger, new_run_id
 from sprt import Sprt
@@ -40,10 +46,11 @@ def parse_opts(spec):
 
 
 class Engine:
-    def __init__(self, path, name, metrics, options=None):
+    def __init__(self, path, name, metrics, options=None, prefix=()):
+        """`prefix` : commande de lancement à distance (ssh ... hôte), vide en local."""
         self.name = name
         self.metrics = metrics
-        self.p = subprocess.Popen([path], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True, bufsize=1)
+        self.p = subprocess.Popen([*prefix, path], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True, bufsize=1)
         self.send("uci")
         self.wait("uciok")
         for opt_name, value in options or []:
@@ -135,13 +142,51 @@ class LockedMetrics:
         self.m.close()
 
 
+class Host:
+    """Machine d'exécution : locale, ou distante (binaires et fichiers d'options copiés par scp)."""
+
+    def __init__(self, spec, args):
+        self.local = spec == "local"
+        self.spec, self.args = spec, args
+        self.e1, self.e2 = args.engine1, args.engine2
+        self.o1, self.o2 = parse_opts(args.engine1_opts), parse_opts(args.engine2_opts)
+        self.prefix = ()
+        if self.local:
+            return
+        key = os.path.expanduser(args.ssh_key)
+        ssh = ["ssh", "-i", key, "-o", "BatchMode=yes", "-o", "ServerAliveInterval=30"]
+        self.prefix = (*ssh, spec)
+        self.dir = f"/tmp/fanorona-match-{uuid.uuid4().hex[:8]}"
+        subprocess.run([*ssh, spec, f"mkdir -p {self.dir}"], check=True)
+        files, self.copied = [], {}
+        for local in (self.e1, self.e2) + tuple(v for _, v in self.o1 + self.o2 if os.path.isfile(v)):
+            if local not in self.copied:
+                self.copied[local] = f"{self.dir}/{len(self.copied)}_{os.path.basename(local)}"
+                files.append(local)
+        for local in files:
+            subprocess.run(["scp", "-q", "-i", key, "-o", "BatchMode=yes", local, f"{spec}:{self.copied[local]}"], check=True)
+        remap = lambda opts: [(k, self.copied.get(v, v)) for k, v in opts]
+        self.e1, self.e2 = self.copied[self.e1], self.copied[self.e2]
+        self.o1, self.o2 = remap(self.o1), remap(self.o2)
+
+    def cleanup(self):
+        if not self.local:
+            subprocess.run([*self.prefix, f"rm -rf {self.dir}"], check=False)
+
+
 def run(args, metrics):
     """Parties fixes (args.games paires) ou SPRT, avec args.concurrency paires de moteurs en parallèle."""
     sprt = Sprt(args.elo0, args.elo1, args.alpha, args.beta) if args.sprt else None
     if sprt:
         print(f"SPRT elo0={args.elo0} elo1={args.elo1} alpha={args.alpha} beta={args.beta} "
               f"bornes LLR=[{sprt.lower:.3f}, {sprt.upper:.3f}]")
-    print(f"{args.concurrency} partie(s) en parallèle", flush=True)
+    hosts, slots = {}, []
+    for part in (args.hosts or f"local:{args.concurrency}").split(","):
+        spec, _, n = part.rpartition(":")
+        hosts[spec] = Host(spec, args)
+        slots += [hosts[spec]] * int(n)
+    print(f"{len(slots)} partie(s) en parallèle : " + ", ".join(f"{h} x{sum(s is hosts[h] for s in slots)}" for h in hosts),
+          flush=True)
     lock = threading.Lock()
     state = {"next": 0, "stop": False, "w": 0, "d": 0, "l": 0, "done": None, "error": None}
 
@@ -180,12 +225,12 @@ def run(args, metrics):
             if decision is not None:
                 state["stop"], state["done"] = True, (decision, sprt.n, llr)
 
-    def worker():
+    def worker(host):
         e1 = e2 = ref = None
         try:
-            e1 = Engine(args.engine1, "engine1", metrics, options=parse_opts(args.engine1_opts))
-            e2 = Engine(args.engine2, "engine2", metrics, options=parse_opts(args.engine2_opts))
-            ref = Engine(args.engine1, "referee", metrics)
+            e1 = Engine(host.e1, "engine1", metrics, options=host.o1, prefix=host.prefix)
+            e2 = Engine(host.e2, "engine2", metrics, options=host.o2, prefix=host.prefix)
+            ref = Engine(args.engine1, "referee", metrics)  # arbitre local (règles uniquement, coût négligeable)
             while (g := take_pair()) is not None:
                 opening = random_opening(ref, args.opening_plies, random.Random(args.seed * 1_000_003 + g))
                 for swap in (False, True):
@@ -207,11 +252,13 @@ def run(args, metrics):
                     except Exception:
                         pass
 
-    threads = [threading.Thread(target=worker) for _ in range(args.concurrency)]
+    threads = [threading.Thread(target=worker, args=(h,)) for h in slots]
     for t in threads:
         t.start()
     for t in threads:
         t.join()
+    for h in hosts.values():
+        h.cleanup()
     if state["error"]:
         raise state["error"]
     if not sprt:
@@ -245,7 +292,9 @@ def main():
     ap.add_argument("--run-id", default=None, help="identifiant de run pour le suivi live (auto par défaut)")
     ap.add_argument("--engine1-opts", default=None, help="options UCI engine1, ex. UseNNUE=true,EvalFile=net.nnue")
     ap.add_argument("--engine2-opts", default=None, help="options UCI engine2, même format")
-    ap.add_argument("--concurrency", type=int, default=1, help="paires de moteurs jouant en parallèle")
+    ap.add_argument("--concurrency", type=int, default=1, help="paires de moteurs jouant en parallèle (en local)")
+    ap.add_argument("--hosts", default=None, help='machines et parties simultanées, ex. "local:5,root@10.10.10.190:4"')
+    ap.add_argument("--ssh-key", default="~/.ssh/id_fanorona_match", help="clé SSH vers les hôtes distants")
     args = ap.parse_args()
 
     run_type = "sprt" if args.sprt else "match"

@@ -151,7 +151,10 @@ g++ -g -O0 -std=c++17 -Isrc -fsanitize=address,undefined src/{bitboard,position,
 2. ~~**Tests SPRT**~~ **fait** (2026-09-27) : `tools/match.py --sprt` (LLR gaussien, `tools/sprt.py`), ouvertures
    aléatoires déjà existantes, suivi live JSONL. Parallélisme **fait** (2026-10-01) :
    `--concurrency N` (N paires de moteurs, ouvertures fonction de la graine et du numéro de paire seulement) ;
-   utiliser N = 5 sur fanorona-dev (6 vCPU).
+   utiliser N = 5 sur fanorona-dev (6 vCPU). Plusieurs machines **fait** (2026-10-01) : `--hosts "local:5,root@10.10.10.190:4,root@10.10.10.191:2"`
+   (c1 et c3 à démarrer avant : `pct start 3190` sur pve1, `pct start 3191` sur pve3) ; binaires et réseau copiés par scp,
+   les deux moteurs d'une partie sur le même hôte ; clé `~/.ssh/id_fanorona_match` de fanorona-dev, autorisée en root
+   sur c1/c3 depuis 10.10.10.180 seulement. Processeurs : même jeu d'instructions (AVX2/FMA/BMI2) sur les 3 hôtes.
 3. **Texel tuning** : générer des positions d'auto-jeu avec résultats, optimiser les poids de `evaluate.cpp`.
 4. **NNUE** — en cours (2026-09-27) :
    - ~~générateur de données~~ **fait** : `./fanorona gensfen` (auto-jeu, `depth`/`opening-plies`/`count`/`out`),
