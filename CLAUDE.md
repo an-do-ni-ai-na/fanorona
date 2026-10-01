@@ -53,7 +53,7 @@ g++ -g -O0 -std=c++17 -Isrc -fsanitize=address,undefined src/{bitboard,position,
 | `src/movegen.*` | `generate_moves()` (tours complets dédupliqués), `generate_detailed()` (avec notation), `parse_move()`, `perft()` ; `generate_vela()` pour la phase 1 de la vela |
 | `src/telo.*` | Fanoron-Telo 3×3 (alignement, pose puis déplacement) : module à part, résolu par analyse rétrograde au démarrage (`Telo::init`), `go` parfait ou `go depth N` limité |
 | `src/evaluate.*` | évaluation manuelle (HCE), du point de vue du camp au trait ; bascule vers `NNUE::evaluate()` si activé |
-| `src/nnue.*` | inférence NNUE (charge un `.nnue`, forward pass 2×45→256 ReLU clippé→1, PAS ENCORE incrémental) |
+| `src/nnue.*` | inférence NNUE (charge un `.nnue`, forward pass 2×45→256 ReLU clippé→1, accumulateur incrémental par diff, W1 transposé, sortie AVX2) |
 | `src/tt.*` | table de transposition, seaux de 2 entrées, générations |
 | `src/search.*` | `Search::think()` : ID, aspiration, PVS, qsearch, NMP, RFP, LMR, killers, historique, temps |
 | `src/uci.*` | boucle de commandes (`position`, `go`, `stop`, `setoption`, `d`, `moves`, `eval`, `status`, `perft`, `bench`, `play`, `gensfen`) |
@@ -240,11 +240,23 @@ g++ -g -O0 -std=c++17 -Isrc -fsanitize=address,undefined src/{bitboard,position,
      marge plus large). **Rendements décroissants confirmés** (pas juste supposés) : chaque cycle de
      renforcement supplémentaire semble apporter de moins en moins, cohérent avec la théorie (le professeur
      s'améliore, mais l'écart entre "bon professeur" et "encore meilleur professeur" se réduit).
-   - **reste à faire** : quantification int16/int8 réelle (le format d'export actuel — float32 — est un
-     contrat de départ, pas figé) ; l'accumulateur fileté dans la récursion de recherche (fermerait
-     l'essentiel de l'écart de profondeur avec la HCE) ; un 4e cycle est possible mais le gain marginal
-     décroissant observé (v2->v3 plus petit que v1->v2) suggère de plutôt investir l'effort ailleurs
-     (quantification, accumulateur) avant de relancer une génération de plus.
+   - ~~accélération de l'inférence~~ **fait, ×4** (2026-10-01) : 420k -> ~1,7M nps au `bench 8` NNUE, **même
+     signature** (1 121 922 nœuds, recherche identique). Le goulot n'était PAS la taille du diff de
+     l'accumulateur (hypothèse ci-dessus, démentie par la mesure) mais l'absence de vectorisation :
+     (1) W1 stocké `[256][90]` (format de nn.Linear) -> chaque colonne lue par sauts de 90 flottants ; transposé
+     au chargement en `[90][256]` (`g_w1t`), les mises à jour deviennent contiguës et vectorisées (×1,5) ;
+     (2) la couche de sortie était une réduction flottante que GCC ne vectorise pas sans `-ffast-math` (256
+     multiplications-additions en chaîne) : réécrite en AVX2/FMA explicite (`immintrin.h`, deux accumulateurs
+     de 8), avec repli portable à 8 sommes partielles (×2,5). Vérifier avec
+     `g++ ... -fopt-info-vec-all src/nnue.cpp` qu'une boucle chaude est bien vectorisée avant de chercher plus loin.
+     **Mesuré et abandonné** : un accumulateur par ply (réutiliser le parent ou le dernier frère) fait passer de
+     12,2 à 10,1 colonnes mises à jour par évaluation — le reste est le coût propre des coups (une capture touche
+     2 colonnes par pièce prise), d'où aucun gain mesurable (A/B à ±1 %) : pas la peine de fileter l'accumulateur
+     dans la récursion. NNUE est maintenant à ~70 % de la vitesse de la HCE (contre 18 %).
+     SPRT nouveau binaire contre l'ancien (même net_v3, 100 ms/coup) : H1 acceptée après 229 parties (LLR +3,00, bornes 0/+30), W91 D79 L59 = 57 % soit environ +49 Elo.
+   - **reste à faire** : quantification int16 (2× plus de voies par instruction, gain borné : l'évaluation
+     n'est plus qu'une part minoritaire du temps par nœud) ; un 4e cycle de renforcement (gains décroissants
+     mesurés) ; recalibrer l'Elo de l'interface (`tools/elo/calibrate.py`) après tout gain de force.
 5. **Lazy SMP** : option `Threads`, TT partagée (entrées rendues sûres par XOR clé/données).
 6. Améliorations de recherche : singular extensions, IIR, history de continuation, meilleur ordre des captures.
 7. Bases de finales (peu de pièces), livre d'ouvertures.

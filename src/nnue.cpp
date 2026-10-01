@@ -1,5 +1,9 @@
 #include "nnue.h"
 
+#include <algorithm>
+#if defined(__AVX2__)
+#include <immintrin.h>
+#endif
 #include <cmath>
 #include <cstdint>
 #include <fstream>
@@ -20,7 +24,10 @@ constexpr double SCORE_SCALE = 400.0;
 bool g_loaded = false;
 bool g_wantEnabled = false;
 int g_hidden = 0;
-std::vector<float> g_w1;  // [hidden][INPUT_SIZE], row-major (= nn.Linear(90, hidden).weight)
+// W1 rangée par entrée : g_w1t[col * hidden + i] = poids (neurone i, entrée col). Le fichier stocke la matrice de
+// nn.Linear (neurone par neurone) ; on la transpose au chargement pour que l'ajout ou le retrait d'une entrée (une
+// case) parcoure 256 flottants contigus, vectorisés par le compilateur, au lieu de sauter de 90 en 90.
+std::vector<float> g_w1t;
 std::vector<float> g_b1;  // [hidden]
 std::vector<float> g_w2;  // [hidden]        (= nn.Linear(hidden, 1).weight, une seule ligne)
 float g_b2 = 0.0f;
@@ -53,7 +60,13 @@ bool read_exact(std::ifstream& f, void* dst, size_t bytes) {
 // Ajoute (sign=+1) ou retire (sign=-1) la contribution de la colonne `col` (0..89) de W_own à
 // l'accumulateur `acc`.
 void add_col(std::vector<float>& acc, int col, float sign) {
-    for (int i = 0; i < g_hidden; ++i) acc[size_t(i)] += sign * g_w1[size_t(i) * INPUT_SIZE + col];
+    float* __restrict a = acc.data();
+    const float* __restrict w = g_w1t.data() + size_t(col) * size_t(g_hidden);
+    const int n = g_hidden;
+    if (sign > 0)
+        for (int i = 0; i < n; ++i) a[i] += w[i];
+    else
+        for (int i = 0; i < n; ++i) a[i] -= w[i];
 }
 
 void recompute_from(const Position& pos) {
@@ -138,7 +151,9 @@ bool load(const std::string& path) {
     }
 
     g_hidden = hidden;
-    g_w1 = std::move(w1);
+    g_w1t.assign(h * INPUT_SIZE, 0.0f);
+    for (size_t i = 0; i < h; ++i)
+        for (size_t c = 0; c < size_t(INPUT_SIZE); ++c) g_w1t[c * h + i] = w1[i * INPUT_SIZE + c];
     g_b1 = std::move(b1);
     g_w2 = std::move(w2);
     g_b2 = b2;
@@ -156,14 +171,37 @@ Value evaluate(const Position& pos) {
     if (!g_cache.valid) recompute_from(pos);
     else update_incremental(pos);
 
-    const std::vector<float>& acc = g_cache.acc[pos.sideToMove];
-    double out = double(g_b2);
-    for (int i = 0; i < g_hidden; ++i) {
-        float a = acc[size_t(i)] < 0.0f ? 0.0f : (acc[size_t(i)] > 1.0f ? 1.0f : acc[size_t(i)]);  // ClippedReLU
-        out += double(g_w2[size_t(i)]) * double(a);
+    const float* __restrict acc = g_cache.acc[pos.sideToMove].data();
+    const float* __restrict w2 = g_w2.data();
+    // Couche de sortie : 8 sommes partielles indépendantes (une par voie AVX2). Une réduction en un seul flottant
+    // n'est pas vectorisée sans -ffast-math (l'ordre des additions changerait) : c'était une chaîne de 256
+    // multiplications-additions dépendantes, l'essentiel du coût de l'évaluation.
+    const int n = g_hidden;
+    float lanes[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+    int i = 0;
+#if defined(__AVX2__) && defined(__FMA__)
+    {
+        const __m256 zero = _mm256_setzero_ps(), one = _mm256_set1_ps(1.0f);
+        __m256 s0 = _mm256_setzero_ps(), s1 = _mm256_setzero_ps();
+        for (; i + 16 <= n; i += 16) {
+            __m256 x0 = _mm256_min_ps(_mm256_max_ps(_mm256_loadu_ps(acc + i), zero), one);
+            __m256 x1 = _mm256_min_ps(_mm256_max_ps(_mm256_loadu_ps(acc + i + 8), zero), one);
+            s0 = _mm256_fmadd_ps(_mm256_loadu_ps(w2 + i), x0, s0);
+            s1 = _mm256_fmadd_ps(_mm256_loadu_ps(w2 + i + 8), x1, s1);
+        }
+        _mm256_storeu_ps(lanes, _mm256_add_ps(s0, s1));
     }
-
-    return clamp_eval(int(std::lround(out * SCORE_SCALE)));
+#endif
+    for (; i + 8 <= n; i += 8)
+        for (int j = 0; j < 8; ++j) {
+            float x = acc[i + j];
+            x = x < 0.0f ? 0.0f : x > 1.0f ? 1.0f : x;  // ClippedReLU
+            lanes[j] += w2[i + j] * x;
+        }
+    float out = 0.0f;
+    for (; i < n; ++i) out += w2[i] * std::min(std::max(acc[i], 0.0f), 1.0f);
+    for (float l : lanes) out += l;
+    return clamp_eval(int(std::lround((double(out) + double(g_b2)) * SCORE_SCALE)));
 }
 
 }  // namespace fanorona::NNUE
