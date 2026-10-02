@@ -277,8 +277,18 @@ g++ -g -O0 -std=c++17 -Isrc -fsanitize=address,undefined src/{bitboard,position,
      `net_v4_h256/h512.nnue` gardés dans checkpoints/ (non versionnés). Leçon : avec le même professeur à la même
      profondeur, l'élève réapprend surtout l'évaluation du professeur ; la piste suivante est un meilleur
      signal (étiquettes à profondeur 8-9, plus de poids au résultat de partie), pas plus de neurones.
+   - ~~étiquettes plus profondes~~ **essayé, non retenu** (2026-10-02) : `gensfen_gen5` = 13M positions à
+     profondeur 9 (`net_v3` professeur, 3 machines, ~2 h 30 ; ~100 pos/s par processus en régime, pas les 300 d'un
+     essai de 2 min). Constat : les scores de recherche sont **trop confiants** par rapport aux résultats (à +500 cp,
+     68 % de points réels en gen4, 59 % en gen5, contre 80 % prédits par l'échelle 400) ; échelle optimale K ≈ 725
+     (gen4) et ≈ 1050 (gen5). Nouvelles options `train.py --score-scale K` (la sortie reste en cp/400 pour le
+     moteur, seule la perte utilise K) et `--wdl-weight W`. Contre `net_v3` à profondeur fixe 7 (2000 parties
+     chacun, ±0,9 %) : gen5 K=400 48,2 % ; gen5 75 % résultat 50,1 % ; gen5 K=1050 47,8 % ; gen4 K=725 50,5 %.
+     Rien ne dépasse `net_v3`. Conclusion des cycles 4 et 5 : avec 2×45 entrées et une seule couche cachée, le
+     réseau est au plafond de ce que ces données peuvent lui apprendre ; le prochain levier est l'architecture
+     (entrées plus riches : voisinages, lignes de capture ; seconde couche) ou la recherche, pas les données.
    - **reste à faire** : quantification int16 (2× plus de voies par instruction, gain borné : l'évaluation
-     n'est plus qu'une part minoritaire du temps par nœud) ; données à étiquettes plus profondes (voir ci-dessus) ;
+     n'est plus qu'une part minoritaire du temps par nœud) ; architecture plus riche (voir ci-dessus) ;
      recalibrer l'Elo de l'interface (`tools/elo/calibrate.py`) après tout gain de force.
 5. **Lazy SMP** : option `Threads`, TT partagée (entrées rendues sûres par XOR clé/données).
 6. Améliorations de recherche — **en cours** (2026-10-01), chaque idée testée par SPRT (net_v3, 100 ms, 3 machines) :

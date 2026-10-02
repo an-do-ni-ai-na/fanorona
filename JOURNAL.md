@@ -11,6 +11,19 @@ fanorona-dev, i7-6700T, 1 thread), justesse par `make test`, `perft` et `tools/n
 
 ## 2026-10-02
 
+### NNUE — étiquettes à profondeur 9 et calibration de l'échelle : non retenus · `{COMMIT}`
+- Données `gensfen_gen5` : 13M positions à profondeur 9 (net_v3 professeur), 3 machines, ~2 h 30.
+- Diagnostic : les scores de recherche sont trop confiants par rapport aux résultats des parties. À +500 cp,
+  l'échelle 400 prédit 80 % des points ; les parties en donnent 68 % (gen4) et 59 % (gen5). Échelle optimale
+  K ≈ 725 pour gen4, ≈ 1050 pour gen5 (avec elle, les deux jeux sont aussi cohérents : MSE 0,0374 / 0,0372).
+- Nouvelles options : `train.py --score-scale K` (seule la perte change, la sortie reste lue en cp par le moteur)
+  et `--wdl-weight W` (poids du résultat de partie dans la cible, 0,5 par défaut comme avant).
+- Contre net_v3 à profondeur fixe 7, 2000 parties chacun (±0,9 %) :
+  gen5 échelle 400 -> 48,2 % ; gen5 75 % résultat -> 50,1 % ; gen5 K=1050 -> 47,8 % ; gen4 K=725 -> 50,5 %.
+- Décision : net_v3 reste le réseau par défaut ; pas de SPRT à 100 ms (aucun candidat au-dessus de 50 % à
+  profondeur égale). Les deux derniers cycles montrent que le réseau (2×45 entrées, une couche cachée) est au
+  plafond : le prochain gain viendra d'entrées plus riches ou d'une seconde couche, ou de la recherche.
+
 ### NNUE — 4ᵉ cycle de renforcement et réseau 512 : non retenus · `596df65`
 - Données `gensfen_gen4` : 12M positions, `net_v3` comme professeur (profondeur 6), 13 processus sur les
   3 machines, ~18 min (contre 1 h 40 pour les 7,7M de gen3, réseau 4× plus lent à l'époque).

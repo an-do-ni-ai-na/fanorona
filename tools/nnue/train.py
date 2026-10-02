@@ -68,7 +68,7 @@ class SfenDataset:
     pour l'overhead Python par-échantillon, largement dominant devant le calcul du réseau
     lui-même. `iter_batches()` ci-dessous fait un seul slicing numpy vectorisé par batch."""
 
-    def __init__(self, path):
+    def __init__(self, path, wdl_weight=0.5, score_scale=SCORE_SCALE):
         fens, scores, wdls = [], [], []
         with open(path) as f:
             for line in f:
@@ -89,8 +89,9 @@ class SfenDataset:
 
         scores_arr = np.asarray(scores, dtype=np.float32)
         wdls_arr = np.asarray(wdls, dtype=np.float32)
-        probs = 1.0 / (1.0 + np.exp(-scores_arr / SCORE_SCALE))
-        self.targets = (0.5 * (probs + wdls_arr)).astype(np.float32)
+        probs = 1.0 / (1.0 + np.exp(-scores_arr / score_scale))
+        # cible = mélange score de recherche / résultat de partie (0.5 = moitié-moitié, historique)
+        self.targets = ((1.0 - wdl_weight) * probs + wdl_weight * wdls_arr).astype(np.float32)
 
     def __len__(self):
         return len(self.targets)
@@ -140,13 +141,19 @@ def main():
     ap.add_argument("--out", default="checkpoints/net.pt")
     ap.add_argument("--export", default=None, help="chemin du fichier .nnue (float32, optionnel)")
     ap.add_argument("--seed", type=int, default=1)
+    ap.add_argument("--score-scale", type=float, default=SCORE_SCALE,
+                    help="échelle score -> probabilité de la perte, à ajuster au jeu de données")
+    ap.add_argument("--wdl-weight", type=float, default=0.5, help="poids du résultat de partie dans la cible (0 = score seul)")
     ap.add_argument("--hidden", type=int, default=HIDDEN_SIZE, help="taille de la couche cachée (multiple de 16)")
     args = ap.parse_args()
 
     torch.manual_seed(args.seed)
     rng = np.random.default_rng(args.seed)
 
-    dataset = SfenDataset(args.data)
+    dataset = SfenDataset(args.data, args.wdl_weight, args.score_scale)
+    # La sortie du réseau reste un logit en unités score/SCORE_SCALE (lue ainsi par src/nnue.cpp) ; seule la
+    # perte passe en probabilité avec l'échelle --score-scale, ajustée au jeu de données (scores -> résultats).
+    out_to_logit = SCORE_SCALE / args.score_scale
     n = len(dataset)
     perm = rng.permutation(n)
     n_val = max(1, int(n * args.val_split))
@@ -166,7 +173,7 @@ def main():
         train_loss = 0.0
         for x, y in dataset.iter_batches(train_idx, args.batch_size):
             opt.zero_grad()
-            pred = torch.sigmoid(model(x).squeeze(-1))
+            pred = torch.sigmoid(model(x).squeeze(-1) * out_to_logit)
             loss = loss_fn(pred, y)
             loss.backward()
             opt.step()
@@ -177,7 +184,7 @@ def main():
         val_loss = 0.0
         with torch.no_grad():
             for x, y in dataset.iter_batches(val_idx, args.batch_size):
-                pred = torch.sigmoid(model(x).squeeze(-1))
+                pred = torch.sigmoid(model(x).squeeze(-1) * out_to_logit)
                 val_loss += loss_fn(pred, y).item() * x.size(0)
         val_loss /= n_val
 
