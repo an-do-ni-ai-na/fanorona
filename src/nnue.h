@@ -7,7 +7,7 @@
 
 namespace fanorona::NNUE {
 
-// Charge un fichier de poids exporté par tools/nnue/train.py (--export, format "FNUE").
+// Charge un fichier de poids exporté par tools/nnue/train.py (--export, formats "FNUE" et "FNU2").
 // Renvoie false (et laisse l'état précédent inchangé) si le fichier est absent/invalide.
 bool load(const std::string& path);
 

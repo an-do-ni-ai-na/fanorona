@@ -32,6 +32,23 @@ std::vector<float> g_b1;  // [hidden]
 std::vector<float> g_w2;  // [hidden]        (= nn.Linear(hidden, 1).weight, une seule ligne)
 float g_b2 = 0.0f;
 
+// Format FNU2 (tools/nnue/train.py, classe NNUE2) : après le même accumulateur, deux petites couches denses
+// hidden -> l2 -> l3 -> 1, en `nb` exemplaires choisis par le nombre total de pièces (bucket = nombre de
+// seuils <= nb_pièces). Matrices transposées au chargement ([entrée][sortie]) : chaque neurone d'entrée
+// non nul ajoute une ligne contiguë aux sorties (vectorisée), et les neurones nuls après ClippedReLU, très
+// nombreux, sont simplement sautés.
+struct Stack {
+    std::vector<float> w2t, b2;  // [hidden][l2], [l2]
+    std::vector<float> w3t, b3;  // [l2][l3], [l3]
+    std::vector<float> w4;       // [l3]
+    float b4 = 0.0f;
+};
+bool g_stacked = false;
+int g_l2 = 0, g_l3 = 0;
+std::vector<int> g_thresholds;
+std::vector<Stack> g_stacks;
+std::vector<float> g_h1, g_h2, g_h3;  // tampons de travail (état global comme l'accumulateur, pas thread-safe)
+
 // Accumulateur incrémental : accum[c] = b1 + W_own @ pieces(c) + W_opp @ pieces(~c), c'est-à-
 // dire "la pré-activation telle qu'elle serait si c'était le tour de c". À l'évaluation, on
 // lit directement accum[pos.sideToMove]. Pas d'accumulateur par nœud de recherche façon
@@ -119,6 +136,145 @@ void update_incremental(const Position& pos) {
     g_cache.byColor[BLACK] = newBlack;
 }
 
+// Lit une matrice [rows][cols] (ordre de nn.Linear) et la renvoie transposée [cols][rows].
+bool read_transposed(std::ifstream& f, std::vector<float>& dst, size_t rows, size_t cols) {
+    std::vector<float> m(rows * cols);
+    if (!read_exact(f, m.data(), m.size() * sizeof(float))) return false;
+    dst.assign(rows * cols, 0.0f);
+    for (size_t r = 0; r < rows; ++r)
+        for (size_t c = 0; c < cols; ++c) dst[c * rows + r] = m[r * cols + c];
+    return true;
+}
+
+bool read_vec(std::ifstream& f, std::vector<float>& dst, size_t n) {
+    dst.assign(n, 0.0f);
+    return read_exact(f, dst.data(), n * sizeof(float));
+}
+
+// Suite du chargement pour le format FNU2 (le magic est déjà lu). Ne touche à l'état global qu'une fois
+// tout le fichier lu et validé.
+bool load_stacked(std::ifstream& f, const std::string& path) {
+    int32_t hdr[4];
+    if (!read_exact(f, hdr, sizeof(hdr)) || hdr[0] <= 0 || hdr[0] > 65536 || hdr[1] <= 0 || hdr[1] > 1024 ||
+        hdr[2] <= 0 || hdr[2] > 1024 || hdr[3] <= 0 || hdr[3] > 64) {
+        std::cout << "info string nnue: en-tête FNU2 invalide dans " << path << std::endl;
+        return false;
+    }
+    const size_t h = size_t(hdr[0]), l2 = size_t(hdr[1]), l3 = size_t(hdr[2]), nb = size_t(hdr[3]);
+    std::vector<int32_t> thr(nb - 1);
+    std::vector<float> w1t, b1;
+    std::vector<Stack> stacks(nb);
+    bool ok = (nb == 1 || read_exact(f, thr.data(), thr.size() * sizeof(int32_t))) &&
+              read_transposed(f, w1t, h, INPUT_SIZE) && read_vec(f, b1, h);
+    for (size_t b = 0; ok && b < nb; ++b) {
+        Stack& s = stacks[b];
+        std::vector<float> b4;
+        ok = read_transposed(f, s.w2t, l2, h) && read_vec(f, s.b2, l2) && read_transposed(f, s.w3t, l3, l2) &&
+             read_vec(f, s.b3, l3) && read_vec(f, s.w4, l3) && read_vec(f, b4, 1);
+        if (ok) s.b4 = b4[0];
+    }
+    if (!ok) {
+        std::cout << "info string nnue: fichier tronqué " << path << std::endl;
+        return false;
+    }
+
+    g_hidden = int(h);
+    g_w1t = std::move(w1t);
+    g_b1 = std::move(b1);
+    g_l2 = int(l2);
+    g_l3 = int(l3);
+    g_thresholds.assign(thr.begin(), thr.end());
+    g_stacks = std::move(stacks);
+    g_h1.assign(h, 0.0f);
+    g_h2.assign(l2, 0.0f);
+    g_h3.assign(l3, 0.0f);
+    g_stacked = true;
+    g_loaded = true;
+    g_cache.valid = false;
+    std::cout << "info string nnue: " << path << " chargé (hidden=" << h << ", couches " << l2 << "x" << l3
+              << ", " << nb << " buckets)" << std::endl;
+    return true;
+}
+
+// out[0..n) += x * w[0..n) : ligne contiguë, vectorisée par le compilateur.
+inline void axpy(float* __restrict out, const float* __restrict w, float x, int n) {
+    for (int j = 0; j < n; ++j) out[j] += x * w[j];
+}
+
+// Couches denses du format FNU2, à partir de l'accumulateur du camp au trait.
+float forward_stacked(const float* acc, const Position& pos) {
+    const int pieces = popcount(pos.pieces(WHITE) | pos.pieces(BLACK));
+    int b = 0;
+    for (int t : g_thresholds) b += pieces >= t;
+    const Stack& s = g_stacks[size_t(b)];
+
+#if defined(__AVX2__) && defined(__FMA__)
+    // Chemin rapide pour la forme utilisée (l2 = 16, l3 = 32). Une boucle naïve enchaîne des
+    // multiplications-additions dépendantes les unes des autres (4 cycles de latence chacune) : ici, quatre
+    // neurones d'entrée à la fois vont dans quatre paires d'accumulateurs indépendantes, sans branchement.
+    if (g_l2 == 16 && g_l3 == 32 && g_hidden % 8 == 0) {
+        const __m256 zero = _mm256_setzero_ps(), one = _mm256_set1_ps(1.0f);
+        // Dense volontairement : ~70 % des neurones sont nuls après ClippedReLU, mais ne traiter que les non nuls
+        // (indices relevés par masque AVX2) a été mesuré PLUS LENT (~900k contre ~1,08M nœuds/s, net_s3) : le
+        // parcours des bits du masque coûte plus en erreurs de prédiction que les multiplications évitées.
+        float* h1 = g_h1.data();
+        for (int i = 0; i < g_hidden; i += 8)
+            _mm256_storeu_ps(h1 + i, _mm256_min_ps(_mm256_max_ps(_mm256_loadu_ps(acc + i), zero), one));
+
+        const float* w = s.w2t.data();
+        __m256 a[8];
+        a[0] = _mm256_loadu_ps(s.b2.data());
+        a[1] = _mm256_loadu_ps(s.b2.data() + 8);
+        for (int k = 2; k < 8; ++k) a[k] = zero;
+        for (int i = 0; i < g_hidden; i += 4, w += 64)
+            for (int u = 0; u < 4; ++u) {
+                const __m256 x = _mm256_broadcast_ss(h1 + i + u);
+                a[2 * u] = _mm256_fmadd_ps(_mm256_loadu_ps(w + 16 * u), x, a[2 * u]);
+                a[2 * u + 1] = _mm256_fmadd_ps(_mm256_loadu_ps(w + 16 * u + 8), x, a[2 * u + 1]);
+            }
+        float h2[16];
+        _mm256_storeu_ps(h2, _mm256_min_ps(_mm256_max_ps(_mm256_add_ps(_mm256_add_ps(a[0], a[2]), _mm256_add_ps(a[4], a[6])), zero), one));
+        _mm256_storeu_ps(h2 + 8, _mm256_min_ps(_mm256_max_ps(_mm256_add_ps(_mm256_add_ps(a[1], a[3]), _mm256_add_ps(a[5], a[7])), zero), one));
+
+        const float* w3 = s.w3t.data();
+        __m256 c[8];
+        for (int k = 0; k < 4; ++k) c[k] = _mm256_loadu_ps(s.b3.data() + 8 * k), c[k + 4] = zero;
+        for (int j = 0; j < 16; j += 2, w3 += 64)
+            for (int u = 0; u < 2; ++u) {
+                const __m256 x = _mm256_broadcast_ss(h2 + j + u);
+                for (int k = 0; k < 4; ++k)
+                    c[4 * u + k] = _mm256_fmadd_ps(_mm256_loadu_ps(w3 + 32 * u + 8 * k), x, c[4 * u + k]);
+            }
+        __m256 o = zero;
+        for (int k = 0; k < 4; ++k) {
+            const __m256 h3 = _mm256_min_ps(_mm256_max_ps(_mm256_add_ps(c[k], c[k + 4]), zero), one);
+            o = _mm256_fmadd_ps(_mm256_loadu_ps(s.w4.data() + 8 * k), h3, o);
+        }
+        float lanes[8];
+        _mm256_storeu_ps(lanes, o);
+        float out = s.b4;
+        for (float l : lanes) out += l;
+        return out;
+    }
+#endif
+
+    float* h2 = g_h2.data();
+    std::copy(s.b2.begin(), s.b2.end(), h2);
+    for (int i = 0; i < g_hidden; ++i) {
+        float x = std::min(std::max(acc[i], 0.0f), 1.0f);
+        if (x != 0.0f) axpy(h2, s.w2t.data() + size_t(i) * size_t(g_l2), x, g_l2);
+    }
+    float* h3 = g_h3.data();
+    std::copy(s.b3.begin(), s.b3.end(), h3);
+    for (int j = 0; j < g_l2; ++j) {
+        float x = std::min(std::max(h2[j], 0.0f), 1.0f);
+        if (x != 0.0f) axpy(h3, s.w3t.data() + size_t(j) * size_t(g_l3), x, g_l3);
+    }
+    float out = s.b4;
+    for (int k = 0; k < g_l3; ++k) out += s.w4[size_t(k)] * std::min(std::max(h3[k], 0.0f), 1.0f);
+    return out;
+}
+
 }  // namespace
 
 bool load(const std::string& path) {
@@ -129,7 +285,9 @@ bool load(const std::string& path) {
     }
 
     char magic[4];
-    if (!read_exact(f, magic, 4) || std::string(magic, 4) != "FNUE") {
+    if (!read_exact(f, magic, 4)) magic[0] = 0;
+    if (std::string(magic, 4) == "FNU2") return load_stacked(f, path);
+    if (std::string(magic, 4) != "FNUE") {
         std::cout << "info string nnue: fichier invalide (magic) " << path << std::endl;
         return false;
     }
@@ -157,6 +315,7 @@ bool load(const std::string& path) {
     g_b1 = std::move(b1);
     g_w2 = std::move(w2);
     g_b2 = b2;
+    g_stacked = false;
     g_loaded = true;
     g_cache.valid = false;  // les poids ont changé, l'accumulateur mis en cache ne vaut plus rien
     std::cout << "info string nnue: " << path << " chargé (hidden=" << hidden << ")" << std::endl;
@@ -172,6 +331,7 @@ Value evaluate(const Position& pos) {
     else update_incremental(pos);
 
     const float* __restrict acc = g_cache.acc[pos.sideToMove].data();
+    if (g_stacked) return clamp_eval(int(std::lround(double(forward_stacked(acc, pos)) * SCORE_SCALE)));
     const float* __restrict w2 = g_w2.data();
     // Couche de sortie : 8 sommes partielles indépendantes (une par voie AVX2). Une réduction en un seul flottant
     // n'est pas vectorisée sans -ffast-math (l'ordre des additions changerait) : c'était une chaîne de 256

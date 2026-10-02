@@ -99,7 +99,7 @@ def main():
     ap.add_argument("--games", type=int, default=30, help="parties par paire voisine")
     ap.add_argument("--gap2", type=int, default=20, help="parties par paire à deux crans")
     ap.add_argument("--workers", type=int, default=5)
-    ap.add_argument("--net", default="net_v3")
+    ap.add_argument("--net", default="net_v6")
     ap.add_argument("--log", default=str(ROOT / "data" / "elo_calibration.jsonl"))
     ap.add_argument("--out", default=str(ROOT / "tools" / "gui" / "elo.json"))
     ap.add_argument("--fit-only", action="store_true")

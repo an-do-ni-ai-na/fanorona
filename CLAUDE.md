@@ -53,7 +53,7 @@ g++ -g -O0 -std=c++17 -Isrc -fsanitize=address,undefined src/{bitboard,position,
 | `src/movegen.*` | `generate_moves()` (tours complets dédupliqués), `generate_detailed()` (avec notation), `parse_move()`, `perft()` ; `generate_vela()` pour la phase 1 de la vela |
 | `src/telo.*` | Fanoron-Telo 3×3 (alignement, pose puis déplacement) : module à part, résolu par analyse rétrograde au démarrage (`Telo::init`), `go` parfait ou `go depth N` limité |
 | `src/evaluate.*` | évaluation manuelle (HCE), du point de vue du camp au trait ; bascule vers `NNUE::evaluate()` si activé |
-| `src/nnue.*` | inférence NNUE (charge un `.nnue`, forward pass 2×45→256 ReLU clippé→1, accumulateur incrémental par diff, W1 transposé, sortie AVX2) |
+| `src/nnue.*` | inférence NNUE : formats FNUE (2×45→256→1) et FNU2 (2×45→hidden→16→32→1, couches denses en 4 exemplaires selon le nombre de pièces), accumulateur incrémental par diff, W1 transposé, couches en AVX2 |
 | `src/tt.*` | table de transposition, seaux de 2 entrées, générations |
 | `src/search.*` | `Search::think()` : ID, aspiration, PVS, qsearch, NMP, RFP, LMR, killers, historique, temps |
 | `src/uci.*` | boucle de commandes (`position`, `go`, `stop`, `setoption`, `d`, `moves`, `eval`, `status`, `perft`, `bench`, `play`, `gensfen`) |
@@ -135,8 +135,8 @@ g++ -g -O0 -std=c++17 -Isrc -fsanitize=address,undefined src/{bitboard,position,
 
 ## État actuel
 
-- HCE ~2,3 M nœuds/s, NNUE ~1,5-1,7 M nœuds/s (1 thread, fanorona-dev). Signatures bench 8 (2026-10-01) :
-  HCE 572 736 nœuds, NNUE net_v3 933 003 nœuds.
+- HCE ~2,3 M nœuds/s, NNUE ~1,3-1,5 M nœuds/s (1 thread, fanorona-dev). Signatures bench 8 (2026-10-03) :
+  HCE 572 736 nœuds, NNUE net_v3 933 003 nœuds, NNUE net_v6 (réseau par défaut) 863 974 nœuds.
 - Évaluation : matériel (100), points forts, connectivité, mobilité, menaces, bonus de simplification, tempo.
   Poids non réglés.
 
@@ -287,9 +287,22 @@ g++ -g -O0 -std=c++17 -Isrc -fsanitize=address,undefined src/{bitboard,position,
      Rien ne dépasse `net_v3`. Conclusion des cycles 4 et 5 : avec 2×45 entrées et une seule couche cachée, le
      réseau est au plafond de ce que ces données peuvent lui apprendre ; le prochain levier est l'architecture
      (entrées plus riches : voisinages, lignes de capture ; seconde couche) ou la recherche, pas les données.
-   - **reste à faire** : quantification int16 (2× plus de voies par instruction, gain borné : l'évaluation
-     n'est plus qu'une part minoritaire du temps par nœud) ; architecture plus riche (voir ci-dessus) ;
-     recalibrer l'Elo de l'interface (`tools/elo/calibrate.py`) après tout gain de force.
+   - ~~architecture plus riche~~ **fait** (2026-10-03) : **net_v6**, réseau par défaut. Format FNU2 : même
+     accumulateur 90 -> hidden (mise à jour incrémentale inchangée), puis deux couches denses hidden -> 16 -> 32 -> 1
+     (ClippedReLU), en 4 exemplaires choisis par le nombre total de pièces (seuils 5, 8, 12 : 63 % des positions des
+     données ont <= 8 pièces). `train.py --l2 16 --l3 32 --buckets 5,8,12 --lr-gamma 0.9` ; `verify.py` lit les deux
+     formats. net_v6 = accumulateur 128, 25 epochs, taux d'apprentissage × 0,9 par epoch, gen3 + gen4 (val_loss
+     0,01215). SPRT contre net_v3 à 100 ms, bornes 0/+5, 3 machines : **H1 en 9823 parties**, W3349 D3331 L3143
+     (51,05 %, ≈ +7 Elo). Essais (profondeur fixe 7, 2000 parties contre net_v3) : accumulateur 256 + 4 buckets
+     52,9 % (53,1 % en entraînement long) mais 20-25 % plus lent, d'où seulement 50,5 % à 100 ms ; sans buckets
+     52,3 % ; accumulateur 128 en 15 epochs 51,2 % ; net_v6 52,1 % à vitesse quasi égale. Vitesse : couches
+     denses en AVX2 avec 8 accumulateurs indépendants (une boucle naïve était 2,5× plus lente : chaîne de FMA
+     dépendantes). Essayé et rejeté : ne traiter que les neurones non nuls (~72 % sont nuls) via masque AVX2 —
+     plus lent (~900k contre ~1,08M nps), erreurs de prédiction du parcours de bits. Réseaux d'essai rangés dans
+     `checkpoints/essais/` (hors de la liste de l'interface). Elo de l'interface recalibré avec net_v6.
+   - **reste à faire** : quantification int16 (2× plus de voies par instruction ; avec FNU2 les couches denses
+     pèsent plus, le gain serait plus net qu'avant) ; un cycle de renforcement avec net_v6 comme professeur ;
+     entrées plus riches que les 2×45 cases (voisinages, lignes de capture).
 5. **Lazy SMP** : option `Threads`, TT partagée (entrées rendues sûres par XOR clé/données).
 6. Améliorations de recherche — **en cours** (2026-10-01), chaque idée testée par SPRT (net_v3, 100 ms, 3 machines) :
    - **retenu** : LMP + futilité des coups calmes (positions sans capture, profondeur <= 3, hors PV) — séparément

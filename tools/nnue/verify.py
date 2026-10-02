@@ -29,26 +29,46 @@ from train import INPUT_SIZE, SCORE_SCALE, SQUARE_NB, parse_fen_features  # noqa
 
 
 def load_nnue(path):
+    """Renvoie une fonction x (90 flottants) -> sortie brute, pour les formats FNUE et FNU2."""
     with open(path, "rb") as f:
+        def floats(n):
+            return np.frombuffer(f.read(n * 4), dtype="<f4")
+
         magic = f.read(4)
-        if magic != b"FNUE":
+        if magic == b"FNUE":
+            (hidden,) = struct.unpack("<i", f.read(4))
+            w1 = floats(hidden * INPUT_SIZE).reshape(hidden, INPUT_SIZE)
+            b1, w2 = floats(hidden), floats(hidden)
+            (b2,) = struct.unpack("<f", f.read(4))
+            return lambda x: float(w2 @ np.clip(w1 @ x + b1, 0.0, 1.0) + b2)
+        if magic != b"FNU2":
             raise ValueError(f"magic invalide dans {path}: {magic!r}")
-        (hidden,) = struct.unpack("<i", f.read(4))
-        w1 = np.frombuffer(f.read(hidden * INPUT_SIZE * 4), dtype="<f4").reshape(hidden, INPUT_SIZE)
-        b1 = np.frombuffer(f.read(hidden * 4), dtype="<f4")
-        w2 = np.frombuffer(f.read(hidden * 4), dtype="<f4")
-        (b2,) = struct.unpack("<f", f.read(4))
-    return w1, b1, w2, b2
+        hidden, l2, l3, nb = struct.unpack("<4i", f.read(16))
+        thresholds = struct.unpack(f"<{nb - 1}i", f.read(4 * (nb - 1)))
+        w1 = floats(hidden * INPUT_SIZE).reshape(hidden, INPUT_SIZE)
+        b1 = floats(hidden)
+        stacks = []
+        for _ in range(nb):
+            w2, b2 = floats(l2 * hidden).reshape(l2, hidden), floats(l2)
+            w3, b3 = floats(l3 * l2).reshape(l3, l2), floats(l3)
+            w4, b4 = floats(l3), floats(1)[0]
+            stacks.append((w2, b2, w3, b3, w4, b4))
+
+    def forward(x):
+        w2, b2, w3, b3, w4, b4 = stacks[sum(int(x.sum()) >= t for t in thresholds)]
+        h1 = np.clip(w1 @ x + b1, 0.0, 1.0)
+        h2 = np.clip(w2 @ h1 + b2, 0.0, 1.0)
+        h3 = np.clip(w3 @ h2 + b3, 0.0, 1.0)
+        return float(w4 @ h3 + b4)
+    return forward
 
 
-def eval_fen_reference(fen, w1, b1, w2, b2):
+def eval_fen_reference(fen, net):
     own_sq, opp_sq = parse_fen_features(fen)
     x = np.zeros(INPUT_SIZE, dtype=np.float32)
     x[own_sq] = 1.0
     x[[SQUARE_NB + s for s in opp_sq]] = 1.0
-    h = np.clip(w1 @ x + b1, 0.0, 1.0)
-    out = float(w2 @ h + b2)
-    return round(out * SCORE_SCALE)
+    return round(net(x) * SCORE_SCALE)
 
 
 def eval_fens_engine(engine, nnue_path, fens):
@@ -79,8 +99,8 @@ def main():
     else:
         fens = ["BBBBBBBBB/BBBBBBBBB/BWBW1BWBW/WWWWWWWWW/WWWWWWWWW w 0 1"]
 
-    w1, b1, w2, b2 = load_nnue(args.nnue)
-    ref_scores = [eval_fen_reference(fen, w1, b1, w2, b2) for fen in fens]
+    net = load_nnue(args.nnue)
+    ref_scores = [eval_fen_reference(fen, net) for fen in fens]
     cpp_scores = eval_fens_engine(args.engine, args.nnue, fens)
 
     if len(cpp_scores) != len(fens):

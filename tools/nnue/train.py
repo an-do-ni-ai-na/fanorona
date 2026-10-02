@@ -3,7 +3,9 @@
 `./fanorona gensfen` (format texte : <fen>|<score_cp>|<wdl> par ligne, cf. cmd_gensfen
 dans src/uci.cpp).
 
-Architecture (cf. CLAUDE.md, feuille de route NNUE) : entrée 2x45 (cases occupées par le
+Deux architectures (cf. CLAUDE.md, feuille de route NNUE). NNUE2 (--l2 > 0, format FNU2, réseau par défaut
+net_v6 depuis le 2026-10-03) : même accumulateur, suivi de couches denses par nombre de pièces (classe NNUE2).
+NNUE (format FNUE, net_v1 à net_v3) : entrée 2x45 (cases occupées par le
 camp au trait / cases occupées par l'adversaire, un bit chacune), une couche cachée 256
 avec ReLU clippé [0,1] ("accumulateur"), sortie scalaire. La sortie du réseau est en unités
 score/SCORE_SCALE (logit) : score_cp = SCORE_SCALE * sortie_brute.
@@ -116,6 +118,66 @@ class NNUE(nn.Module):
         return self.output(h)
 
 
+class NNUE2(nn.Module):
+    """Réseau à couches empilées (2026-10-02) : même accumulateur 90 -> hidden que NNUE (donc même mise à jour
+    incrémentale côté moteur), suivi de deux petites couches denses hidden -> l2 -> l3 -> 1 (ClippedReLU entre
+    chaque). Les couches denses existent en `nb` exemplaires ("buckets") choisis par le nombre total de pièces :
+    bucket = nombre de seuils <= nb_pièces. Au Fanorona le plateau se vide très vite (63 % des positions des
+    données ont <= 8 pièces), et un plateau plein ne s'évalue pas comme une finale à 3 contre 2.
+    Les nb exemplaires sont calculés d'un coup (une seule nn.Linear de sortie nb*l2) puis le bon est extrait
+    par indexation : c'est l'astuce des "layer stacks" de nnue-pytorch."""
+
+    def __init__(self, hidden=HIDDEN_SIZE, l2=16, l3=32, thresholds=(5, 8, 12)):
+        super().__init__()
+        self.hidden, self.l2_size, self.l3_size = hidden, l2, l3
+        self.thresholds = list(thresholds)
+        self.nb = len(self.thresholds) + 1
+        self.register_buffer("thr", torch.tensor(self.thresholds, dtype=torch.float32))
+        self.input = nn.Linear(INPUT_SIZE, hidden)
+        self.l2 = nn.Linear(hidden, l2 * self.nb)
+        self.l3 = nn.Linear(l2, l3 * self.nb)
+        self.output = nn.Linear(l3, self.nb)
+
+    def bucket(self, x):
+        return (x.sum(1, keepdim=True) >= self.thr).sum(1)
+
+    def forward(self, x):
+        b = self.bucket(x)
+        rows = torch.arange(x.size(0))
+        h1 = torch.clamp(self.input(x), 0.0, 1.0)
+        h2 = torch.clamp(self.l2(h1).view(-1, self.nb, self.l2_size)[rows, b], 0.0, 1.0)
+        h3 = torch.clamp(self.l3(h2).view(-1, self.nb, self.l3_size)[rows, b], 0.0, 1.0)
+        return self.output(h3)[rows, b].unsqueeze(-1)
+
+
+def export_weights2(model, path):
+    """Export float32 little-endian du réseau NNUE2 :
+        magic b"FNU2" | hidden, l2, l3, nb (int32 x4) | seuils (int32 x (nb-1)) |
+        input.weight [hidden][90] | input.bias [hidden] |
+        pour chaque bucket b : w2 [l2][hidden], b2 [l2], w3 [l3][l2], b3 [l3], w4 [l3], b4 (1 flottant)
+    """
+    def arr(t):
+        return t.detach().numpy().astype("<f4")
+
+    with open(path, "wb") as f:
+        f.write(b"FNU2")
+        f.write(struct.pack("<4i", model.hidden, model.l2_size, model.l3_size, model.nb))
+        f.write(struct.pack(f"<{model.nb - 1}i", *model.thresholds))
+        f.write(arr(model.input.weight).tobytes())
+        f.write(arr(model.input.bias).tobytes())
+        w2, b2 = arr(model.l2.weight), arr(model.l2.bias)
+        w3, b3 = arr(model.l3.weight), arr(model.l3.bias)
+        w4, b4 = arr(model.output.weight), arr(model.output.bias)
+        L2, L3 = model.l2_size, model.l3_size
+        for b in range(model.nb):
+            f.write(w2[b * L2:(b + 1) * L2].tobytes())
+            f.write(b2[b * L2:(b + 1) * L2].tobytes())
+            f.write(w3[b * L3:(b + 1) * L3].tobytes())
+            f.write(b3[b * L3:(b + 1) * L3].tobytes())
+            f.write(w4[b].tobytes())
+            f.write(b4[b:b + 1].tobytes())
+
+
 def export_weights(model, path):
     """Export binaire *non quantifié* (float32, little-endian) :
         magic b"FNUE" (4o) | hidden_size (int32) |
@@ -145,6 +207,12 @@ def main():
                     help="échelle score -> probabilité de la perte, à ajuster au jeu de données")
     ap.add_argument("--wdl-weight", type=float, default=0.5, help="poids du résultat de partie dans la cible (0 = score seul)")
     ap.add_argument("--hidden", type=int, default=HIDDEN_SIZE, help="taille de la couche cachée (multiple de 16)")
+    ap.add_argument("--l2", type=int, default=0,
+                    help="> 0 : réseau à couches empilées NNUE2 (hidden -> l2 -> l3 -> 1, multiples de 8), format FNU2")
+    ap.add_argument("--l3", type=int, default=32)
+    ap.add_argument("--buckets", default="5,8,12",
+                    help="NNUE2 : seuils de nombre de pièces séparant les sous-réseaux ('' = un seul)")
+    ap.add_argument("--lr-gamma", type=float, default=1.0, help="taux d'apprentissage multiplié par ce facteur à chaque epoch")
     args = ap.parse_args()
 
     torch.manual_seed(args.seed)
@@ -160,8 +228,13 @@ def main():
     val_idx, train_idx = perm[:n_val], perm[n_val:]
     n_train = len(train_idx)
 
-    model = NNUE(hidden=args.hidden)
+    if args.l2 > 0:
+        thresholds = [int(t) for t in args.buckets.split(",") if t.strip()]
+        model = NNUE2(hidden=args.hidden, l2=args.l2, l3=args.l3, thresholds=thresholds)
+    else:
+        model = NNUE(hidden=args.hidden)
     opt = torch.optim.Adam(model.parameters(), lr=args.lr)
+    sched = torch.optim.lr_scheduler.ExponentialLR(opt, gamma=args.lr_gamma)
     loss_fn = nn.MSELoss()
 
     out_path = Path(args.out)
@@ -179,6 +252,7 @@ def main():
             opt.step()
             train_loss += loss.item() * x.size(0)
         train_loss /= n_train
+        sched.step()
 
         model.eval()
         val_loss = 0.0
@@ -193,7 +267,7 @@ def main():
 
     if args.export:
         Path(args.export).parent.mkdir(parents=True, exist_ok=True)
-        export_weights(model, args.export)
+        (export_weights2 if args.l2 > 0 else export_weights)(model, args.export)
         print(f"poids exportés (float32, non quantifiés) -> {args.export}")
 
 

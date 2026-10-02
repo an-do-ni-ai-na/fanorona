@@ -9,6 +9,26 @@ fanorona-dev, i7-6700T, 1 thread), justesse par `make test`, `perft` et `tools/n
 
 ---
 
+## 2026-10-03
+
+### NNUE — architecture à couches empilées : net_v6, nouveau réseau par défaut · `{COMMIT}`
+- Constat de départ : 63 % des positions des données ont 8 pièces ou moins, 90 % en ont 12 ou moins ; et un réseau
+  à une seule couche cachée ne représente presque que des valeurs de cases, pas leurs interactions.
+- Nouveau format FNU2 : même accumulateur 90 -> hidden (mise à jour incrémentale inchangée), puis deux couches
+  denses hidden -> 16 -> 32 -> 1, en 4 exemplaires selon le nombre de pièces (1-4, 5-7, 8-11, 12+). Moteur,
+  `train.py` (`--l2 --l3 --buckets --lr-gamma`) et `verify.py` (2000/2000 à ±1 cp) ; l'ancien format reste lu.
+- Vitesse : une boucle naïve rendait le moteur 2,5× plus lent ; en AVX2 avec 8 accumulateurs indépendants,
+  accumulateur 256 : −20 %, accumulateur 128 : ≈ net_v3. Ne traiter que les neurones non nuls (72 %) : plus lent,
+  abandonné.
+- Contre net_v3 à profondeur fixe 7 (2000 parties) : 256 + buckets 52,9 % / 53,1 % (entraînement long) ;
+  sans buckets 52,3 % ; 128 + buckets 51,2 % / 52,1 % (entraînement long). À 100 ms, le 256 ne fait que 50,5 %
+  (4523 parties) : sa lenteur mange le gain.
+- **net_v6** = 128 + buckets, entraînement long (25 epochs, taux × 0,9 par epoch), gen3 + gen4. SPRT contre
+  net_v3, 100 ms, bornes 0/+5, 3 machines : **H1 acceptée en 9823 parties**, W3349 D3331 L3143 (51,05 %,
+  ≈ +7 Elo). Signature `bench 8` : 863 974 nœuds.
+- Déployé comme réseau par défaut de l'interface ; Elo des niveaux recalibré (744 parties) : 800, 1379, 1816,
+  1996, 2054, 2306 (écarts avec la calibration précédente dans la marge de ±100 Elo).
+
 ## 2026-10-02
 
 ### NNUE — étiquettes à profondeur 9 et calibration de l'échelle : non retenus · `d1b98bd`
