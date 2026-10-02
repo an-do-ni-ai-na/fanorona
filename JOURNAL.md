@@ -11,7 +11,7 @@ fanorona-dev, i7-6700T, 1 thread), justesse par `make test`, `perft` et `tools/n
 
 ## 2026-10-03
 
-### NNUE — architecture à couches empilées : net_v6, nouveau réseau par défaut · `{COMMIT}`
+### NNUE — architecture à couches empilées : net_v6, nouveau réseau par défaut · `4014a41`
 - Constat de départ : 63 % des positions des données ont 8 pièces ou moins, 90 % en ont 12 ou moins ; et un réseau
   à une seule couche cachée ne représente presque que des valeurs de cases, pas leurs interactions.
 - Nouveau format FNU2 : même accumulateur 90 -> hidden (mise à jour incrémentale inchangée), puis deux couches
