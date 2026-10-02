@@ -11,7 +11,7 @@ fanorona-dev, i7-6700T, 1 thread), justesse par `make test`, `perft` et `tools/n
 
 ## 2026-10-02
 
-### NNUE — étiquettes à profondeur 9 et calibration de l'échelle : non retenus · `{COMMIT}`
+### NNUE — étiquettes à profondeur 9 et calibration de l'échelle : non retenus · `d1b98bd`
 - Données `gensfen_gen5` : 13M positions à profondeur 9 (net_v3 professeur), 3 machines, ~2 h 30.
 - Diagnostic : les scores de recherche sont trop confiants par rapport aux résultats des parties. À +500 cp,
   l'échelle 400 prédit 80 % des points ; les parties en donnent 68 % (gen4) et 59 % (gen5). Échelle optimale
