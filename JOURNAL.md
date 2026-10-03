@@ -11,7 +11,7 @@ fanorona-dev, i7-6700T, 1 thread), justesse par `make test`, `perft` et `tools/n
 
 ## 2026-10-04
 
-### Outils — entraînement des réseaux sur GPU · `{COMMIT}`
+### Outils — entraînement des réseaux sur GPU · `454a79f`
 - Machine Windows du réseau (andoniaina-desk, 10.10.10.200, GTX 1070 Ti) pilotée par SSH depuis fanorona-dev.
   `train.py --device` (auto : la carte si présente ; données copiées une fois dans la mémoire de la carte) et
   `--save-npz` (données converties en binaire : la machine n'a que 8 Go de RAM).
@@ -20,7 +20,7 @@ fanorona-dev, i7-6700T, 1 thread), justesse par `make test`, `perft` et `tools/n
   ~37, val_loss 0,01210 contre 0,01215, même qualité sur des positions jamais vues.
 - Contraintes : NumPy < 2.4 (le Core 2 Quad n'a pas SSE4.2), PyTorch compilé pour CUDA 12.6 (Pascal).
 
-### NNUE — augmentation par symétrie : meilleure généralisation, pas de gain en partie · `{COMMIT}`
+### NNUE — augmentation par symétrie : meilleure généralisation, pas de gain en partie · `454a79f`
 - Les 4 symétries du plateau conservent le jeu (vérifié : mêmes coups légaux et même éval HCE sur 9000
   positions retournées, nouvel outil `tools/nnue/symmetry.py`).
 - Constat : net_v6 évalue une même position très différemment selon son orientation (183 cp d'écart médian).
