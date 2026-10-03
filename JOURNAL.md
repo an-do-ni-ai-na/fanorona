@@ -9,6 +9,39 @@ fanorona-dev, i7-6700T, 1 thread), justesse par `make test`, `perft` et `tools/n
 
 ---
 
+## 2026-10-04
+
+### Outils — entraînement des réseaux sur GPU · `{COMMIT}`
+- Machine Windows du réseau (andoniaina-desk, 10.10.10.200, GTX 1070 Ti) pilotée par SSH depuis fanorona-dev.
+  `train.py --device` (auto : la carte si présente ; données copiées une fois dans la mémoire de la carte) et
+  `--save-npz` (données converties en binaire : la machine n'a que 8 Go de RAM).
+- 12 s par epoch en lots de 16 384 (≈ 7× le processeur de fanorona-dev) ; en lots de 1024, plus lent que le
+  processeur (le Core 2 Quad limite le rythme). La recette de net_v6, refaite en 60 epochs : 13 min au lieu de
+  ~37, val_loss 0,01210 contre 0,01215, même qualité sur des positions jamais vues.
+- Contraintes : NumPy < 2.4 (le Core 2 Quad n'a pas SSE4.2), PyTorch compilé pour CUDA 12.6 (Pascal).
+
+### NNUE — augmentation par symétrie : meilleure généralisation, pas de gain en partie · `{COMMIT}`
+- Les 4 symétries du plateau conservent le jeu (vérifié : mêmes coups légaux et même éval HCE sur 9000
+  positions retournées, nouvel outil `tools/nnue/symmetry.py`).
+- Constat : net_v6 évalue une même position très différemment selon son orientation (183 cp d'écart médian).
+- `train.py --augment` : chaque position présentée dans une orientation au hasard. net_v7b (50 epochs) :
+  écart divisé par deux (85 cp), meilleure prédiction du résultat sur des positions jamais vues dans les 4
+  orientations, y compris l'originale.
+- Mais SPRT contre net_v6 (100 ms, 0/+5, fanorona-dev + c3) : 50,2 % en 6862 parties (≈ +1 Elo), arrêté ;
+  net_v7 (25 epochs) : 49,8 % en 3022. Les parties partent toutes de la même position : le bruit d'orientation
+  coûte peu en jeu réel. net_v6 reste le réseau par défaut.
+
+### Recherche — signatures de parité « type Sikidy » : sans valeur stratégique
+- Hypothèse proposée : projeter une position sur 4 bits de parité (pièces de chaque camp, centre, mobilité,
+  mod 2), comme les figures du Sikidy, et chercher un lien avec la valeur de la position.
+- Mesure sur 200 000 positions réelles (information mutuelle avec le résultat de la partie, 1,55 bit au total) :
+  la signature apporte 0,013 bit au-delà du matériel ; chaque grandeur prise en valeur brute apporte 2 à 100
+  fois plus que sa parité (mobilité 0,059 contre 0,0006 ; voisinages 0,105 contre 0,0035). Le modulo 2 jette
+  l'information qui compte (le nombre).
+- Aucun invariant linéaire de parité non trivial n'existe : un coup simple impose aᵢ = aⱼ entre cases voisines,
+  donc a constant ; et la parité du nombre total de pièces change à chaque capture impaire.
+- Retenu de la piste : les symétries du plateau (entrée ci-dessus).
+
 ## 2026-10-03
 
 ### NNUE — architecture à couches empilées : net_v6, nouveau réseau par défaut · `4014a41`

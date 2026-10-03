@@ -317,6 +317,31 @@ g++ -g -O0 -std=c++17 -Isrc -fsanitize=address,undefined src/{bitboard,position,
      dépendantes). Essayé et rejeté : ne traiter que les neurones non nuls (~72 % sont nuls) via masque AVX2 —
      plus lent (~900k contre ~1,08M nps), erreurs de prédiction du parcours de bits. Réseaux d'essai rangés dans
      `checkpoints/essais/` (hors de la liste de l'interface). Elo de l'interface recalibré avec net_v6.
+   - ~~augmentation par symétrie~~ **essayé, non retenu en force** (2026-10-04) : `train.py --augment` présente
+     chaque position dans une des 4 symétries du plateau (identité, miroirs G-D et H-B, demi-tour ; vérifiées par
+     `tools/nnue/symmetry.py rules` : mêmes coups légaux et même éval HCE sur 9000 positions retournées).
+     L'asymétrie d'évaluation de net_v6 est énorme (183 cp d'écart médian entre les 4 orientations d'une même
+     position, 547 cp au 90e centile) ; augmenté (net_v7b, 50 epochs) : 85 / 301 cp, et meilleure prédiction du
+     résultat sur des positions jamais vues dans les 4 orientations, y compris l'originale (0,03319 contre
+     0,03359). Mais SPRT contre net_v6 (100 ms, 0/+5) : 50,2 % en 6862 parties, ≈ +1 Elo, arrêté. Les parties
+     partant toutes de la même position, le bruit d'orientation de net_v6 coûte peu en jeu réel. À réutiliser
+     pour les tables de finales (facteur 4) et quand les données manquent. NB : val_loss d'un réseau augmenté
+     n'est PAS comparable (validation tirée des mêmes parties, orientation d'origine) : comparer avec
+     `symmetry.py nets` sur des positions d'une autre génération.
+   - **Entraînement sur GPU** (2026-10-04) : machine Windows 10 **andoniaina-desk, 10.10.10.200** (GTX 1070 Ti
+     8 Go, Core 2 Quad Q9500, 8 Go RAM), hors Proxmox. SSH (OpenSSH for Windows, compte `andoniaina`, shell
+     cmd) avec les clés de la VM de contrôle et `~/.ssh/id_fanorona_match` de fanorona-dev. Python 3.12 et venv
+     dans `C:\fanorona\` (`venv\Scripts\python.exe`), PyTorch 2.14.1+cu126 (`sm_61` présent ; CUDA 13 ne gère
+     plus Pascal). Pièges : le Q9500 n'a ni SSE4.2 ni POPCNT -> **NumPy < 2.4 obligatoire** (2.4 exige
+     x86-64-v2) ; moteur C++ inutilisable tel quel (pas d'AVX2) et CPU trop lent pour gensfen/matchs.
+     Flux : `train.py données.txt --save-npz données.npz` sur fanorona-dev (4 min pour 19,7M, 1,9 Go), scp vers
+     `C:/fanorona/data/` (~5 Mo/s, pas d'AES-NI), puis
+     `ssh andoniaina@10.10.10.200 "C:\fanorona\venv\Scripts\python.exe C:\fanorona\tools\train.py
+     C:\fanorona\data\gen34.npz --batch-size 16384 --lr 0.004 --epochs 60 --lr-gamma 0.95 ..."`, rapatrier le
+     .nnue, `verify.py`. Le jeu de données entier est placé dans la mémoire de la carte. Mesures : batch 1024 =
+     140 s/epoch (plus lent que le CPU de fanorona-dev : le Core 2 limite le rythme des lancements) ; batch
+     16384 = 12 s/epoch (~7× fanorona-dev). Recette net_v6 refaite en 13 min (60 epochs) : val_loss 0,01210
+     contre 0,01215 en ~37 min sur CPU, éval identique sur positions jamais vues.
    - **reste à faire** : quantification int16 (2× plus de voies par instruction ; avec FNU2 les couches denses
      pèsent plus, le gain serait plus net qu'avant) ; un cycle de renforcement avec net_v6 comme professeur ;
      entrées plus riches que les 2×45 cases (voisinages, lignes de capture).

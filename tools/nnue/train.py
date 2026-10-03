@@ -24,6 +24,7 @@ du vrai format quantifié int16/int8 à ce moment-là.
 """
 import argparse
 import struct
+import time
 from pathlib import Path
 
 import numpy as np
@@ -39,6 +40,22 @@ HIDDEN_SIZE = 256
 # Pente de la sigmoïde score->probabilité, en centipions (mêmes unités que score_to_uci
 # dans src/search.cpp). 400cp -> ~91% de probabilité de gain, échelle usuelle en Elo/logistique.
 SCORE_SCALE = 400.0
+
+
+def symmetry_permutations():
+    """Les 4 symétries du plateau 9x5 qui conservent le jeu : identité, miroir gauche-droite (x -> 8-x), miroir
+    haut-bas (y -> 4-y), demi-tour. Les diagonales partent des points où x+y est pair, parité conservée puisque
+    8 et 4 sont pairs. Pas d'échange de couleurs : les entrées sont déjà vues du camp au trait.
+    Renvoie un tableau [4][90] : la colonne c de la position transformée = la colonne perm[c] de l'originale
+    (chaque symétrie est sa propre inverse)."""
+    perms = []
+    for mx, my in ((False, False), (True, False), (False, True), (True, True)):
+        sq = []
+        for s in range(SQUARE_NB):
+            y, x = divmod(s, FILE_NB)
+            sq.append((RANK_NB - 1 - y if my else y) * FILE_NB + (FILE_NB - 1 - x if mx else x))
+        perms.append(sq + [SQUARE_NB + t for t in sq])
+    return torch.tensor(perms, dtype=torch.long)
 
 
 def parse_fen_features(fen):
@@ -70,36 +87,58 @@ class SfenDataset:
     pour l'overhead Python par-échantillon, largement dominant devant le calcul du réseau
     lui-même. `iter_batches()` ci-dessous fait un seul slicing numpy vectorisé par batch."""
 
-    def __init__(self, path, wdl_weight=0.5, score_scale=SCORE_SCALE):
-        fens, scores, wdls = [], [], []
-        with open(path) as f:
-            for line in f:
-                line = line.strip()
-                if not line:
-                    continue
-                fen, score, wdl = line.split("|")
-                fens.append(fen)
-                scores.append(float(score))
-                wdls.append(float(wdl))
+    def __init__(self, path, wdl_weight=0.5, score_scale=SCORE_SCALE, device="cpu"):
+        if str(path).endswith(".npz"):
+            # Format binaire produit par --save-npz : évite l'analyse du texte (des minutes et plusieurs Go de
+            # mémoire pour ~20M positions), indispensable sur une machine d'entraînement à 8 Go de RAM.
+            d = np.load(path)
+            self.features, self.scores, self.wdls = d["features"], d["scores"], d["wdl"]
+        else:
+            fens, scores, wdls = [], [], []
+            with open(path) as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    fen, score, wdl = line.split("|")
+                    fens.append(fen)
+                    scores.append(float(score))
+                    wdls.append(float(wdl))
 
-        n = len(fens)
-        self.features = np.zeros((n, INPUT_SIZE), dtype=np.uint8)
-        for i, fen in enumerate(fens):
-            own_sq, opp_sq = parse_fen_features(fen)
-            self.features[i, own_sq] = 1
-            self.features[i, [SQUARE_NB + s for s in opp_sq]] = 1
+            n = len(fens)
+            self.features = np.zeros((n, INPUT_SIZE), dtype=np.uint8)
+            for i, fen in enumerate(fens):
+                own_sq, opp_sq = parse_fen_features(fen)
+                self.features[i, own_sq] = 1
+                self.features[i, [SQUARE_NB + s for s in opp_sq]] = 1
+            self.scores = np.asarray(scores, dtype=np.float32)
+            self.wdls = np.asarray(wdls, dtype=np.float32)
 
-        scores_arr = np.asarray(scores, dtype=np.float32)
-        wdls_arr = np.asarray(wdls, dtype=np.float32)
-        probs = 1.0 / (1.0 + np.exp(-scores_arr / score_scale))
+        probs = 1.0 / (1.0 + np.exp(-self.scores / score_scale))
         # cible = mélange score de recherche / résultat de partie (0.5 = moitié-moitié, historique)
-        self.targets = ((1.0 - wdl_weight) * probs + wdl_weight * wdls_arr).astype(np.float32)
+        self.targets = ((1.0 - wdl_weight) * probs + wdl_weight * self.wdls).astype(np.float32)
+
+        # Sur GPU, tout le jeu de données (uint8, ~1,8 Go pour 20M positions) est copié une fois dans la mémoire
+        # de la carte et les batches y sont découpés : le processeur hôte ne fait presque rien.
+        self.device = torch.device(device)
+        if self.device.type != "cpu":
+            self.features_t = torch.from_numpy(self.features).to(self.device)
+            self.targets_t = torch.from_numpy(self.targets).to(self.device)
+
+    def save_npz(self, path):
+        np.savez(path, features=self.features, scores=self.scores, wdl=self.wdls)
 
     def __len__(self):
         return len(self.targets)
 
     def iter_batches(self, indices, batch_size):
-        """Un seul gather numpy vectorisé par batch (pas d'appel Python par échantillon)."""
+        """Un seul gather vectorisé par batch (pas d'appel Python par échantillon)."""
+        if self.device.type != "cpu":
+            idx = torch.from_numpy(indices).to(self.device)
+            for start in range(0, len(indices), batch_size):
+                b = idx[start : start + batch_size]
+                yield self.features_t[b].float(), self.targets_t[b]
+            return
         for start in range(0, len(indices), batch_size):
             b = indices[start : start + batch_size]
             x = torch.from_numpy(self.features[b].astype(np.float32, copy=False))
@@ -143,7 +182,7 @@ class NNUE2(nn.Module):
 
     def forward(self, x):
         b = self.bucket(x)
-        rows = torch.arange(x.size(0))
+        rows = torch.arange(x.size(0), device=x.device)
         h1 = torch.clamp(self.input(x), 0.0, 1.0)
         h2 = torch.clamp(self.l2(h1).view(-1, self.nb, self.l2_size)[rows, b], 0.0, 1.0)
         h3 = torch.clamp(self.l3(h2).view(-1, self.nb, self.l3_size)[rows, b], 0.0, 1.0)
@@ -213,12 +252,25 @@ def main():
     ap.add_argument("--buckets", default="5,8,12",
                     help="NNUE2 : seuils de nombre de pièces séparant les sous-réseaux ('' = un seul)")
     ap.add_argument("--lr-gamma", type=float, default=1.0, help="taux d'apprentissage multiplié par ce facteur à chaque epoch")
+    ap.add_argument("--device", default="auto", help="cpu, cuda ou auto (cuda si une carte est disponible)")
+    ap.add_argument("--save-npz", default=None,
+                    help="convertit les données au format binaire .npz (à donner ensuite comme données) puis s'arrête")
+    ap.add_argument("--augment", action="store_true",
+                    help="présente chaque position d'entraînement dans une des 4 symétries du plateau, tirée au hasard")
     args = ap.parse_args()
 
     torch.manual_seed(args.seed)
     rng = np.random.default_rng(args.seed)
 
-    dataset = SfenDataset(args.data, args.wdl_weight, args.score_scale)
+    device = torch.device("cuda" if args.device == "auto" and torch.cuda.is_available()
+                          else ("cpu" if args.device == "auto" else args.device))
+    if args.save_npz:
+        SfenDataset(args.data).save_npz(args.save_npz)
+        print(f"données converties -> {args.save_npz}")
+        return
+    dataset = SfenDataset(args.data, args.wdl_weight, args.score_scale, device)
+    print(f"{len(dataset)} positions, entraînement sur {device}"
+          + (f" ({torch.cuda.get_device_name(device)})" if device.type == "cuda" else ""), flush=True)
     # La sortie du réseau reste un logit en unités score/SCORE_SCALE (lue ainsi par src/nnue.cpp) ; seule la
     # perte passe en probabilité avec l'échelle --score-scale, ajustée au jeu de données (scores -> résultats).
     out_to_logit = SCORE_SCALE / args.score_scale
@@ -233,25 +285,30 @@ def main():
         model = NNUE2(hidden=args.hidden, l2=args.l2, l3=args.l3, thresholds=thresholds)
     else:
         model = NNUE(hidden=args.hidden)
+    model.to(device)
     opt = torch.optim.Adam(model.parameters(), lr=args.lr)
     sched = torch.optim.lr_scheduler.ExponentialLR(opt, gamma=args.lr_gamma)
+    perms = symmetry_permutations().to(device)
     loss_fn = nn.MSELoss()
 
     out_path = Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
     for epoch in range(1, args.epochs + 1):
+        t0 = time.time()
         model.train()
         rng.shuffle(train_idx)
-        train_loss = 0.0
+        train_loss = torch.zeros((), device=device)  # cumul sur l'appareil : pas de synchronisation par batch
         for x, y in dataset.iter_batches(train_idx, args.batch_size):
+            if args.augment:  # une symétrie au hasard par position (la validation, elle, reste non transformée)
+                x = x.gather(1, perms[torch.randint(0, 4, (x.size(0),), device=device)])
             opt.zero_grad()
             pred = torch.sigmoid(model(x).squeeze(-1) * out_to_logit)
             loss = loss_fn(pred, y)
             loss.backward()
             opt.step()
-            train_loss += loss.item() * x.size(0)
-        train_loss /= n_train
+            train_loss += loss.detach() * x.size(0)
+        train_loss = train_loss.item() / n_train
         sched.step()
 
         model.eval()
@@ -262,12 +319,12 @@ def main():
                 val_loss += loss_fn(pred, y).item() * x.size(0)
         val_loss /= n_val
 
-        print(f"epoch {epoch:3d}  train_loss {train_loss:.5f}  val_loss {val_loss:.5f}", flush=True)
-        torch.save(model.state_dict(), out_path)
+        print(f"epoch {epoch:3d}  train_loss {train_loss:.5f}  val_loss {val_loss:.5f}  ({time.time() - t0:.0f} s)", flush=True)
+        torch.save({k: v.cpu() for k, v in model.state_dict().items()}, out_path)
 
     if args.export:
         Path(args.export).parent.mkdir(parents=True, exist_ok=True)
-        (export_weights2 if args.l2 > 0 else export_weights)(model, args.export)
+        (export_weights2 if args.l2 > 0 else export_weights)(model.cpu(), args.export)
         print(f"poids exportés (float32, non quantifiés) -> {args.export}")
 
 
