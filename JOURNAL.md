@@ -11,7 +11,7 @@ fanorona-dev, i7-6700T, 1 thread), justesse par `make test`, `perft` et `tools/n
 
 ## 2026-10-04
 
-### NNUE — balayage d'architectures sur GPU ; entraînement en CUDA Graph · `{COMMIT}`
+### NNUE — balayage d'architectures sur GPU ; entraînement en CUDA Graph · `29fedba`
 - `train.py --cuda-graph` : 8 pas d'entraînement enregistrés dans un graphe CUDA et rejoués d'un seul appel,
   mélange des indices sur la carte, copie des données libérée de la RAM. La carte n'était occupée qu'à 27-44 %
   (le Core 2 Quad ne la nourrissait pas) ; 7 s/epoch au lieu de 12-13 s, soit ~13× le processeur de fanorona-dev.
