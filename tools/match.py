@@ -28,6 +28,7 @@ Grafana/Loki ; désactivable avec --no-live-log si le répertoire n'est pas acce
 import argparse
 import os
 import random
+import socket
 import subprocess
 import threading
 import uuid
@@ -46,9 +47,11 @@ def parse_opts(spec):
 
 
 class Engine:
-    def __init__(self, path, name, metrics, options=None, prefix=()):
-        """`prefix` : commande de lancement à distance (ssh ... hôte), vide en local."""
+    def __init__(self, path, name, metrics, options=None, prefix=(), host=None):
+        """`prefix` : commande de lancement à distance (ssh ... hôte), vide en local. `host` : nom de la
+        machine, ajouté aux lignes "info" journalisées (suivi par machine dans Grafana)."""
         self.name = name
+        self.host = host
         self.metrics = metrics
         self.p = subprocess.Popen([*prefix, path], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True, bufsize=1)
         self.send("uci")
@@ -74,7 +77,7 @@ class Engine:
                 continue
             if line.startswith(prefix):
                 if last_info is not None:
-                    self.metrics.log_info_line(last_info, engine=self.name, game=game, ply=ply)
+                    self.metrics.log_info_line(last_info, engine=self.name, game=game, ply=ply, host=self.host)
                 return line.strip()
 
     def query(self, cmd, prefix, game=None, ply=None):
@@ -152,12 +155,14 @@ class Host:
         self.o1, self.o2 = parse_opts(args.engine1_opts), parse_opts(args.engine2_opts)
         self.prefix = ()
         if self.local:
+            self.name = socket.gethostname()
             return
         key = os.path.expanduser(args.ssh_key)
         ssh = ["ssh", "-i", key, "-o", "BatchMode=yes", "-o", "ServerAliveInterval=30"]
         self.prefix = (*ssh, spec)
         self.dir = f"/tmp/fanorona-match-{uuid.uuid4().hex[:8]}"
-        subprocess.run([*ssh, spec, f"mkdir -p {self.dir}"], check=True)
+        self.name = subprocess.run([*ssh, spec, f"mkdir -p {self.dir} && hostname"], check=True,
+                                   capture_output=True, text=True).stdout.strip() or spec
         files, self.copied = [], {}
         for local in (self.e1, self.e2) + tuple(v for _, v in self.o1 + self.o2 if os.path.isfile(v)):
             if local not in self.copied:
@@ -185,8 +190,9 @@ def run(args, metrics):
         spec, _, n = part.rpartition(":")
         hosts[spec] = Host(spec, args)
         slots += [hosts[spec]] * int(n)
-    print(f"{len(slots)} partie(s) en parallèle : " + ", ".join(f"{h} x{sum(s is hosts[h] for s in slots)}" for h in hosts),
+    print(f"{len(slots)} partie(s) en parallèle : " + ", ".join(f"{hosts[h].name} x{sum(s is hosts[h] for s in slots)}" for h in hosts),
           flush=True)
+    metrics.log("match_hosts", hosts={h.name: sum(s is h for s in slots) for h in hosts.values()})
     lock = threading.Lock()
     state = {"next": 0, "stop": False, "w": 0, "d": 0, "l": 0, "done": None, "error": None}
 
@@ -202,7 +208,7 @@ def run(args, metrics):
             state["next"] += 1
             return g
 
-    def record(game_id, res, e1_white):
+    def record(game_id, res, e1_white, host):
         result = game_result_for_engine1(res, e1_white)
         with lock:
             if state["stop"]:
@@ -210,13 +216,13 @@ def run(args, metrics):
             state[{"win": "w", "draw": "d", "loss": "l"}[result]] += 1
             n = state["w"] + state["d"] + state["l"]
             if not sprt:
-                metrics.log("game_result", game=game_id, raw_result=res, engine1_result=result)
+                metrics.log("game_result", game=game_id, raw_result=res, engine1_result=result, host=host)
                 print(f"partie {n} (#{game_id + 1}): {res}  | engine1 +{state['w']} ={state['d']} -{state['l']}", flush=True)
                 return
             sprt.add_result(result)
             xbar, var, _ = sprt.stats()
             llr = sprt.llr()
-            metrics.log("sprt_update", game=game_id, raw_result=res, engine1_result=result, wins=sprt.wins,
+            metrics.log("sprt_update", game=game_id, raw_result=res, engine1_result=result, host=host, wins=sprt.wins,
                         draws=sprt.draws, losses=sprt.losses, llr=llr, lower=sprt.lower, upper=sprt.upper,
                         mean_score=xbar)
             print(f"partie {sprt.n}: {res}  | W{sprt.wins} D{sprt.draws} L{sprt.losses}  "
@@ -228,8 +234,8 @@ def run(args, metrics):
     def worker(host):
         e1 = e2 = ref = None
         try:
-            e1 = Engine(host.e1, "engine1", metrics, options=host.o1, prefix=host.prefix)
-            e2 = Engine(host.e2, "engine2", metrics, options=host.o2, prefix=host.prefix)
+            e1 = Engine(host.e1, "engine1", metrics, options=host.o1, prefix=host.prefix, host=host.name)
+            e2 = Engine(host.e2, "engine2", metrics, options=host.o2, prefix=host.prefix, host=host.name)
             ref = Engine(args.engine1, "referee", metrics)  # arbitre local (règles uniquement, coût négligeable)
             while (g := take_pair()) is not None:
                 opening = random_opening(ref, args.opening_plies, random.Random(args.seed * 1_000_003 + g))
@@ -240,7 +246,7 @@ def run(args, metrics):
                         e.send("ucinewgame")
                     engines = [e2, e1] if swap else [e1, e2]
                     res = play_game(engines, opening, f"depth {args.depth}" if args.depth else f"movetime {args.movetime}", ref, 2 * g + swap)
-                    record(2 * g + swap, res, not swap)
+                    record(2 * g + swap, res, not swap, host.name)
         except Exception as e:  # un moteur qui meurt arrête tout le match
             with lock:
                 state["stop"], state["error"] = True, e

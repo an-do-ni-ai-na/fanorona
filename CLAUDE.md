@@ -31,11 +31,22 @@ AVANT `gensfen`, donc par stdin et pas en argument de ligne de commande (sinon i
 ```sh
 printf 'setoption name EvalFile value checkpoints/net_v1.nnue\nsetoption name UseNNUE value true\ngensfen count 700000 depth 6 opening-plies 8 out data/gen2_1.txt\nquit\n' | ./fanorona
 ```
+Sur plusieurs machines d'un coup (répartition de `--count`, copie binaire/réseau par scp, rapatriement et
+concaténation automatiques, progression par machine dans Grafana) :
+```sh
+python3 tools/gensfen_dist.py ./fanorona --count 12000000 --depth 6 --opening-plies 8 \
+    --opts "UseNNUE=true,EvalFile=checkpoints/net_v6.nnue" --out data/gensfen_gen6.txt \
+    --hosts "local:5,root@10.10.10.190:4,root@10.10.10.191:2"
+```
 
 Suivi live (nodes/s, profondeur, eval...) pendant un match/SPRT : `tools/match.py` journalise en JSONL
 (`/var/log/fanorona/<run_id>.jsonl` par défaut, désactivable avec `--no-live-log`), repris par Grafana Alloy
 sur la VM `fanorona-dev` vers Loki/Grafana du homelab (dashboard "Fanorona - Recherche live"). Voir
-`tools/metrics_logger.py`.
+`tools/metrics_logger.py`. Depuis le 2026-10-03, chaque événement porte le nom de la machine (`host`), et
+`tools/gensfen_dist.py` journalise la progression de gensfen (`gensfen_progress` : positions écrites, pos/s) :
+le dashboard montre la charge (CPU, RAM, température de l'hôte), le débit gensfen et la cadence des parties par
+machine. Dans LogQL, extraire ce champ sous un autre nom (`| json machine="host"`) : Alloy pose déjà une
+étiquette de flux `host="fanorona-dev"` qui le masquerait.
 
 Build de débogage avec sanitizers :
 
@@ -71,6 +82,7 @@ g++ -g -O0 -std=c++17 -Isrc -fsanitize=address,undefined src/{bitboard,position,
 | `tools/gui/verify_lessons.py` | vérifie chaque exercice contre le moteur (solution et nombre minimal de coups `par` des exercices solo, position gagnante pour ceux contre le moteur) — à relancer après toute modification des leçons |
 | `tools/gui/puzzles.json` | puzzles tactiques générés (FEN, ligne solution, coups acceptés par étape, classement, thèmes) |
 | `tools/puzzles/gen_puzzles.py` | génération des puzzles depuis `gensfen` (faute aléatoire, coup unique entre « familles » de chaînes, second avis NNUE, `--verify-only` pour refiltrer) |
+| `tools/gensfen_dist.py` | `gensfen` réparti sur plusieurs machines (`--hosts`, comme match.py), concaténation automatique, progression live par machine |
 | `tools/metrics_logger.py` | journalisation JSONL des lignes UCI `info` + résultats, pour Grafana/Loki |
 | `tools/nnue/train.py` | entraînement PyTorch du réseau NNUE à partir des données `gensfen` |
 | `tools/nnue/verify.py` | vérifie que `src/nnue.cpp` donne EXACTEMENT le même score qu'une référence numpy |
@@ -243,7 +255,8 @@ g++ -g -O0 -std=c++17 -Isrc -fsanitize=address,undefined src/{bitboard,position,
      au lieu de 6 pour générer des données. Workflow : cloner/build sur chaque nœud, copier le `.nnue`
      professeur, lancer `gensfen` en parallèle sur les 3 (setoption NNUE par stdin comme d'habitude),
      rapatrier les fichiers des LXC vers fanorona-dev (seul hôte avec le venv PyTorch) par `scp`, concaténer,
-     entraîner comme d'habitude. Seule la génération de données est distribuée — l'entraînement PyTorch
+     entraîner comme d'habitude. **Automatisé le 2026-10-03** par `tools/gensfen_dist.py` (tout ce workflow en
+     une commande depuis fanorona-dev, plus besoin de cloner/compiler sur c1/c3). Seule la génération de données est distribuée — l'entraînement PyTorch
      lui-même reste sur une seule machine (rapide, modèle minuscule, pas besoin de distribuer).
    - ~~2e cycle de renforcement (`net_v2` -> `gensfen_gen3` -> `net_v3`)~~ **fait** (2026-09-28) : 7,7M
      positions générées en ~1h40 sur les 3 nœuds (`net_v2` comme professeur), `net_v3` entraîné dessus
