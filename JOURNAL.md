@@ -24,7 +24,9 @@ fanorona-dev, i7-6700T, 1 thread), justesse par `make test`, `perft` et `tools/n
 - Constat : les réseaux plus grands ont une val_loss nettement meilleure (0,01177 contre 0,01215) mais pas une
   meilleure prédiction du résultat sur des positions jamais vues (gen5) : ils collent mieux aux étiquettes de
   ces données sans mieux généraliser. Les écarts en jeu sont de quelques Elo au plus.
-- SPRT du meilleur compromis (192 + 16x32) contre net_v6 : voir l'entrée suivante.
+- SPRT du meilleur compromis (192 + 16x32) contre net_v6 (100 ms, 0/+5, fanorona-dev + c3) : 49,7 % en 3009
+  parties (W988 D1014 L1007, ≈ −2 Elo), arrêté. net_v6 reste le réseau par défaut. Conclusion : la limite
+  n est plus l entraînement (désormais quasi gratuit) ni la taille du réseau, mais les données.
 
 ### Outils — entraînement des réseaux sur GPU · `454a79f`
 - Machine Windows du réseau (andoniaina-desk, 10.10.10.200, GTX 1070 Ti) pilotée par SSH depuis fanorona-dev.
