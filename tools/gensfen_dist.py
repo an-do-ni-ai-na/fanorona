@@ -3,7 +3,7 @@
 
     python3 tools/gensfen_dist.py ./fanorona --count 12000000 --depth 6 --opening-plies 8 \
         --opts "UseNNUE=true,EvalFile=checkpoints/net_v6.nnue" --out data/gensfen_gen6.txt \
-        --hosts "local:5,root@10.10.10.190:4,root@10.10.10.191:2"
+        --hosts "local:5,root@10.10.10.190:5,root@10.10.10.191:3"
 
 Remplace le workflow manuel (lancer gensfen sur chaque nœud, rapatrier par scp, concaténer) : `--count` est
 réparti entre tous les processus au prorata, chaque processus écrit son propre fichier partiel (sur sa machine),

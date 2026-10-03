@@ -36,7 +36,7 @@ concaténation automatiques, progression par machine dans Grafana) :
 ```sh
 python3 tools/gensfen_dist.py ./fanorona --count 12000000 --depth 6 --opening-plies 8 \
     --opts "UseNNUE=true,EvalFile=checkpoints/net_v6.nnue" --out data/gensfen_gen6.txt \
-    --hosts "local:5,root@10.10.10.190:4,root@10.10.10.191:2"
+    --hosts "local:5,root@10.10.10.190:5,root@10.10.10.191:3"
 ```
 
 Suivi live (nodes/s, profondeur, eval...) pendant un match/SPRT : `tools/match.py` journalise en JSONL
@@ -168,7 +168,7 @@ g++ -g -O0 -std=c++17 -Isrc -fsanitize=address,undefined src/{bitboard,position,
 2. ~~**Tests SPRT**~~ **fait** (2026-09-27) : `tools/match.py --sprt` (LLR gaussien, `tools/sprt.py`), ouvertures
    aléatoires déjà existantes, suivi live JSONL. Parallélisme **fait** (2026-10-01) :
    `--concurrency N` (N paires de moteurs, ouvertures fonction de la graine et du numéro de paire seulement) ;
-   utiliser N = 5 sur fanorona-dev (6 vCPU). Plusieurs machines **fait** (2026-10-01) : `--hosts "local:5,root@10.10.10.190:4,root@10.10.10.191:2"`
+   utiliser N = 5 sur fanorona-dev (6 vCPU). Plusieurs machines **fait** (2026-10-01) : `--hosts "local:5,root@10.10.10.190:5,root@10.10.10.191:3"`
    (c1 et c3 à démarrer avant : `pct start 3190` sur pve1, `pct start 3191` sur pve3) ; binaires et réseau copiés par scp,
    les deux moteurs d'une partie sur le même hôte ; clé `~/.ssh/id_fanorona_match` de fanorona-dev, autorisée en root
    sur c1/c3 depuis 10.10.10.180 seulement. Processeurs : même jeu d'instructions (AVX2/FMA/BMI2) sur les 3 hôtes.
@@ -253,9 +253,9 @@ g++ -g -O0 -std=c++17 -Isrc -fsanitize=address,undefined src/{bitboard,position,
      (`--tol`).
    - **Calcul distribué sur 3 nœuds PVE** (2026-09-28) : `gensfen` est embarrassingly parallel, donc on peut
      répartir sur tout le cluster plutôt qu'un seul hôte. Deux nouveaux LXC légers (Debian 13, juste le
-     binaire C++, pas de Python/PyTorch) : **fanorona-c1** (VMID 3190, pve1, 5 vCPU, 10.10.10.190) et
-     **fanorona-c3** (VMID 3191, pve3, 3 vCPU, 10.10.10.191), `onboot=0` volontaire (nœuds de calcul
-     ponctuels, à démarrer manuellement avant un cycle). Avec fanorona-dev (6 vCPU, pve2), ça fait ~14 vCPU
+     binaire C++, pas de Python/PyTorch) : **fanorona-c1** (VMID 3190, pve1, 6 vCPU depuis le 2026-10-04, 10.10.10.190) et
+     **fanorona-c3** (VMID 3191, pve3, 4 vCPU depuis le 2026-10-04, 10.10.10.191), `onboot=0` volontaire (nœuds de calcul
+     ponctuels, à démarrer manuellement avant un cycle). Le 2026-10-04, c1 et c3 sont passés à tous les threads de leur hôte (6 et 4) avec une priorité CPU basse (`cpuunits=25`) : ils prennent tout quand l'hôte est libre et cèdent la place aux services sinon. Avec fanorona-dev (6 vCPU, pve2), ça fait ~16 vCPU (13 processus avec la règle N <= cœurs - 1)
      au lieu de 6 pour générer des données. Workflow : cloner/build sur chaque nœud, copier le `.nnue`
      professeur, lancer `gensfen` en parallèle sur les 3 (setoption NNUE par stdin comme d'habitude),
      rapatrier les fichiers des LXC vers fanorona-dev (seul hôte avec le venv PyTorch) par `scp`, concaténer,

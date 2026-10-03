@@ -13,7 +13,7 @@ NNUE contre HCE (même binaire, NNUE est une option UCI à l'exécution) :
 
 Parties en parallèle (--concurrency N) : N paires de moteurs jouent simultanément, chaque fil prenant la paire de
 parties suivante ; les ouvertures dépendent seulement de la graine et du numéro de paire (pas du parallélisme).
-Plusieurs machines (--hosts "local:5,root@10.10.10.190:4,root@10.10.10.191:2") : chaque fil lance ses deux moteurs
+Plusieurs machines (--hosts "local:5,root@10.10.10.190:5,root@10.10.10.191:3") : chaque fil lance ses deux moteurs
 sur son hôte par SSH (UCI passe par stdin/stdout), après copie des binaires et des fichiers d'options (EvalFile) ;
 les deux moteurs d'une partie sont toujours sur la même machine, la partie reste équitable. Processeurs : même jeu
 d'instructions requis (binaires compilés avec -march=native). Clé : --ssh-key (~/.ssh/id_fanorona_match).
