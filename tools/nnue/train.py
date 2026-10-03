@@ -124,12 +124,15 @@ class SfenDataset:
         if self.device.type != "cpu":
             self.features_t = torch.from_numpy(self.features).to(self.device)
             self.targets_t = torch.from_numpy(self.targets).to(self.device)
+            # libère la copie en RAM (la machine GPU n'a que 8 Go : permet plusieurs entraînements en parallèle)
+            self.features = self.scores = self.wdls = self.targets = None
+
+    def __len__(self):
+        return len(self.targets_t) if self.targets is None else len(self.targets)
 
     def save_npz(self, path):
         np.savez(path, features=self.features, scores=self.scores, wdl=self.wdls)
 
-    def __len__(self):
-        return len(self.targets)
 
     def iter_batches(self, indices, batch_size):
         """Un seul gather vectorisé par batch (pas d'appel Python par échantillon)."""
@@ -252,6 +255,12 @@ def main():
     ap.add_argument("--buckets", default="5,8,12",
                     help="NNUE2 : seuils de nombre de pièces séparant les sous-réseaux ('' = un seul)")
     ap.add_argument("--lr-gamma", type=float, default=1.0, help="taux d'apprentissage multiplié par ce facteur à chaque epoch")
+    ap.add_argument("--cuda-graph", action="store_true",
+                    help="GPU : étape d'entraînement enregistrée en CUDA Graph et rejouée d'un seul appel par batch "
+                         "(le processeur hôte ne limite plus la carte) ; ignore le dernier batch incomplet")
+    ap.add_argument("--graph-steps", type=int, default=8,
+                    help="--cuda-graph : nombre de pas d'entraînement enregistrés dans un même graphe (le processeur "
+                         "hôte n'intervient qu'une fois tous les N batches)")
     ap.add_argument("--device", default="auto", help="cpu, cuda ou auto (cuda si une carte est disponible)")
     ap.add_argument("--save-npz", default=None,
                     help="convertit les données au format binaire .npz (à donner ensuite comme données) puis s'arrête")
@@ -286,10 +295,45 @@ def main():
     else:
         model = NNUE(hidden=args.hidden)
     model.to(device)
-    opt = torch.optim.Adam(model.parameters(), lr=args.lr)
-    sched = torch.optim.lr_scheduler.ExponentialLR(opt, gamma=args.lr_gamma)
+    graph = args.cuda_graph and device.type == "cuda"
+    if graph:  # taux d'apprentissage tenseur + Adam "capturable" : tout l'état reste sur la carte
+        opt = torch.optim.Adam(model.parameters(), lr=torch.tensor(args.lr, device=device), capturable=True)
+    else:
+        opt = torch.optim.Adam(model.parameters(), lr=args.lr)
+    sched = None if graph else torch.optim.lr_scheduler.ExponentialLR(opt, gamma=args.lr_gamma)
     perms = symmetry_permutations().to(device)
     loss_fn = nn.MSELoss()
+
+    if graph:
+        bs, gk = args.batch_size, args.graph_steps
+        static_idx = torch.zeros(gk * bs, dtype=torch.long, device=device)
+        loss_acc = torch.zeros((), device=device)
+
+        def train_step():  # gk pas complets, chacun sur sa tranche de static_idx
+            for k in range(gk):
+                idx = static_idx[k * bs:(k + 1) * bs]
+                x = dataset.features_t[idx].float()
+                if args.augment:
+                    x = x.gather(1, perms[torch.randint(0, 4, (bs,), device=device)])
+                pred = torch.sigmoid(model(x).squeeze(-1) * out_to_logit)
+                loss = loss_fn(pred, dataset.targets_t[idx])
+                loss.backward()
+                opt.step()
+                opt.zero_grad(set_to_none=False)
+                loss_acc.add_(loss.detach())
+
+        # quelques pas réels sur un flux annexe (exigé avant la capture), puis enregistrement d'un pas complet
+        side = torch.cuda.Stream()
+        side.wait_stream(torch.cuda.current_stream())
+        with torch.cuda.stream(side):
+            for k in range(2):
+                static_idx.copy_(torch.from_numpy(train_idx[k * gk * bs:(k + 1) * gk * bs]).to(device))
+                train_step()
+        torch.cuda.current_stream().wait_stream(side)
+        train_idx_t = torch.from_numpy(train_idx).to(device)
+        step_graph = torch.cuda.CUDAGraph()
+        with torch.cuda.graph(step_graph):
+            train_step()
 
     out_path = Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -297,9 +341,20 @@ def main():
     for epoch in range(1, args.epochs + 1):
         t0 = time.time()
         model.train()
-        rng.shuffle(train_idx)
-        train_loss = torch.zeros((), device=device)  # cumul sur l'appareil : pas de synchronisation par batch
-        for x, y in dataset.iter_batches(train_idx, args.batch_size):
+        if not graph:
+            rng.shuffle(train_idx)
+        if graph:  # mélange sur la carte : ni tri sur le processeur hôte, ni transfert de 150 Mo d'indices
+            idx_t = train_idx_t[torch.randperm(len(train_idx_t), device=device)]
+            n_chunks = len(train_idx) // (gk * bs)  # le reste (< gk batches, tiré au hasard) est ignoré
+            loss_acc.zero_()
+            for k in range(n_chunks):
+                static_idx.copy_(idx_t[k * gk * bs:(k + 1) * gk * bs])
+                step_graph.replay()
+            train_loss = loss_acc.item() / (n_chunks * gk)
+            for g in opt.param_groups:
+                g["lr"].fill_(args.lr * args.lr_gamma ** epoch)
+        train_loss_t = torch.zeros((), device=device)  # cumul sur l'appareil : pas de synchronisation par batch
+        for x, y in ([] if graph else dataset.iter_batches(train_idx, args.batch_size)):
             if args.augment:  # une symétrie au hasard par position (la validation, elle, reste non transformée)
                 x = x.gather(1, perms[torch.randint(0, 4, (x.size(0),), device=device)])
             opt.zero_grad()
@@ -307,9 +362,10 @@ def main():
             loss = loss_fn(pred, y)
             loss.backward()
             opt.step()
-            train_loss += loss.detach() * x.size(0)
-        train_loss = train_loss.item() / n_train
-        sched.step()
+            train_loss_t += loss.detach() * x.size(0)
+        if not graph:
+            train_loss = train_loss_t.item() / n_train
+            sched.step()
 
         model.eval()
         val_loss = 0.0

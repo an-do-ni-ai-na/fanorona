@@ -201,6 +201,79 @@ inline void axpy(float* __restrict out, const float* __restrict w, float x, int 
     for (int j = 0; j < n; ++j) out[j] += x * w[j];
 }
 
+#if defined(__AVX2__) && defined(__FMA__)
+// Somme par paires a[0] += a[1], a[2] += a[3]... puis a[0] += a[2]... : même ordre d'addition pour toutes les
+// formes (les signatures bench ne dépendent pas de la forme du code).
+template <int U, int V>
+inline void reduce_pairs(__m256 (&a)[U][V]) {
+    for (int step = 1; step < U; step *= 2)
+        for (int u = 0; u + step < U; u += 2 * step)
+            for (int v = 0; v < V; ++v) a[u][v] = _mm256_add_ps(a[u][v], a[u + step][v]);
+}
+
+// Couches denses en AVX2 pour une forme hidden -> L2 -> L3 -> 1 fixée à la compilation. Une boucle naïve
+// enchaîne des multiplications-additions dépendantes les unes des autres (4 cycles de latence chacune) : ici,
+// U neurones d'entrée à la fois vont dans U jeux d'accumulateurs indépendants (U x V = 8 registres), sans
+// branchement. Dense volontairement : ~70 % des neurones sont nuls après ClippedReLU, mais ne traiter que les non
+// nuls (indices relevés par masque AVX2) a été mesuré PLUS LENT (~900k contre ~1,08M nœuds/s, net_s3) : le
+// parcours des bits du masque coûte plus en erreurs de prédiction que les multiplications évitées.
+template <int L2, int L3>
+float dense_avx2(const float* acc, const Stack& s) {
+    constexpr int V2 = L2 / 8, U2 = 8 / V2, V3 = L3 / 8, U3 = 8 / V3;
+    static_assert(L2 % 8 == 0 && L3 % 8 == 0 && U2 >= 1 && U3 >= 1 && L2 % U3 == 0, "forme non prise en charge");
+    const __m256 zero = _mm256_setzero_ps(), one = _mm256_set1_ps(1.0f);
+    float* h1 = g_h1.data();
+    for (int i = 0; i < g_hidden; i += 8)
+        _mm256_storeu_ps(h1 + i, _mm256_min_ps(_mm256_max_ps(_mm256_loadu_ps(acc + i), zero), one));
+
+    const float* w = s.w2t.data();
+    __m256 a[U2][V2];
+    for (int u = 0; u < U2; ++u)
+        for (int v = 0; v < V2; ++v) a[u][v] = u == 0 ? _mm256_loadu_ps(s.b2.data() + 8 * v) : zero;
+    for (int i = 0; i < g_hidden; i += U2, w += U2 * L2)
+        for (int u = 0; u < U2; ++u) {
+            const __m256 x = _mm256_broadcast_ss(h1 + i + u);
+            for (int v = 0; v < V2; ++v) a[u][v] = _mm256_fmadd_ps(_mm256_loadu_ps(w + L2 * u + 8 * v), x, a[u][v]);
+        }
+    reduce_pairs(a);
+    alignas(32) float h2[L2];
+    for (int v = 0; v < V2; ++v) _mm256_store_ps(h2 + 8 * v, _mm256_min_ps(_mm256_max_ps(a[0][v], zero), one));
+
+    const float* w3 = s.w3t.data();
+    __m256 c[U3][V3];
+    for (int u = 0; u < U3; ++u)
+        for (int v = 0; v < V3; ++v) c[u][v] = u == 0 ? _mm256_loadu_ps(s.b3.data() + 8 * v) : zero;
+    for (int j = 0; j < L2; j += U3, w3 += U3 * L3)
+        for (int u = 0; u < U3; ++u) {
+            const __m256 x = _mm256_broadcast_ss(h2 + j + u);
+            for (int v = 0; v < V3; ++v) c[u][v] = _mm256_fmadd_ps(_mm256_loadu_ps(w3 + L3 * u + 8 * v), x, c[u][v]);
+        }
+    reduce_pairs(c);
+    __m256 o = zero;
+    for (int v = 0; v < V3; ++v) {
+        const __m256 h3 = _mm256_min_ps(_mm256_max_ps(c[0][v], zero), one);
+        o = _mm256_fmadd_ps(_mm256_loadu_ps(s.w4.data() + 8 * v), h3, o);
+    }
+    float lanes[8];
+    _mm256_storeu_ps(lanes, o);
+    float out = s.b4;
+    for (float l : lanes) out += l;
+    return out;
+}
+
+using DenseFn = float (*)(const float*, const Stack&);
+DenseFn g_dense = nullptr;  // chemin AVX2 de la forme chargée, nullptr = boucle générique
+
+DenseFn pick_dense(int hidden, int l2, int l3) {
+    if (hidden % 8 != 0) return nullptr;
+#define FANORONA_DENSE(A, B) if (l2 == A && l3 == B) return dense_avx2<A, B>;
+    FANORONA_DENSE(8, 16) FANORONA_DENSE(8, 32) FANORONA_DENSE(16, 16) FANORONA_DENSE(16, 32)
+    FANORONA_DENSE(32, 16) FANORONA_DENSE(32, 32)
+#undef FANORONA_DENSE
+    return nullptr;
+}
+#endif
+
 // Couches denses du format FNU2, à partir de l'accumulateur du camp au trait.
 float forward_stacked(const float* acc, const Position& pos) {
     const int pieces = popcount(pos.pieces(WHITE) | pos.pieces(BLACK));
@@ -209,53 +282,7 @@ float forward_stacked(const float* acc, const Position& pos) {
     const Stack& s = g_stacks[size_t(b)];
 
 #if defined(__AVX2__) && defined(__FMA__)
-    // Chemin rapide pour la forme utilisée (l2 = 16, l3 = 32). Une boucle naïve enchaîne des
-    // multiplications-additions dépendantes les unes des autres (4 cycles de latence chacune) : ici, quatre
-    // neurones d'entrée à la fois vont dans quatre paires d'accumulateurs indépendantes, sans branchement.
-    if (g_l2 == 16 && g_l3 == 32 && g_hidden % 8 == 0) {
-        const __m256 zero = _mm256_setzero_ps(), one = _mm256_set1_ps(1.0f);
-        // Dense volontairement : ~70 % des neurones sont nuls après ClippedReLU, mais ne traiter que les non nuls
-        // (indices relevés par masque AVX2) a été mesuré PLUS LENT (~900k contre ~1,08M nœuds/s, net_s3) : le
-        // parcours des bits du masque coûte plus en erreurs de prédiction que les multiplications évitées.
-        float* h1 = g_h1.data();
-        for (int i = 0; i < g_hidden; i += 8)
-            _mm256_storeu_ps(h1 + i, _mm256_min_ps(_mm256_max_ps(_mm256_loadu_ps(acc + i), zero), one));
-
-        const float* w = s.w2t.data();
-        __m256 a[8];
-        a[0] = _mm256_loadu_ps(s.b2.data());
-        a[1] = _mm256_loadu_ps(s.b2.data() + 8);
-        for (int k = 2; k < 8; ++k) a[k] = zero;
-        for (int i = 0; i < g_hidden; i += 4, w += 64)
-            for (int u = 0; u < 4; ++u) {
-                const __m256 x = _mm256_broadcast_ss(h1 + i + u);
-                a[2 * u] = _mm256_fmadd_ps(_mm256_loadu_ps(w + 16 * u), x, a[2 * u]);
-                a[2 * u + 1] = _mm256_fmadd_ps(_mm256_loadu_ps(w + 16 * u + 8), x, a[2 * u + 1]);
-            }
-        float h2[16];
-        _mm256_storeu_ps(h2, _mm256_min_ps(_mm256_max_ps(_mm256_add_ps(_mm256_add_ps(a[0], a[2]), _mm256_add_ps(a[4], a[6])), zero), one));
-        _mm256_storeu_ps(h2 + 8, _mm256_min_ps(_mm256_max_ps(_mm256_add_ps(_mm256_add_ps(a[1], a[3]), _mm256_add_ps(a[5], a[7])), zero), one));
-
-        const float* w3 = s.w3t.data();
-        __m256 c[8];
-        for (int k = 0; k < 4; ++k) c[k] = _mm256_loadu_ps(s.b3.data() + 8 * k), c[k + 4] = zero;
-        for (int j = 0; j < 16; j += 2, w3 += 64)
-            for (int u = 0; u < 2; ++u) {
-                const __m256 x = _mm256_broadcast_ss(h2 + j + u);
-                for (int k = 0; k < 4; ++k)
-                    c[4 * u + k] = _mm256_fmadd_ps(_mm256_loadu_ps(w3 + 32 * u + 8 * k), x, c[4 * u + k]);
-            }
-        __m256 o = zero;
-        for (int k = 0; k < 4; ++k) {
-            const __m256 h3 = _mm256_min_ps(_mm256_max_ps(_mm256_add_ps(c[k], c[k + 4]), zero), one);
-            o = _mm256_fmadd_ps(_mm256_loadu_ps(s.w4.data() + 8 * k), h3, o);
-        }
-        float lanes[8];
-        _mm256_storeu_ps(lanes, o);
-        float out = s.b4;
-        for (float l : lanes) out += l;
-        return out;
-    }
+    if (g_dense) return g_dense(acc, s);
 #endif
 
     float* h2 = g_h2.data();
@@ -286,7 +313,13 @@ bool load(const std::string& path) {
 
     char magic[4];
     if (!read_exact(f, magic, 4)) magic[0] = 0;
-    if (std::string(magic, 4) == "FNU2") return load_stacked(f, path);
+    if (std::string(magic, 4) == "FNU2") {
+        const bool ok = load_stacked(f, path);
+#if defined(__AVX2__) && defined(__FMA__)
+        if (ok) g_dense = pick_dense(g_hidden, g_l2, g_l3);
+#endif
+        return ok;
+    }
     if (std::string(magic, 4) != "FNUE") {
         std::cout << "info string nnue: fichier invalide (magic) " << path << std::endl;
         return false;

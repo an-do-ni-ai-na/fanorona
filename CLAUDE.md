@@ -338,7 +338,10 @@ g++ -g -O0 -std=c++17 -Isrc -fsanitize=address,undefined src/{bitboard,position,
      `C:/fanorona/data/` (~5 Mo/s, pas d'AES-NI), puis
      `ssh andoniaina@10.10.10.200 "C:\fanorona\venv\Scripts\python.exe C:\fanorona\tools\train.py
      C:\fanorona\data\gen34.npz --batch-size 16384 --lr 0.004 --epochs 60 --lr-gamma 0.95 ..."`, rapatrier le
-     .nnue, `verify.py`. Le jeu de données entier est placé dans la mémoire de la carte. Mesures : batch 1024 =
+     .nnue, `verify.py`. **Ajouter `--cuda-graph`** (8 pas d'entraînement par graphe CUDA rejoué d'un seul appel,
+     mélange des indices sur la carte, copie RAM libérée) : 7 s/epoch au lieu de 12-13 (60 epochs ≈ 7 min).
+     Deux entraînements simultanés ne tiennent pas (7,5 Go sur 8, Windows déborde en RAM : tout ralentit).
+     Le jeu de données entier est placé dans la mémoire de la carte. Mesures sans graphe : batch 1024 =
      140 s/epoch (plus lent que le CPU de fanorona-dev : le Core 2 limite le rythme des lancements) ; batch
      16384 = 12 s/epoch (~7× fanorona-dev). Recette net_v6 refaite en 13 min (60 epochs) : val_loss 0,01210
      contre 0,01215 en ~37 min sur CPU, éval identique sur positions jamais vues.

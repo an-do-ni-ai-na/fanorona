@@ -11,6 +11,21 @@ fanorona-dev, i7-6700T, 1 thread), justesse par `make test`, `perft` et `tools/n
 
 ## 2026-10-04
 
+### NNUE — balayage d'architectures sur GPU ; entraînement en CUDA Graph · `{COMMIT}`
+- `train.py --cuda-graph` : 8 pas d'entraînement enregistrés dans un graphe CUDA et rejoués d'un seul appel,
+  mélange des indices sur la carte, copie des données libérée de la RAM. La carte n'était occupée qu'à 27-44 %
+  (le Core 2 Quad ne la nourrissait pas) ; 7 s/epoch au lieu de 12-13 s, soit ~13× le processeur de fanorona-dev.
+- Moteur : chemin AVX2 des couches denses généralisé (patron C++) aux formes 8/16/32 x 16/32 ; mêmes
+  signatures bench qu'avant (net_v3 933 003, net_v6 863 974).
+- 6 architectures entraînées chacune en ~7-15 min (gen3 + gen4, 60 epochs), contre net_v6 à profondeur fixe 7
+  (2000 parties, ±1 %) — référence net_v6 réentraîné sur GPU : 49,6 % :
+  accumulateur 256 + 16x32 : 50,9 % (≈1,05M nps) ; 256 + 8x32 : 50,9 % (1,17M) ; 256 + 8x16 : 49,8 % (1,24M) ;
+  **192 + 16x32 : 51,2 % (1,29M)** ; 192 + 8x32 : 49,7 % (1,43M) ; 128 + 32x32 : 50,8 % (1,36M) ; net_v6 ≈ 1,38M.
+- Constat : les réseaux plus grands ont une val_loss nettement meilleure (0,01177 contre 0,01215) mais pas une
+  meilleure prédiction du résultat sur des positions jamais vues (gen5) : ils collent mieux aux étiquettes de
+  ces données sans mieux généraliser. Les écarts en jeu sont de quelques Elo au plus.
+- SPRT du meilleur compromis (192 + 16x32) contre net_v6 : voir l'entrée suivante.
+
 ### Outils — entraînement des réseaux sur GPU · `454a79f`
 - Machine Windows du réseau (andoniaina-desk, 10.10.10.200, GTX 1070 Ti) pilotée par SSH depuis fanorona-dev.
   `train.py --device` (auto : la carte si présente ; données copiées une fois dans la mémoire de la carte) et
