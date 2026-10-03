@@ -40,6 +40,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs
 
+import labo
+
 HERE = Path(__file__).resolve().parent
 MOVE_RE = re.compile(r"^[a-i][1-5](?:[a-i][1-5][AW]?)*$")  # une case seule = pose (Fanoron-Telo)
 GAMES = {"tsivy", "dimy", "telo"}
@@ -811,6 +813,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         path, _, query = self.path.partition("?")
+        if path == "/labo" or path.startswith("/api/labo/"):
+            return self.labo_get(path, query)
         if path.startswith("/api/analyse/"):
             try:
                 return self.send_json(200, poll_analysis(path.split("/")[3]))
@@ -871,6 +875,29 @@ class Handler(BaseHTTPRequestHandler):
                                                for i, v in enumerate(STRENGTHS)]})
         else:
             self.send_json(404, {"error": "introuvable"})
+
+    def labo_get(self, path, query):
+        """Page Labo (entraînement du modèle, voir labo.py) : lecture seule des journaux de fanorona-dev."""
+        try:
+            if path == "/labo":
+                body = (HERE / "labo.html").read_bytes()
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+            elif path == "/api/labo/live":
+                self.send_json(200, labo.tracker().snapshot())
+            elif path == "/api/labo/trainings":
+                self.send_json(200, labo.trainings())
+            elif path == "/api/labo/training":
+                self.send_json(200, labo.training(parse_qs(query).get("name", [""])[0]))
+            elif path == "/api/labo/lineage":
+                self.send_json(200, labo.lineage())
+            else:
+                self.send_json(404, {"error": "introuvable"})
+        except (ValueError, OSError) as e:
+            self.send_json(400, {"error": str(e)})
 
     def do_POST(self):
         try:

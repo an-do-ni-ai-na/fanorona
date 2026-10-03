@@ -105,6 +105,9 @@ button, select { font: inherit; color: inherit; }
   border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap; }
 .tabs button:hover { color: var(--strong); }
 .tabs button.active { color: var(--strong); border-bottom-color: var(--accent); font-weight: 600; }
+.tabs a.tab-link { display: flex; align-items: center; padding: 0 12px; font-weight: 500; font-size: 15px; color: var(--muted); text-decoration: none;
+  border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap; }
+.tabs a.tab-link:hover { color: var(--strong); }
 .topbar .spacer { flex: 1; }
 .icon-btn { background: none; border: 0; width: 38px; height: 38px; border-radius: var(--r-sm); cursor: pointer; color: var(--muted);
   display: inline-flex; align-items: center; justify-content: center; }
@@ -571,6 +574,7 @@ dialog::backdrop { background: rgba(10, 8, 6, .55); backdrop-filter: blur(2px); 
     <button data-page="puzzles" data-i18n="nav_puzzles">Puzzles</button>
     <button data-page="learn" data-i18n="nav_learn">Apprendre</button>
     <button data-page="games" data-i18n="nav_games">Parties</button>
+    <a class="tab-link" href="/labo" title="Entraînement du modèle : en direct, courbes, généalogie des réseaux">Labo</a>
   </nav>
   <div class="spacer"></div>
   <button class="profile-chip" id="profileChip" aria-haspopup="true"><span class="avatar" id="chipAvatar"></span><span class="chip-name" id="chipName"></span>

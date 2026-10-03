@@ -1,0 +1,125 @@
+{
+  "_doc": "Généalogie des réseaux NNUE pour la page Labo. Seules les métadonnées sont écrites ici : scores, Elo et marges sont recalculés par labo.py à partir des journaux (logs/). Ajouter un réseau = ajouter une entrée (status: adopted | rejected | testing), avec ses journaux d'entraînement et de test.",
+  "nets": [
+    {
+      "id": "hce", "name": "HCE", "status": "base", "date": "2026-09-26",
+      "arch": "Évaluation classique écrite à la main",
+      "note": "Point de départ : matériel, mobilité et structure, sans apprentissage."
+    },
+    {
+      "id": "net_v1", "name": "net_v1", "parent": "hce", "status": "adopted", "date": "2026-09-27",
+      "arch": "2×45 → 256 → 1", "data": "gensfen 10 M positions, professeur HCE, profondeur 6",
+      "train_log": "train.log",
+      "tests": [{"log": "sprt_nnue_vs_hce.log", "kind": "sprt", "tc": "100 ms/coup", "vs": "hce", "decides": true}],
+      "note": "Premier réseau : bat la HCE dès 90 parties."
+    },
+    {
+      "id": "net_v2", "name": "net_v2", "parent": "net_v1", "status": "adopted", "date": "2026-09-27",
+      "arch": "2×45 → 256 → 1", "data": "gen2 : 3,5 M positions, professeur net_v1",
+      "train_log": "train_gen2.log",
+      "tests": [{"log": "sprt_v2_vs_v1.log", "kind": "sprt", "tc": "100 ms/coup", "vs": "net_v1", "decides": true}],
+      "note": "Premier cycle de renforcement : le réseau apprend de ses propres parties."
+    },
+    {
+      "id": "net_v3", "name": "net_v3", "parent": "net_v2", "status": "adopted", "date": "2026-09-28",
+      "arch": "2×45 → 256 → 1", "data": "gen3 : 7,7 M positions sur 3 machines, professeur net_v2",
+      "train_log": "train_gen3.log",
+      "tests": [{"log": "sprt_v3_vs_v2.log", "kind": "sprt", "tc": "100 ms/coup", "vs": "net_v2", "decides": true}],
+      "note": "Gain réel mais plus petit : les rendements décroissants commencent."
+    },
+    {
+      "id": "net_v4_h256", "name": "net_v4 (256)", "parent": "net_v3", "status": "rejected", "date": "2026-10-01",
+      "arch": "2×45 → 256 → 1", "data": "gen3 + gen4 (19,7 M), professeur net_v3",
+      "train_log": "train_gen4_h256.log",
+      "tests": [{"log": "sprt_v4h256_v3.log", "kind": "sprt", "tc": "100 ms/coup", "vs": "net_v3"},
+                {"log": "depth7_v4h256_v3.log", "kind": "match", "tc": "profondeur 7", "vs": "net_v3"}],
+      "note": "Même professeur, même profondeur : rien de neuf à apprendre."
+    },
+    {
+      "id": "net_v4_h512", "name": "net_v4 (512)", "parent": "net_v3", "status": "rejected", "date": "2026-10-01",
+      "arch": "2×45 → 512 → 1", "data": "gen3 + gen4 (19,7 M)",
+      "train_log": "train_gen4_h512.log",
+      "tests": [{"log": "sprt_v4h512_v3.log", "kind": "sprt", "tc": "100 ms/coup", "vs": "net_v3"},
+                {"log": "depth7_v4h512_v3.log", "kind": "match", "tc": "profondeur 7", "vs": "net_v3"}],
+      "note": "Meilleure val_loss, mais 30 % plus lent : le gain d'évaluation est mangé par la vitesse."
+    },
+    {
+      "id": "net_v4c", "name": "net_v4c", "parent": "net_v3", "status": "rejected", "date": "2026-10-02",
+      "arch": "2×45 → 256 → 1", "data": "gen4, échelle de score K = 725",
+      "train_log": "train_v4c.log",
+      "tests": [{"log": "depth7_v4c_v3.log", "kind": "match", "tc": "profondeur 7", "vs": "net_v3"}],
+      "note": "Recalibrage de l'échelle sigmoïde sur les vrais résultats."
+    },
+    {
+      "id": "net_v5a", "name": "net_v5a", "parent": "net_v3", "status": "rejected", "date": "2026-10-02",
+      "arch": "2×45 → 256 → 1", "data": "gen5 : 13 M positions à profondeur 9, K = 400",
+      "train_log": "train_gen5a.log",
+      "tests": [{"log": "depth7_v5a_v3.log", "kind": "match", "tc": "profondeur 7", "vs": "net_v3"}],
+      "note": "Étiquettes plus profondes : pas mieux."
+    },
+    {
+      "id": "net_v5b", "name": "net_v5b", "parent": "net_v3", "status": "rejected", "date": "2026-10-02",
+      "arch": "2×45 → 256 → 1", "data": "gen5, cible à 75 % sur le résultat de la partie",
+      "train_log": "train_gen5b.log",
+      "tests": [{"log": "depth7_v5b_v3.log", "kind": "match", "tc": "profondeur 7", "vs": "net_v3"}]
+    },
+    {
+      "id": "net_v5c", "name": "net_v5c", "parent": "net_v3", "status": "rejected", "date": "2026-10-02",
+      "arch": "2×45 → 256 → 1", "data": "gen5, K = 1050",
+      "train_log": "train_v5c.log",
+      "tests": [{"log": "depth7_v5c_v3.log", "kind": "match", "tc": "profondeur 7", "vs": "net_v3"}],
+      "note": "Conclusion des cycles 4 et 5 : une seule couche cachée est au plafond."
+    },
+    {
+      "id": "net_s1", "name": "net_s1", "parent": "net_v3", "status": "rejected", "date": "2026-10-02",
+      "arch": "FNU2 : 2×45 → 256 → 16 → 32 → 1, 4 buckets", "data": "gen3 + gen4",
+      "train_log": "train_s1.log",
+      "tests": [{"log": "depth7_s1_v3.log", "kind": "match", "tc": "profondeur 7", "vs": "net_v3"},
+                {"log": "sprt_s1_v3.log", "kind": "sprt", "tc": "100 ms/coup", "vs": "net_v3"}],
+      "note": "Meilleure évaluation à profondeur égale, mais 20-25 % plus lent."
+    },
+    {
+      "id": "net_s2", "name": "net_s2", "parent": "net_v3", "status": "rejected", "date": "2026-10-02",
+      "arch": "FNU2 : 2×45 → 256 → 16 → 32 → 1, sans buckets", "data": "gen3 + gen4",
+      "train_log": "train_s2.log",
+      "tests": [{"log": "depth7_s2_v3.log", "kind": "match", "tc": "profondeur 7", "vs": "net_v3"}]
+    },
+    {
+      "id": "net_s3", "name": "net_s3", "parent": "net_v3", "status": "rejected", "date": "2026-10-02",
+      "arch": "FNU2 : 2×45 → 256 → 16 → 32 → 1, 4 buckets, 25 epochs", "data": "gen3 + gen4",
+      "train_log": "train_s3.log",
+      "tests": [{"log": "depth7_s3_v3.log", "kind": "match", "tc": "profondeur 7", "vs": "net_v3"},
+                {"log": "sprt_s3_v3.log", "kind": "sprt", "tc": "100 ms/coup", "vs": "net_v3"}]
+    },
+    {
+      "id": "net_s4", "name": "net_s4", "parent": "net_v3", "status": "rejected", "date": "2026-10-02",
+      "arch": "FNU2 : 2×45 → 128 → 16 → 32 → 1, 4 buckets, 15 epochs", "data": "gen3 + gen4",
+      "train_log": "train_s4.log",
+      "tests": [{"log": "depth7_s4_v3.log", "kind": "match", "tc": "profondeur 7", "vs": "net_v3"}]
+    },
+    {
+      "id": "net_v6", "name": "net_v6", "parent": "net_v3", "status": "adopted", "date": "2026-10-03",
+      "arch": "FNU2 : 2×45 → 128 → 16 → 32 → 1, 4 buckets (5, 8, 12 pièces)", "data": "gen3 + gen4, 25 epochs, lr × 0,9 par epoch",
+      "train_log": "train_s5.log",
+      "tests": [{"log": "depth7_s5_v3.log", "kind": "match", "tc": "profondeur 7", "vs": "net_v3"},
+                {"log": "sprt_s5_v3.log", "kind": "sprt", "tc": "100 ms/coup", "vs": "net_v3", "decides": true}],
+      "note": "Architecture à couches empilées (essai net_s5) : réseau par défaut actuel."
+    },
+    {
+      "id": "net_v7", "name": "net_v7", "parent": "net_v6", "status": "rejected", "date": "2026-10-03",
+      "arch": "FNU2 : 2×45 → 128 → 16 → 32 → 1, 4 buckets, 25 epochs", "data": "à documenter",
+      "train_log": "train_v7.log",
+      "tests": [{"log": "depth7_v7_v6.log", "kind": "match", "tc": "profondeur 7", "vs": "net_v6"},
+                {"log": "sprt_v7_v6.log", "kind": "sprt", "tc": "100 ms/coup", "vs": "net_v6"}],
+      "note": "Essai du 3 octobre, pas encore décrit dans CLAUDE.md."
+    },
+    {
+      "id": "net_v7b", "name": "net_v7b", "parent": "net_v6", "status": "testing", "date": "2026-10-03",
+      "arch": "FNU2 : 2×45 → 128 → 16 → 32 → 1, 4 buckets, 50 epochs", "data": "à documenter",
+      "train_log": "train_v7b.log",
+      "tests": [{"log": "depth7_v7b_v6.log", "kind": "match", "tc": "profondeur 7", "vs": "net_v6"},
+                {"log": "sprt_v7b_v6.log", "kind": "sprt", "tc": "100 ms/coup", "vs": "net_v6"}],
+      "note": "Variante longue de net_v7, SPRT en cours."
+    }
+  ]
+}

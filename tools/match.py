@@ -63,7 +63,7 @@ class Engine:
         self.p.stdin.write(cmd + "\n")
         self.p.stdin.flush()
 
-    def wait(self, prefix, game=None, ply=None):
+    def wait(self, prefix, game=None, ply=None, **extra):
         # Ne journalise que la dernière ligne "info" (profondeur finale atteinte) d'une
         # recherche, pas chaque itération : pour un SPRT de milliers de parties, journaliser
         # chaque profondeur intermédiaire produirait des dizaines de Mo de logs par partie.
@@ -77,12 +77,14 @@ class Engine:
                 continue
             if line.startswith(prefix):
                 if last_info is not None:
-                    self.metrics.log_info_line(last_info, engine=self.name, game=game, ply=ply, host=self.host)
+                    if prefix == "bestmove":  # coup choisi : la page Labo l'affiche sur le plateau en direct
+                        extra["move"] = line.split()[1] if len(line.split()) > 1 else None
+                    self.metrics.log_info_line(last_info, engine=self.name, game=game, ply=ply, host=self.host, **extra)
                 return line.strip()
 
-    def query(self, cmd, prefix, game=None, ply=None):
+    def query(self, cmd, prefix, game=None, ply=None, **extra):
         self.send(cmd)
-        return self.wait(prefix, game=game, ply=ply)
+        return self.wait(prefix, game=game, ply=ply, **extra)
 
     def close(self):
         self.send("quit")
@@ -108,12 +110,13 @@ def play_game(engines, opening, movetime, referee, game_id):
     moves = list(opening)
     while True:
         referee.send(position_cmd(moves))
+        fen = referee.query("d", "Fen:")[4:].strip()  # position cherchée, journalisée avec la ligne info (page Labo)
         status = referee.query("status", "status").split(" ", 1)[1]
         if status != "ongoing":
             return status
         eng = engines[len(moves) % 2]
         eng.send(position_cmd(moves))
-        best = eng.query(f"go {movetime}", "bestmove", game=game_id, ply=len(moves)).split()[1]
+        best = eng.query(f"go {movetime}", "bestmove", game=game_id, ply=len(moves), fen=fen).split()[1]
         if best == "(none)":
             return "black wins" if len(moves) % 2 == 0 else "white wins"
         moves.append(best)
@@ -308,7 +311,8 @@ def main():
     metrics = MetricsLogger(
         run_type,
         run_id=args.run_id or new_run_id(run_type),
-        tags={"engine1_path": args.engine1, "engine2_path": args.engine2},
+        tags={"engine1_path": args.engine1, "engine2_path": args.engine2,
+              "engine1_opts": args.engine1_opts or "", "engine2_opts": args.engine2_opts or ""},
         enabled=not args.no_live_log,
     )
     if metrics.enabled:

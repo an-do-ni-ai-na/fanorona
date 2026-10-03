@@ -1,0 +1,660 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fanorona · Labo</title>
+<link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+/* =====================================================================================================
+   Labo : entraînement du modèle, en direct et en historique. Même charte que index.html (tools/gui/CHARTE.md) :
+   mêmes variables de thème (Papier / Ardoise / Veille) et de plateau (bois / granite), lues dans le stockage local
+   de l'application. Couleurs de séries : 3 teintes catégorielles validées (outil dataviz, toutes paires, daltonisme
+   et contraste) sur les surfaces des trois thèmes — d'où au plus 3 séries par graphique ; une machine garde sa
+   couleur partout (fanorona-dev, fanorona-c1, fanorona-c3), comme dans Grafana.
+   ===================================================================================================== */
+:root {
+  --font-ui: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --font-brand: "Fraunces", Georgia, "Times New Roman", serif;
+  --r: 10px; --r-sm: 6px;
+  --bg: #f2efe9; --surface: #fdfcfa; --surface-2: #f5f2ec; --border: #e4ded4; --text: #4a443b; --strong: #1f1b16; --muted: #756d61;
+  --accent: #a84f28; --accent-soft: rgba(168, 79, 40, .10); --info: #3e6a8a;
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --gain: #2a78d6; --loss: #e34948; --grid: #ebe6dd;
+  --ok: #1d7a3e; --warn: #9a6400;
+  --shadow: 0 1px 2px rgba(40, 30, 20, .06), 0 6px 20px rgba(40, 30, 20, .06);
+  --board-filter: none; --piece-shine: .22;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    --bg: #141311; --surface: #1e1c19; --surface-2: #262420; --border: #322f2a; --text: #c7c0b4; --strong: #f0ebe3; --muted: #8a8378;
+    --accent: #d2743f; --accent-soft: rgba(210, 116, 63, .14); --info: #7fa9c9;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --gain: #3987e5; --loss: #e66767; --grid: #2a2824;
+    --ok: #4cb873; --warn: #d39a2c;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 8px 24px rgba(0, 0, 0, .25);
+    --board-filter: none; --piece-shine: .2;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #141311; --surface: #1e1c19; --surface-2: #262420; --border: #322f2a; --text: #c7c0b4; --strong: #f0ebe3; --muted: #8a8378;
+  --accent: #d2743f; --accent-soft: rgba(210, 116, 63, .14); --info: #7fa9c9;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --gain: #3987e5; --loss: #e66767; --grid: #2a2824;
+  --ok: #4cb873; --warn: #d39a2c;
+  --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 8px 24px rgba(0, 0, 0, .25);
+  --board-filter: none; --piece-shine: .2;
+  color-scheme: dark;
+}
+:root[data-theme="night"] {
+  --bg: #0a0807; --surface: #120f0c; --surface-2: #19150f; --border: #262019; --text: #9c8b74; --strong: #c4b08e; --muted: #7a6b58;
+  --accent: #b0703a; --accent-soft: rgba(176, 112, 58, .14); --info: #a58458;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --gain: #3987e5; --loss: #e66767; --grid: #1d1813;
+  --ok: #6f9a52; --warn: #bd8726;
+  --shadow: 0 1px 2px rgba(0, 0, 0, .5);
+  --board-filter: brightness(.6) sepia(.35) saturate(.85); --piece-shine: 0;
+  color-scheme: dark;
+}
+:root, :root[data-board="wood"] { --b-1: #e6c48e; --b-2: #c7985a; --b-line: #58391b; --hl-path: rgba(20, 118, 98, .88);
+  --p-w1: #fffaf0; --p-w2: #e0d2b8; --p-w-edge: #a8916c; --p-b1: #4a3d33; --p-b2: #15100c; --p-b-edge: #000; }
+:root[data-board="granite"] { --b-1: #a7a39c; --b-2: #85817a; --b-line: #2c2926; --hl-path: rgba(196, 80, 30, .88);
+  --p-w1: #f6f4ef; --p-w2: #cfcac0; --p-w-edge: #8c867b; --p-b1: #3f3d3b; --p-b2: #060606; --p-b-edge: #000; }
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--text); font: 15px/1.5 var(--font-ui); -webkit-font-smoothing: antialiased; }
+button, select { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.hidden { display: none !important; }
+a { color: var(--info); }
+
+.topbar { position: sticky; top: 0; z-index: 30; display: flex; align-items: center; gap: 26px; height: 60px; padding: 0 20px;
+  background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(8px); border-bottom: 1px solid var(--border); }
+.brand { display: flex; align-items: center; gap: 10px; font: 600 24px/1 var(--font-brand); color: var(--strong); text-decoration: none; }
+.brand svg { width: 30px; height: 30px; color: var(--accent); }
+.brand small { font: 500 15px var(--font-ui); color: var(--muted); }
+.tabs { display: flex; gap: 4px; height: 100%; }
+.tabs button { background: none; border: 0; padding: 0 12px; cursor: pointer; font-weight: 500; font-size: 15px; color: var(--text);
+  border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap; }
+.tabs button:hover { color: var(--strong); }
+.tabs button.active { color: var(--strong); border-bottom-color: var(--accent); font-weight: 600; }
+.spacer { flex: 1; }
+.back { color: var(--muted); text-decoration: none; font-weight: 500; white-space: nowrap; }
+.back:hover { color: var(--strong); }
+
+main { max-width: 1240px; margin: 0 auto; padding: 22px 20px 60px; }
+h2 { font: 600 20px/1.3 var(--font-brand); color: var(--strong); margin: 28px 0 12px; }
+h2:first-child { margin-top: 4px; }
+.sec-label { font-size: 11.5px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); font-weight: 600; margin: 0 0 8px; }
+.note { color: var(--muted); font-size: 13.5px; margin: 6px 0 0; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); padding: 16px 18px; }
+.card + .card { margin-top: 14px; }
+.grid > .card + .card { margin-top: 0; }
+.card-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+.card-head h3 { margin: 0; font-size: 17px; font-weight: 600; color: var(--strong); }
+.card-head .meta { color: var(--muted); font-size: 13.5px; }
+.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.chip { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600; padding: 2px 9px; border-radius: 99px;
+  border: 1px solid var(--border); color: var(--text); background: var(--surface-2); white-space: nowrap; }
+.chip.live { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 40%, transparent); background: var(--accent-soft); }
+.chip.live::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); animation: pulse 1.6s infinite; }
+@keyframes pulse { 50% { opacity: .3; } }
+@media (prefers-reduced-motion: reduce) { .chip.live::before { animation: none; } }
+.chip.ok { color: var(--ok); } .chip.bad { color: var(--loss); } .chip.warn { color: var(--warn); }
+.dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; flex: none; }
+
+.grid { display: grid; gap: 14px; }
+.g3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.g2 { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); }
+@media (max-width: 900px) { .g3, .g2 { grid-template-columns: 1fr; } }
+
+/* Machines */
+.mach { display: flex; flex-direction: column; gap: 8px; }
+.mach-top { display: flex; align-items: center; gap: 8px; }
+.mach-top b { color: var(--strong); font-weight: 600; }
+.mach-top .chip { margin-left: auto; }
+.meter { height: 8px; border-radius: 4px; background: var(--surface-2); overflow: hidden; }
+.meter i { display: block; height: 100%; border-radius: 4px; background: var(--c, var(--s1)); transition: width .4s; }
+.mach-row { display: grid; grid-template-columns: 40px 1fr auto; align-items: center; gap: 10px; font-size: 13.5px; }
+.mach-row span:last-child { text-align: right; color: var(--strong); white-space: nowrap; min-width: 96px; }
+
+/* Tuiles de chiffres */
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin-bottom: 14px; }
+.tile { background: var(--surface-2); border-radius: var(--r-sm); padding: 10px 12px; }
+.tile .k { font-size: 12px; color: var(--muted); }
+.tile .v { font: 600 21px/1.25 var(--font-mono); color: var(--strong); font-variant-numeric: tabular-nums; }
+.tile .s { font-size: 12.5px; color: var(--muted); font-family: var(--font-mono); }
+
+/* Graphiques */
+.chart { position: relative; }
+.chart svg { display: block; width: 100%; height: auto; overflow: visible; }
+.chart .axis text, .chart .lbl { fill: var(--muted); font: 11.5px var(--font-ui); }
+.chart .val { fill: var(--strong); font: 600 12px var(--font-mono); }
+.chart .gridl { stroke: var(--grid); stroke-width: 1; }
+.chart .base { stroke: var(--muted); stroke-width: 1; opacity: .6; }
+.tip { position: absolute; pointer-events: none; z-index: 5; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-sm);
+  box-shadow: var(--shadow); padding: 7px 10px; font-size: 12.5px; color: var(--text); white-space: nowrap; transform: translate(-50%, -100%); }
+.tip b { color: var(--strong); }
+.tip .row { display: flex; align-items: center; gap: 6px; }
+.legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 13px; margin: 0 0 8px; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend .ln { width: 18px; height: 0; border-top: 2px solid var(--c); }
+.legend .ln.dash { border-top-style: dashed; }
+
+/* Barres par machine */
+.bars { display: grid; gap: 7px; }
+.bar-row { display: grid; grid-template-columns: 112px 1fr 84px; align-items: center; gap: 10px; font-size: 13.5px; }
+.bar-row .name { display: flex; align-items: center; gap: 7px; }
+.bar-row .v { text-align: right; font-family: var(--font-mono); color: var(--strong); }
+.bar { height: 12px; background: var(--surface-2); border-radius: 0 4px 4px 0; overflow: hidden; }
+.bar i { display: block; height: 100%; background: var(--c); border-radius: 0 4px 4px 0; transition: width .4s; }
+
+/* Plateaux en direct */
+.boards { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+.mini { background: var(--surface-2); border-radius: var(--r-sm); padding: 8px 9px 7px; border-top: 3px solid var(--c); }
+.mini svg { display: block; width: 100%; height: auto; filter: var(--board-filter); }
+.mini .cap { display: flex; justify-content: space-between; gap: 6px; font-size: 12px; color: var(--muted); margin-top: 5px; }
+.mini .cap b { color: var(--strong); font-weight: 600; }
+.empty { color: var(--muted); padding: 28px 10px; text-align: center; grid-column: 1 / -1; }
+
+/* Apprentissage */
+.runs { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.runs th { text-align: left; font-size: 11.5px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); font-weight: 600;
+  padding: 6px 8px; border-bottom: 1px solid var(--border); }
+.runs td { padding: 6px 8px; border-bottom: 1px solid var(--border); }
+.runs tr:hover td { background: var(--surface-2); }
+.runs td.num { text-align: right; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.runs label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.runs input { accent-color: var(--accent); width: 16px; height: 16px; }
+.table-wrap { max-height: 460px; overflow: auto; }
+
+/* Généalogie */
+.lineage { display: grid; gap: 10px; }
+.gen { display: grid; grid-template-columns: 150px 1fr; gap: 14px; }
+.gen-head { padding-top: 8px; }
+.gen-head b { display: block; font: 600 17px var(--font-brand); color: var(--strong); }
+.gen-head span { font-size: 12.5px; color: var(--muted); }
+.gen-body { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 10px; }
+.net { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); padding: 11px 13px; display: flex; flex-direction: column; gap: 6px; }
+.net.adopted { border-color: color-mix(in srgb, var(--accent) 55%, var(--border)); box-shadow: inset 3px 0 0 var(--accent); }
+.net-top { display: flex; align-items: center; gap: 8px; }
+.net-top b { font-family: var(--font-mono); color: var(--strong); }
+.net-top .chip { margin-left: auto; }
+.net .arch { font-size: 12.5px; color: var(--muted); }
+.net .res { font-size: 13px; display: grid; gap: 2px; }
+.net .res { gap: 7px; }
+.net .res > div { display: grid; gap: 0; }
+.net .res .k { font-size: 12px; color: var(--muted); }
+.net .res .mono { white-space: nowrap; color: var(--strong); }
+.net .res .mono { color: var(--strong); }
+.net .why { font-size: 12.5px; color: var(--text); }
+.linkbtn { background: none; border: 0; padding: 0; color: var(--info); cursor: pointer; font-size: 12.5px; text-align: left; }
+@media (max-width: 700px) {
+  .gen { grid-template-columns: 1fr; }
+  .topbar { gap: 8px; padding: 0 10px; } .brand small, .back, .topbar .spacer { display: none; }
+  .brand span { font-size: 20px; } .brand svg { width: 26px; height: 26px; }
+  .tabs { overflow-x: auto; scrollbar-width: none; } .tabs button { padding: 0 8px; font-size: 14px; }
+  main { padding: 16px 12px 40px; } .card { padding: 14px; }
+  .bar-row { grid-template-columns: 100px 1fr 56px; }
+}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="/">
+    <svg viewBox="0 0 32 32" aria-hidden="true" fill="none" stroke="currentColor"><rect x="3" y="8" width="26" height="16" rx="2.5" stroke-width="2"/>
+      <path d="M3 16h26M9.5 8v16M16 8v16M22.5 8v16M3 8l13 16M16 8l13 16M29 8L16 24M16 8L3 24" stroke-width="1.1" opacity=".55"/>
+      <circle cx="9.5" cy="16" r="3.2" fill="currentColor" stroke="none"/><circle cx="22.5" cy="16" r="3" fill="var(--surface)" stroke-width="1.6"/></svg>
+    <span>Fanorona <small>· Labo</small></span></a>
+  <nav class="tabs" id="tabs">
+    <button data-page="live" class="active">En direct</button>
+    <button data-page="curves">Apprentissage</button>
+    <button data-page="lineage">Généalogie</button>
+  </nav>
+  <div class="spacer"></div>
+  <a class="back" href="/">← Jouer</a>
+</header>
+
+<main>
+  <!-- ======================================================================================= EN DIRECT -->
+  <section id="page-live">
+    <p class="sec-label">Machines de calcul</p>
+    <div class="grid g3" id="machines"></div>
+    <p class="note hidden" id="machinesOff">Charge des machines indisponible (Prometheus injoignable).</p>
+    <div id="liveRuns"></div>
+  </section>
+
+  <!-- ======================================================================================= APPRENTISSAGE -->
+  <section id="page-curves" class="hidden">
+    <h2>Courbes d'apprentissage</h2>
+    <div class="card">
+      <div class="card-head"><h3>Perte par epoch</h3><span class="meta">trait plein : validation · pointillés : entraînement</span></div>
+      <div class="legend" id="curveLegend"></div>
+      <div class="chart" id="curveChart"></div>
+      <p class="note">Jusqu'à 3 entraînements superposés. Les pertes ne se comparent qu'entre entraînements sur les mêmes
+        données et la même échelle de score : une perte plus basse ne garantit pas un réseau plus fort (voir la généalogie).</p>
+    </div>
+    <div class="card">
+      <div class="card-head"><h3>Tous les entraînements</h3><span class="meta" id="runsCount"></span></div>
+      <div class="table-wrap"><table class="runs" id="runsTable"></table></div>
+    </div>
+  </section>
+
+  <!-- ======================================================================================= GÉNÉALOGIE -->
+  <section id="page-lineage" class="hidden">
+    <h2>Force gagnée depuis l'évaluation classique</h2>
+    <div class="card">
+      <div class="card-head"><h3>Elo cumulé des réseaux adoptés</h3><span class="meta">par rapport à la HCE · barres : intervalle à 95 %</span></div>
+      <div class="chart" id="eloChart"></div>
+      <p class="note">Chaque marche est le test qui a fait adopter le réseau contre son prédécesseur (SPRT à 100 ms/coup).
+        Les gains de la recherche (élagages, accumulateur incrémental) ne sont pas comptés ici.</p>
+    </div>
+    <h2>Essais contre leur réseau de référence</h2>
+    <div class="card">
+      <div class="card-head"><h3>Écart d'Elo à profondeur fixe 7</h3><span class="meta">2000 parties par essai · barres : intervalle à 95 %</span></div>
+      <div class="chart" id="trialChart"></div>
+      <p class="note">À profondeur égale, on mesure la seule qualité de l'évaluation ; la vitesse du réseau compte ensuite au
+        contrôle de temps (un réseau meilleur ici peut perdre à 100 ms/coup s'il est plus lent).</p>
+    </div>
+    <h2>Toutes les générations</h2>
+    <div class="lineage" id="lineageList"></div>
+  </section>
+</main>
+
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const NS = "http://www.w3.org/2000/svg";
+const MACHINES = ["fanorona-dev", "fanorona-c1", "fanorona-c3"];
+const NODE = { "fanorona-dev": "pve2", "fanorona-c1": "pve1", "fanorona-c3": "pve3" };
+const mColor = h => { const i = MACHINES.indexOf(h); return i < 0 ? "var(--muted)" : `var(--s${i + 1})`; };
+const fmt = (x, d = 0) => x == null || isNaN(x) ? "–" : Number(x).toLocaleString("fr-FR", { minimumFractionDigits: d, maximumFractionDigits: d });
+const sgn = (x, d = 0) => x == null ? "–" : (x > 0 ? "+" : x < 0 ? "−" : "±") + fmt(Math.abs(x), d);
+const pct = (x, d = 1) => x == null ? "–" : fmt(x * 100, d) + " %";
+const ago = ts => { const s = Math.max(0, Date.now() / 1000 - ts); return s < 90 ? `${Math.round(s)} s` : s < 5400 ? `${Math.round(s / 60)} min` : `${fmt(s / 3600, 1)} h`; };
+const dur = s => s < 90 ? `${Math.round(s)} s` : s < 5400 ? `${Math.round(s / 60)} min` : `${Math.floor(s / 3600)} h ${String(Math.round(s % 3600 / 60)).padStart(2, "0")}`;
+const getJSON = url => fetch(url, { cache: "no-store" }).then(r => r.ok ? r.json() : Promise.reject(r.status));
+
+// ------------------------------------------------------------------------------------------- thème (celui de l'appli)
+function applyTheme() {
+  let st = {};
+  try { st = JSON.parse(localStorage.getItem("fanorona-gui-v3")) || {}; } catch (e) { /* stockage indisponible */ }
+  const h = new Date().getHours();
+  const eff = st.autoNight && (h >= 22 || h < 7) ? "night" : (st.theme || "auto");
+  if (eff === "auto") document.documentElement.removeAttribute("data-theme"); else document.documentElement.dataset.theme = eff;
+  document.documentElement.dataset.board = st.boardTheme || "wood";
+}
+applyTheme();
+setInterval(applyTheme, 60000);
+addEventListener("storage", applyTheme);
+
+// ------------------------------------------------------------------------------------------- navigation
+let page = "live";
+function show(p) {
+  page = p;
+  for (const b of $("tabs").children) b.classList.toggle("active", b.dataset.page === p);
+  for (const s of ["live", "curves", "lineage"]) $("page-" + s).classList.toggle("hidden", s !== p);
+  history.replaceState(null, "", p === "live" ? "/labo" : "/labo#" + p);
+  if (p === "live") pollLive(); else if (p === "curves") loadTrainings(); else loadLineage();
+}
+for (const b of $("tabs").children) b.onclick = () => show(b.dataset.page);
+
+// ------------------------------------------------------------------------------------------- graphique en lignes
+// series : [{name, color, dash, points: [[x, y]...], label}] ; un seul axe y. Survol : réticule + infobulle.
+function lineChart(el, series, o = {}) {
+  const W = Math.max(320, el.clientWidth || 760), H = o.height || 260, m = { l: 56, r: o.labelRight ? 92 : 16, t: 12, b: 30 };
+  el._redraw = () => lineChart(el, series, o);
+  const pts = series.flatMap(s => s.points);
+  if (!pts.length) { el.innerHTML = `<p class="empty">${esc(o.empty || "Pas encore de données.")}</p>`; return; }
+  let [x0, x1] = o.xDomain || [Math.min(...pts.map(p => p[0])), Math.max(...pts.map(p => p[0]))];
+  let ys = pts.map(p => p[1]).concat(o.yExtra || []);
+  let [y0, y1] = o.yDomain || [Math.min(...ys), Math.max(...ys)];
+  if (x1 === x0) x1 = x0 + 1;
+  if (y1 === y0) { y0 -= 1; y1 += 1; }
+  if (!o.yDomain) { const pad = (y1 - y0) * .08; y0 -= pad; y1 += pad; }
+  const X = x => m.l + (x - x0) / (x1 - x0) * (W - m.l - m.r), Y = y => H - m.b - (y - y0) / (y1 - y0) * (H - m.t - m.b);
+  const ticks = (a, b, n) => { const st = Math.pow(10, Math.floor(Math.log10((b - a) / n))); const s2 = [1, 2, 2.5, 5, 10].map(k => k * st).find(k => (b - a) / k <= n) || st * 10;
+    const out = []; for (let v = Math.ceil(a / s2) * s2; v <= b + 1e-12; v += s2) out.push(+v.toFixed(10)); return out; };
+  let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(o.title || "graphique")}"><g class="axis">`;
+  for (const v of ticks(y0, y1, 5)) s += `<line class="gridl" x1="${m.l}" x2="${W - m.r}" y1="${Y(v)}" y2="${Y(v)}"/><text x="${m.l - 8}" y="${Y(v) + 4}" text-anchor="end">${esc(o.yFmt ? o.yFmt(v) : fmt(v))}</text>`;
+  for (const v of ticks(x0, x1, Math.max(2, Math.floor((W - m.l - m.r) / 110)))) s += `<text x="${X(v)}" y="${H - 9}" text-anchor="middle">${esc(o.xFmt ? o.xFmt(v) : fmt(v))}</text>`;
+  s += `<line class="base" x1="${m.l}" x2="${W - m.r}" y1="${H - m.b}" y2="${H - m.b}"/>`;
+  if (o.xLabel) s += `<text x="${W - m.r}" y="${H - 9}" text-anchor="end" dy="-14">${esc(o.xLabel)}</text>`;
+  s += `</g>`;
+  for (const r of o.refLines || []) s += `<line x1="${m.l}" x2="${W - m.r}" y1="${Y(r.y)}" y2="${Y(r.y)}" stroke="${r.color}" stroke-width="1.5" stroke-dasharray="6 5"/>
+    <text class="lbl" x="${W - m.r - 4}" y="${Y(r.y) - 5}" text-anchor="end">${esc(r.label)}</text>`;
+  for (const se of series) {
+    if (!se.points.length) continue;
+    const d = se.points.map((p, i) => (i ? "L" : "M") + X(p[0]).toFixed(1) + " " + Y(p[1]).toFixed(1)).join("");
+    s += `<path d="${d}" fill="none" stroke="${se.color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" ${se.dash ? 'stroke-dasharray="5 4" opacity=".75"' : ""}/>`;
+    if (se.label && o.labelRight) { const p = se.points[se.points.length - 1]; s += `<text class="lbl" x="${X(p[0]) + 7}" y="${Y(p[1]) + 4}" style="fill:var(--strong);font-weight:600">${esc(se.label)}</text>`; }
+    if (se.marker) { const p = se.points[se.points.length - 1]; s += `<circle cx="${X(p[0])}" cy="${Y(p[1])}" r="4" fill="${se.color}" stroke="var(--surface)" stroke-width="2"/>`; }
+  }
+  s += `<line class="xh" stroke="var(--muted)" stroke-width="1" y1="${m.t}" y2="${H - m.b}" opacity="0"/><g class="hov"></g>
+    <rect x="${m.l}" y="${m.t}" width="${W - m.l - m.r}" height="${H - m.t - m.b}" fill="transparent"/></svg>`;
+  el.innerHTML = s + `<div class="tip hidden"></div>`;
+  const svg = el.querySelector("svg"), tip = el.querySelector(".tip"), xh = svg.querySelector(".xh"), hov = svg.querySelector(".hov");
+  svg.onpointermove = ev => {
+    const r = svg.getBoundingClientRect(), sx = (ev.clientX - r.left) / r.width * W;
+    const xv = x0 + (sx - m.l) / (W - m.l - m.r) * (x1 - x0);
+    const near = series.map(se => { let best = null; for (const p of se.points) if (!best || Math.abs(p[0] - xv) < Math.abs(best[0] - xv)) best = p; return best && { se, p: best }; }).filter(Boolean);
+    if (!near.length) return;
+    const xs = near[0].p[0];
+    xh.setAttribute("x1", X(xs)); xh.setAttribute("x2", X(xs)); xh.setAttribute("opacity", ".5");
+    hov.innerHTML = near.map(n => `<circle cx="${X(n.p[0])}" cy="${Y(n.p[1])}" r="4" fill="${n.se.color}" stroke="var(--surface)" stroke-width="2"/>`).join("");
+    tip.innerHTML = `<b>${esc(o.xFmt ? o.xFmt(xs) : (o.xName || "") + " " + fmt(xs))}</b>` + near.map(n =>
+      `<div class="row"><span class="dot" style="background:${n.se.color}"></span>${esc(n.se.name)} <b class="mono">${esc(o.yFmt ? o.yFmt(n.p[1], true) : fmt(n.p[1], 2))}</b></div>`).join("");
+    tip.classList.remove("hidden");
+    tip.style.left = (X(xs) / W * r.width) + "px"; tip.style.top = (Math.min(...near.map(n => Y(n.p[1]))) / H * r.height - 10) + "px";
+  };
+  svg.onpointerleave = () => { tip.classList.add("hidden"); xh.setAttribute("opacity", "0"); hov.innerHTML = ""; };
+}
+
+// ------------------------------------------------------------------------------------------- mini-plateau
+// FEN : rangées de la 5e à la 1re, chiffres = cases vides. Points forts (diagonales) : (colonne + rangée) paire.
+function boardSVG(fen, move) {
+  const rows = fen.split(" ")[0].split("/"), R = rows.length, C = 9, S = 20, P = 12;
+  const W = (C - 1) * S + 2 * P, H = (R - 1) * S + 2 * P, X = c => P + c * S, Y = r => P + r * S;
+  let s = `<svg viewBox="0 0 ${W} ${H}" aria-hidden="true"><defs>
+    <linearGradient id="bw" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="var(--b-1)"/><stop offset="1" stop-color="var(--b-2)"/></linearGradient>
+    <radialGradient id="pw" cx=".35" cy=".3" r=".8"><stop offset="0" stop-color="var(--p-w1)"/><stop offset="1" stop-color="var(--p-w2)"/></radialGradient>
+    <radialGradient id="pb" cx=".35" cy=".3" r=".8"><stop offset="0" stop-color="var(--p-b1)"/><stop offset="1" stop-color="var(--p-b2)"/></radialGradient></defs>
+    <rect width="${W}" height="${H}" rx="6" fill="url(#bw)"/><g stroke="var(--b-line)" stroke-width="1.1" opacity=".85">`;
+  for (let r = 0; r < R; r++) s += `<line x1="${X(0)}" y1="${Y(r)}" x2="${X(C - 1)}" y2="${Y(r)}"/>`;
+  for (let c = 0; c < C; c++) s += `<line x1="${X(c)}" y1="${Y(0)}" x2="${X(c)}" y2="${Y(R - 1)}"/>`;
+  for (let r = 0; r < R; r++) for (let c = 0; c < C; c++) if ((c + (R - 1 - r)) % 2 === 0) {
+    if (r + 1 < R && c + 1 < C) s += `<line x1="${X(c)}" y1="${Y(r)}" x2="${X(c + 1)}" y2="${Y(r + 1)}"/>`;
+    if (r + 1 < R && c > 0) s += `<line x1="${X(c)}" y1="${Y(r)}" x2="${X(c - 1)}" y2="${Y(r + 1)}"/>`;
+    if (r > 0 && c + 1 < C) s += `<line x1="${X(c)}" y1="${Y(r)}" x2="${X(c + 1)}" y2="${Y(r - 1)}"/>`;
+    if (r > 0 && c > 0) s += `<line x1="${X(c)}" y1="${Y(r)}" x2="${X(c - 1)}" y2="${Y(r - 1)}"/>`;
+  }
+  s += `</g>`;
+  rows.forEach((row, r) => { let c = 0; for (const ch of row) {
+    if (/\d/.test(ch)) { c += +ch; continue; }
+    const w = ch === "W";
+    s += `<circle cx="${X(c)}" cy="${Y(r)}" r="7.2" fill="url(#${w ? "pw" : "pb"})" stroke="var(${w ? "--p-w-edge" : "--p-b-edge"})" stroke-width=".8"/>`;
+    c++;
+  } });
+  const sq = (move || "").match(/[a-i][1-5]/g);
+  if (sq && sq.length > 1) {
+    const pt = q => [X(q.charCodeAt(0) - 97), Y(R - +q[1])];
+    s += `<polyline points="${sq.map(q => pt(q).join(",")).join(" ")}" fill="none" stroke="var(--hl-path)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>`;
+    const [ex, ey] = pt(sq[sq.length - 1]);
+    s += `<circle cx="${ex}" cy="${ey}" r="3.6" fill="var(--hl-path)"/>`;
+  }
+  return s + `</svg>`;
+}
+
+// ------------------------------------------------------------------------------------------- EN DIRECT
+let liveTimer = null, liveBusy = false;
+function renderMachines(ms) {
+  $("machinesOff").classList.toggle("hidden", !!ms);
+  $("machines").innerHTML = (ms || []).map(m => `<div class="card mach" style="--c:${mColor(m.name)}">
+    <div class="mach-top"><span class="dot" style="background:${mColor(m.name)}"></span><b>${esc(m.name)}</b><span class="meta" style="color:var(--muted);font-size:13px">${esc(NODE[m.name] || "")}</span>
+      <span class="chip ${m.up ? "ok" : ""}">${m.up ? "en marche" : "arrêtée"}</span></div>
+    <div class="mach-row"><span>CPU</span><div class="meter"><i style="width:${m.ncpu ? Math.min(100, m.cpu / m.ncpu * 100) : 0}%"></i></div><span class="mono">${fmt(m.cpu, 1)} / ${fmt(m.ncpu)} vCPU</span></div>
+    <div class="mach-row"><span>RAM</span><div class="meter"><i style="width:${Math.min(100, m.mem * 100)}%"></i></div><span class="mono">${pct(m.mem, 0)}</span></div>
+  </div>`).join("");
+}
+
+function barRows(obj, valFmt, max) {
+  const keys = MACHINES.filter(h => h in obj).concat(Object.keys(obj).filter(h => !MACHINES.includes(h)));
+  if (!keys.length) return `<p class="note">—</p>`;
+  const mx = max || Math.max(...keys.map(k => obj[k])) || 1;
+  return `<div class="bars">` + keys.map(h => `<div class="bar-row"><span class="name"><span class="dot" style="background:${mColor(h)}"></span>${esc(h)}</span>
+    <div class="bar"><i style="--c:${mColor(h)};width:${obj[h] / mx * 100}%"></i></div><span class="v">${valFmt(obj[h])}</span></div>`).join("") + `</div>`;
+}
+
+function runTitle(r) {
+  const vs = r.engines && r.engines[0] ? `${r.engines[0]} contre ${r.engines[1]}` : null;
+  if (r.run_type === "sprt") return ["SPRT", vs || "moteurs non journalisés"];
+  if (r.run_type === "match") return ["Match", vs || "moteurs non journalisés"];
+  return [r.run_type, r.run_id];
+}
+
+function statusChip(r) {
+  if (r.active) return `<span class="chip live">en cours</span>`;
+  const d = r.done || {};
+  if (d.decision === "h1") return `<span class="chip ok">H1 acceptée · engine1 plus fort</span>`;
+  if (d.decision === "h0") return `<span class="chip bad">H0 acceptée · pas de gain</span>`;
+  if (d.decision === "inconclusive") return `<span class="chip warn">arrêté sans conclusion</span>`;
+  return `<span class="chip">terminé il y a ${ago(r.last_ts)}</span>`;
+}
+
+function renderMatch(r, el) {
+  const st = r.stats || {}, [kind, title] = runTitle(r);
+  const llr = r.llr && r.llr.length ? r.llr[r.llr.length - 1][1] : null;
+  const elapsed = (r.last_ts - r.first_ts) || 0;
+  const totalRate = Object.values(r.host_rate || {}).reduce((a, b) => a + b, 0);
+  el.innerHTML = `<div class="card-head"><h3>${esc(kind)} · ${esc(title)}</h3>${statusChip(r)}<span class="meta">${esc(r.run_id)} · depuis ${dur(elapsed)}</span></div>
+    <div class="tiles">
+      <div class="tile"><div class="k">Parties</div><div class="v">${fmt(st.games)}</div><div class="s">${fmt(totalRate, 1)} / min</div></div>
+      <div class="tile"><div class="k">Victoires · nulles · défaites</div><div class="v" style="font-size:17px">${fmt(st.w)} · ${fmt(st.d)} · ${fmt(st.l)}</div><div class="s">pour engine1</div></div>
+      <div class="tile"><div class="k">Score engine1</div><div class="v">${pct(st.score)}</div><div class="s">50 % = égalité</div></div>
+      <div class="tile"><div class="k">Écart d'Elo</div><div class="v">${sgn(st.elo, 1)}</div><div class="s">${st.games >= 30 ? `95 % : ${sgn(st.elo_lo)} à ${sgn(st.elo_hi)}` : "trop tôt pour un intervalle"}</div></div>
+      ${r.sprt ? `<div class="tile"><div class="k">LLR</div><div class="v">${sgn(llr, 2)}</div><div class="s">bornes ${fmt(r.sprt.lower, 2)} / ${fmt(r.sprt.upper, 2)}</div></div>` : ""}
+    </div>
+    <div class="grid ${r.sprt ? "g2" : ""}">
+      ${r.sprt ? `<div><p class="sec-label">Rapport de vraisemblance (LLR)</p><div class="chart" data-k="llr"></div>
+        <p class="note">Le test s'arrête quand la courbe touche une borne : en haut, engine1 est plus fort ; en bas, il ne l'est pas.</p></div>` : ""}
+      <div><p class="sec-label">Cadence par machine (parties / min, 5 dernières min)</p>${barRows(r.host_rate || {}, v => fmt(v, 1))}
+        <p class="sec-label" style="margin-top:14px">Parties jouées par machine</p>${barRows(r.host_games || {}, v => fmt(v))}
+        ${Object.keys(r.nps || {}).length ? `<p class="sec-label" style="margin-top:14px">Vitesse de recherche (nœuds / s)</p>${barRows(r.nps, v => fmt(v / 1000) + " k")}` : ""}</div>
+    </div>
+    <p class="sec-label" style="margin-top:16px">Parties en cours</p>
+    <div class="boards" data-k="boards"></div>`;
+  if (r.sprt) lineChart(el.querySelector('[data-k="llr"]'), [{ name: "LLR", color: "var(--s1)", points: r.llr, marker: true }], {
+    height: 230, title: "LLR du SPRT", xName: "partie", yFmt: (v, tip) => tip ? sgn(v, 3) : fmt(v, 1),
+    yExtra: [r.sprt.lower, r.sprt.upper], xFmt: v => "partie " + fmt(v),
+    refLines: [{ y: r.sprt.upper, label: "H1 : engine1 plus fort", color: "var(--gain)" }, { y: r.sprt.lower, label: "H0 : pas de gain", color: "var(--loss)" }] });
+  const games = r.games || [];
+  el.querySelector('[data-k="boards"]').innerHTML = games.length ? games.map(g => {
+    const white = g.ply % 2 === 0, who = g.engine === "engine1" ? (r.engines && r.engines[0]) || "engine1" : (r.engines && r.engines[1]) || "engine2";
+    return `<div class="mini" style="--c:${mColor(g.host)}">${boardSVG(g.fen, g.move)}
+      <div class="cap"><span><b>${esc(g.host || "?")}</b> · partie ${fmt(g.game + 1)}</span><span>coup ${fmt(g.ply + 1)}</span></div>
+      <div class="cap"><span>Au trait : ${white ? "Blancs" : "Noirs"} (${esc(who)})</span><span class="mono">${g.score_cp != null ? sgn(g.score_cp) + " cp" : ""}${g.depth ? " · p" + g.depth : ""}</span></div></div>`;
+  }).join("") : `<p class="empty">${r.active ? "Les positions s'affichent avec un match.py du 2026-10-04 ou plus récent (ce run a été lancé avant)." : "Run terminé."}</p>`;
+}
+
+function renderGensfen(r, el) {
+  const procs = r.procs || [], byHost = {};
+  for (const p of procs) { const h = byHost[p.host] ||= { written: 0, target: 0, pos_s: 0, n: 0 }; h.written += p.written; h.target += p.target; h.pos_s += p.pos_s; h.n++; }
+  const written = procs.reduce((a, p) => a + p.written, 0), target = r.target || procs.reduce((a, p) => a + p.target, 0);
+  const rate = procs.reduce((a, p) => a + p.pos_s, 0);
+  const slowest = Math.max(0, ...procs.map(p => p.pos_s ? (p.target - p.written) / p.pos_s : 0));
+  el.innerHTML = `<div class="card-head"><h3>Génération de données · gensfen</h3>${statusChip(r)}<span class="meta">${esc(r.run_id)}</span></div>
+    <div class="tiles">
+      <div class="tile"><div class="k">Positions écrites</div><div class="v">${fmt(written)}</div><div class="s">sur ${fmt(target)}</div></div>
+      <div class="tile"><div class="k">Avancement</div><div class="v">${pct(target ? written / target : 0, 0)}</div><div class="s">${procs.length} processus</div></div>
+      <div class="tile"><div class="k">Débit</div><div class="v">${fmt(rate)}</div><div class="s">positions / s</div></div>
+      <div class="tile"><div class="k">Fin estimée</div><div class="v">${r.active && slowest ? dur(slowest) : "–"}</div><div class="s">au rythme du plus lent</div></div>
+    </div>
+    <div class="grid g2"><div><p class="sec-label">Débit total (positions / s)</p><div class="chart" data-k="rate"></div></div>
+      <div><p class="sec-label">Avancement par machine</p>${barRows(Object.fromEntries(Object.entries(byHost).map(([h, v]) => [h, v.target ? v.written / v.target : 0])), v => pct(v, 0), 1)}
+        <p class="sec-label" style="margin-top:14px">Débit par machine (positions / s)</p>${barRows(Object.fromEntries(Object.entries(byHost).map(([h, v]) => [h, v.pos_s])), v => fmt(v))}</div></div>`;
+  lineChart(el.querySelector('[data-k="rate"]'), [{ name: "débit", color: "var(--s1)", points: (r.rate || []).map(([t, v]) => [t, v]) }],
+    { height: 200, title: "débit gensfen", yFmt: v => fmt(v),
+      xFmt: t => new Date(t * 1000).toLocaleTimeString("fr-FR", (r.rate || []).length > 1 && r.rate[r.rate.length - 1][0] - r.rate[0][0] < 600
+        ? { hour: "2-digit", minute: "2-digit", second: "2-digit" } : { hour: "2-digit", minute: "2-digit" }) });
+}
+
+function renderManual(m, host) {
+  for (const t of m.trainings) {
+    const el = document.createElement("div"); el.className = "card"; host.appendChild(el);
+    const last = t.epochs[t.epochs.length - 1];
+    el.innerHTML = `<div class="card-head"><h3>Entraînement · ${esc(t.name)}</h3><span class="chip live">en cours</span><span class="meta">train.py sur fanorona-dev</span></div>
+      <div class="tiles"><div class="tile"><div class="k">Epoch</div><div class="v">${fmt(last.epoch)}</div></div>
+        <div class="tile"><div class="k">Perte validation</div><div class="v">${fmt(last.val, 5)}</div></div>
+        <div class="tile"><div class="k">Perte entraînement</div><div class="v">${fmt(last.train, 5)}</div></div>
+        ${last.t ? `<div class="tile"><div class="k">Temps écoulé</div><div class="v">${dur(last.t)}</div></div>` : ""}</div>
+      <div class="legend"><span><i class="ln" style="--c:var(--s1)"></i>validation</span><span><i class="ln dash" style="--c:var(--s1)"></i>entraînement</span></div><div class="chart"></div>`;
+    lineChart(el.querySelector(".chart"), [
+      { name: "validation", color: "var(--s1)", points: t.epochs.map(e => [e.epoch, e.val]), marker: true },
+      { name: "entraînement", color: "var(--s1)", dash: true, points: t.epochs.map(e => [e.epoch, e.train]) }],
+      { height: 220, title: "perte", xName: "epoch", xFmt: v => "epoch " + fmt(v), yFmt: (v, tip) => fmt(v, tip ? 5 : 4) });
+  }
+  for (const g of m.gensfen) {
+    const el = document.createElement("div"); el.className = "card"; host.appendChild(el);
+    el.innerHTML = `<div class="card-head"><h3>gensfen · ${esc(g.name)}</h3><span class="chip live">en cours</span><span class="meta">lancé à la main</span></div>
+      <div class="mach-row" style="grid-template-columns:1fr 160px"><div class="meter"><i style="width:${g.target ? g.written / g.target * 100 : 0}%"></i></div>
+      <span class="mono">${fmt(g.written)} / ${fmt(g.target)} · ${fmt(g.pos_s)} pos/s</span></div>`;
+  }
+}
+
+async function pollLive() {
+  clearTimeout(liveTimer);
+  if (page !== "live") return;
+  if (!liveBusy) {
+    liveBusy = true;
+    try {
+      const d = await getJSON("/api/labo/live");
+      renderMachines(d.machines);
+      const host = $("liveRuns"); host.innerHTML = "";
+      const active = d.runs.filter(r => r.active).length + d.manual.trainings.length + d.manual.gensfen.length;
+      const h = document.createElement("h2"); h.textContent = active ? "En cours" : "Rien ne tourne en ce moment"; host.appendChild(h);
+      renderManual(d.manual, host);
+      for (const r of d.runs) {
+        if (!r.active && !active && host.children.length > 3) break;
+        const el = document.createElement("div"); el.className = "card"; host.appendChild(el);
+        if (r.run_type === "gensfen") renderGensfen(r, el); else renderMatch(r, el);
+      }
+      if (!d.runs.length && !active) host.insertAdjacentHTML("beforeend", `<p class="empty">Aucun match, SPRT, entraînement ni génération dans la dernière demi-heure.
+        Lancez par exemple <span class="mono">tools/match.py</span> ou <span class="mono">tools/gensfen_dist.py</span> sur fanorona-dev.</p>`);
+    } catch (e) {
+      $("liveRuns").innerHTML = `<p class="empty">Serveur injoignable (${esc(e)}).</p>`;
+    }
+    liveBusy = false;
+  }
+  liveTimer = setTimeout(pollLive, document.hidden ? 15000 : 2500);
+}
+
+// ------------------------------------------------------------------------------------------- APPRENTISSAGE
+let runs = [], selected = [], curveCache = {};
+const SEL_KEY = "fanorona-labo-curves";
+async function loadTrainings() {
+  runs = await getJSON("/api/labo/trainings");
+  if (!selected.length) {
+    try { selected = JSON.parse(localStorage.getItem(SEL_KEY)) || []; } catch (e) { selected = []; }
+    selected = selected.filter(n => runs.some(r => r.name === n));
+    if (!selected.length) selected = [...new Set([runs[0]?.name, runs.find(r => r.net === "net_v6")?.name].filter(Boolean))];
+  }
+  $("runsCount").textContent = `${runs.length} entraînements dans logs/`;
+  $("runsTable").innerHTML = `<thead><tr><th>Entraînement</th><th>Réseau exporté</th><th style="text-align:right">Epochs</th><th style="text-align:right">Val. finale</th><th style="text-align:right">Meilleure</th><th>Date</th></tr></thead><tbody>` +
+    runs.map(r => `<tr><td><label><input type="checkbox" data-n="${esc(r.name)}" ${selected.includes(r.name) ? "checked" : ""}>
+      ${selected.includes(r.name) ? `<span class="dot" style="background:var(--s${selected.indexOf(r.name) + 1})"></span>` : ""}<span class="mono">${esc(r.name)}</span>${r.active ? ' <span class="chip live">en cours</span>' : ""}</label></td>
+      <td class="mono">${esc(r.net || (r.export || "").replace("checkpoints/", "").replace(".nnue", "") || "–")}</td><td class="num">${r.epochs}</td>
+      <td class="num">${fmt(r.final_val, 5)}</td><td class="num">${fmt(r.best_val, 5)}</td>
+      <td>${new Date(r.mtime * 1000).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })} ${new Date(r.mtime * 1000).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}</td></tr>`).join("") + `</tbody>`;
+  for (const cb of $("runsTable").querySelectorAll("input")) cb.onchange = () => {
+    const n = cb.dataset.n;
+    if (cb.checked) { selected.push(n); if (selected.length > 3) selected.shift(); } else selected = selected.filter(x => x !== n);
+    try { localStorage.setItem(SEL_KEY, JSON.stringify(selected)); } catch (e) { /* stockage indisponible */ }
+    loadTrainings();
+  };
+  await drawCurves();
+}
+async function drawCurves() {
+  for (const n of selected) if (!curveCache[n] || runs.find(r => r.name === n)?.active) curveCache[n] = await getJSON("/api/labo/training?name=" + encodeURIComponent(n));
+  const series = [];
+  selected.forEach((n, i) => {
+    const c = curveCache[n], col = `var(--s${i + 1})`, label = runs.find(r => r.name === n)?.net || (c.export || n).replace("checkpoints/", "").replace("essais/", "").replace(".nnue", "");
+    series.push({ name: label + " · validation", color: col, points: c.epochs.map(e => [e.epoch, e.val]), label });
+    series.push({ name: label + " · entraînement", color: col, dash: true, points: c.epochs.map(e => [e.epoch, e.train]) });
+  });
+  $("curveLegend").innerHTML = selected.map((n, i) => `<span><i class="ln" style="--c:var(--s${i + 1})"></i>${esc(series[2 * i].label)}</span>`).join("");
+  lineChart($("curveChart"), series, { height: 320, labelRight: true, title: "courbes d'apprentissage", xName: "epoch", xFmt: v => "epoch " + fmt(v),
+    yFmt: (v, tip) => fmt(v, tip ? 5 : 4), empty: "Cochez un entraînement ci-dessous." });
+}
+
+// ------------------------------------------------------------------------------------------- GÉNÉALOGIE
+const STATUS = { adopted: ["adopté", "ok"], rejected: ["non retenu", ""], testing: ["en test", "live"], base: ["base", ""] };
+async function loadLineage() {
+  const { nets } = await getJSON("/api/labo/lineage");
+  const byId = Object.fromEntries(nets.map(n => [n.id, n]));
+
+  // 1. Elo cumulé (lignée adoptée), points étiquetés + barres d'intervalle
+  const chain = nets.filter(n => n.elo_total != null).sort((a, b) => a.elo_total - b.elo_total || (a.date > b.date ? 1 : -1));
+  const el = $("eloChart"), W = Math.max(320, el.clientWidth || 760), H = 280, m = { l: 56, r: 30, t: 22, b: 36 };
+  const ymax = Math.max(...chain.map(n => n.elo_total + (n.elo_total_ci || 0))) * 1.1 || 10;
+  const X = i => m.l + i / Math.max(1, chain.length - 1) * (W - m.l - m.r), Y = v => H - m.b - v / ymax * (H - m.t - m.b);
+  let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Elo cumulé des réseaux adoptés"><g class="axis">`;
+  for (let v = 0; v <= ymax; v += ymax > 120 ? 50 : 20) s += `<line class="gridl" x1="${m.l}" x2="${W - m.r}" y1="${Y(v)}" y2="${Y(v)}"/><text x="${m.l - 8}" y="${Y(v) + 4}" text-anchor="end">${v ? "+" + v : 0}</text>`;
+  s += `<line class="base" x1="${m.l}" x2="${W - m.r}" y1="${Y(0)}" y2="${Y(0)}"/></g>`;
+  s += `<path d="${chain.map((n, i) => (i ? "L" : "M") + X(i) + " " + Y(n.elo_total)).join("")}" fill="none" stroke="var(--s1)" stroke-width="2"/>`;
+  chain.forEach((n, i) => {
+    const ci = n.elo_total_ci || 0;
+    if (ci) s += `<line x1="${X(i)}" x2="${X(i)}" y1="${Y(n.elo_total + ci)}" y2="${Y(Math.max(0, n.elo_total - ci))}" stroke="var(--s1)" stroke-width="1.5" opacity=".45"/>`;
+    s += `<circle cx="${X(i)}" cy="${Y(n.elo_total)}" r="5" fill="var(--s1)" stroke="var(--surface)" stroke-width="2"><title>${esc(n.name)} : ${sgn(n.elo_total)} Elo (±${fmt(ci)})</title></circle>
+      <text class="val" x="${X(i)}" y="${Y(n.elo_total + ci) - 8}" text-anchor="middle">${n.elo_total ? sgn(n.elo_total) : "0"}</text>
+      <text class="lbl" x="${X(i)}" y="${H - 12}" text-anchor="middle" style="fill:var(--strong);font-family:var(--font-mono)">${esc(n.name)}</text>`;
+    if (n.elo_step != null) s += `<text class="lbl" x="${(X(i) + X(i - 1)) / 2}" y="${(Y(n.elo_total) + Y(chain[i - 1].elo_total)) / 2 + 16}" text-anchor="middle">${sgn(n.elo_step)}</text>`;
+  });
+  el.innerHTML = s + `</svg>`;
+
+  // 2. Essais à profondeur 7 : écart d'Elo contre leur référence (divergent : gain / perte), groupés par référence
+  const trials = [];
+  for (const n of nets) for (const t of n.tests || []) if (t.result && t.tc === "profondeur 7") trials.push({ n, t, r: t.result });
+  trials.sort((a, b) => (a.t.vs > b.t.vs ? 1 : a.t.vs < b.t.vs ? -1 : 0) || (a.n.date > b.n.date ? 1 : -1));
+  const groupsVs = [...new Set(trials.map(x => x.t.vs))];
+  const TW = Math.max(320, $("trialChart").clientWidth || 760), rowH = 26, headH = 24, TH = trials.length * rowH + groupsVs.length * headH + 34, tm = { l: 120, r: 64 };
+  const lim = Math.max(10, ...trials.map(x => Math.max(Math.abs(x.r.elo_lo), Math.abs(x.r.elo_hi)))) * 1.08;
+  const TX = v => tm.l + (v + lim) / (2 * lim) * (TW - tm.l - tm.r);
+  let t = `<svg viewBox="0 0 ${TW} ${TH}" role="img" aria-label="Écart d'Elo des essais"><g class="axis">`;
+  for (const v of (TW < 560 ? [-20, 0, 20] : [-20, -10, 0, 10, 20]).filter(v => Math.abs(v) <= lim)) t += `<line class="${v ? "gridl" : "base"}" x1="${TX(v)}" x2="${TX(v)}" y1="4" y2="${TH - 26}"/><text x="${TX(v)}" y="${TH - 8}" text-anchor="middle">${v > 0 ? "+" + v : v}</text>`;
+  t += `</g>`;
+  let prevVs = null, y = 4;
+  trials.forEach(x => {
+    const col = x.r.elo >= 0 ? "var(--gain)" : "var(--loss)";
+    if (x.t.vs !== prevVs) { t += `<text class="lbl" x="${tm.l - 12}" y="${y + 16}" text-anchor="end" style="font-size:10.5px;letter-spacing:.07em;font-weight:600">CONTRE ${esc((byId[x.t.vs]?.name || x.t.vs).toUpperCase())}</text>`; prevVs = x.t.vs; y += headH; }
+    t += `<text class="lbl" x="${tm.l - 12}" y="${y + 9}" text-anchor="end" style="fill:var(--strong);font-family:var(--font-mono)">${esc(x.n.name)}${x.n.status === "adopted" ? " ★" : ""}</text>
+      <line x1="${TX(x.r.elo_lo)}" x2="${TX(x.r.elo_hi)}" y1="${y + 5}" y2="${y + 5}" stroke="${col}" stroke-width="2" opacity=".5"/>
+      <circle cx="${TX(x.r.elo)}" cy="${y + 5}" r="5" fill="${col}" stroke="var(--surface)" stroke-width="2"><title>${esc(x.n.name)} : ${pct(x.r.score)} sur ${fmt(x.r.games)} parties</title></circle>
+      <text class="val" x="${TW - tm.r + 10}" y="${y + 9}">${sgn(x.r.elo, 1)}</text>`;
+    y += rowH;
+  });
+  $("trialChart").innerHTML = trials.length ? t + `</svg><p class="note">★ réseau adopté. Point bleu : meilleur que la référence ; rouge : moins bon. Un intervalle qui croise 0 = pas d'écart démontré.</p>` : `<p class="empty">Aucun match à profondeur 7 trouvé.</p>`;
+
+  // 3. Générations : une ligne par référence (parent), réseaux par date
+  const groups = {};
+  for (const n of nets) (groups[n.parent || "_"] ||= []).push(n);
+  const order = [];
+  (function walk(id) { order.push(id); for (const c of (groups[id] || []).filter(c => c.status === "adopted")) walk(c.id); })("hce");
+  $("lineageList").innerHTML = order.map(id => {
+    const kids = id === "hce" ? [byId.hce] : [];
+    const children = (groups[id] || []).sort((a, b) => (a.status === "adopted" ? -1 : 0) - (b.status === "adopted" ? -1 : 0) || (a.date > b.date ? 1 : -1));
+    const cards = kids.concat(children).map(n => {
+      const [lab, cls] = STATUS[n.status] || [n.status, ""];
+      const tests = (n.tests || []).filter(t => t.result).map(t => `<div><span class="k">${t.kind === "sprt" ? "SPRT" : "Match"} · ${esc(t.tc)} · ${fmt(t.result.games)} parties</span>
+        <span class="mono">${pct(t.result.score)} · ${sgn(t.result.elo)} Elo${t.result.verdict === "h1" ? " · H1 ✓" : t.result.verdict === "h0" ? " · H0 ✗" : ""}</span></div>`).join("");
+      return `<div class="net ${n.status}"><div class="net-top"><b>${esc(n.name)}</b><span class="chip ${cls}">${lab}</span></div>
+        <div class="arch">${esc(n.arch || "")}${n.data ? "<br>" + esc(n.data) : ""}</div>
+        ${tests ? `<div class="res">${tests}</div>` : ""}
+        ${n.note ? `<div class="why">${esc(n.note)}</div>` : ""}
+        ${n.train ? `<button class="linkbtn" data-train="${esc(n.train.name)}">courbe d'apprentissage (${n.train.epochs} epochs, val ${fmt(n.train.final_val, 5)}) →</button>` : ""}
+        <div class="arch">${esc(n.date || "")}</div></div>`;
+    }).join("");
+    if (!cards) return "";
+    return `<div class="gen"><div class="gen-head"><b>${id === "hce" ? "Départ" : "Après " + esc(byId[id].name)}</b>
+      <span>${id === "hce" ? "évaluation écrite à la main" : (groups[id] || []).length + " essai(s) contre " + esc(byId[id].name)}</span></div><div class="gen-body">${cards}</div></div>`;
+  }).join("");
+  for (const b of $("lineageList").querySelectorAll("[data-train]")) b.onclick = () => {
+    selected = [b.dataset.train];
+    try { localStorage.setItem(SEL_KEY, JSON.stringify(selected)); } catch (e) { /* idem */ }
+    show("curves");
+  };
+}
+
+let resizeT = null;
+addEventListener("resize", () => { clearTimeout(resizeT); resizeT = setTimeout(() => {
+  for (const el of document.querySelectorAll(".chart")) if (el._redraw && el.offsetParent) el._redraw();
+  if (page === "lineage") loadLineage();
+}, 200); });
+document.addEventListener("visibilitychange", () => { if (!document.hidden && page === "live") pollLive(); });
+show(["curves", "lineage"].includes(location.hash.slice(1)) ? location.hash.slice(1) : "live");
+</script>
+</body>
+</html>

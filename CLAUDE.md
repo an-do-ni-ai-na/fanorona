@@ -45,7 +45,10 @@ sur la VM `fanorona-dev` vers Loki/Grafana du homelab (dashboard "Fanorona - Rec
 `tools/metrics_logger.py`. Depuis le 2026-10-03, chaque événement porte le nom de la machine (`host`), et
 `tools/gensfen_dist.py` journalise la progression de gensfen (`gensfen_progress` : positions écrites, pos/s) :
 le dashboard montre la charge (CPU, RAM, température de l'hôte), le débit gensfen et la cadence des parties par
-machine. Dans LogQL, extraire ce champ sous un autre nom (`| json machine="host"`) : Alloy pose déjà une
+machine. La page **Labo** de la GUI (https://fanorona.lab.andoniaina.me/labo) lit les mêmes journaux, plus
+`logs/` : **nouveau réseau = ajouter son entrée dans `tools/gui/lineage.json`** (statut, parent, journaux
+d'entraînement et de test ; les scores et l'Elo sont recalculés, rien à recopier). Les plateaux en direct
+demandent les champs `fen`/`move` des lignes info (match.py >= 2026-10-04). Dans LogQL, extraire ce champ sous un autre nom (`| json machine="host"`) : Alloy pose déjà une
 étiquette de flux `host="fanorona-dev"` qui le masquerait.
 
 Build de débogage avec sanitizers :
@@ -82,6 +85,7 @@ g++ -g -O0 -std=c++17 -Isrc -fsanitize=address,undefined src/{bitboard,position,
 | `tools/gui/verify_lessons.py` | vérifie chaque exercice contre le moteur (solution et nombre minimal de coups `par` des exercices solo, position gagnante pour ceux contre le moteur) — à relancer après toute modification des leçons |
 | `tools/gui/puzzles.json` | puzzles tactiques générés (FEN, ligne solution, coups acceptés par étape, classement, thèmes) |
 | `tools/puzzles/gen_puzzles.py` | génération des puzzles depuis `gensfen` (faute aléatoire, coup unique entre « familles » de chaînes, second avis NNUE, `--verify-only` pour refiltrer) |
+| `tools/gui/labo.py`, `labo.html`, `lineage.json` | page **Labo** de la GUI (`/labo`) : entraînement en direct (machines, SPRT/LLR, gensfen, plateaux des parties en cours), courbes d'apprentissage de tous les `logs/train*.log`, généalogie des réseaux (Elo recalculé depuis les journaux de test) |
 | `tools/gensfen_dist.py` | `gensfen` réparti sur plusieurs machines (`--hosts`, comme match.py), concaténation automatique, progression live par machine |
 | `tools/metrics_logger.py` | journalisation JSONL des lignes UCI `info` + résultats, pour Grafana/Loki |
 | `tools/nnue/train.py` | entraînement PyTorch du réseau NNUE à partir des données `gensfen` |
