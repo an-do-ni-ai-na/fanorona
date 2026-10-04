@@ -64,9 +64,16 @@ std::vector<float> g_h1, g_h2, g_h3;  // tampons de travail (état global comme 
 // (feuille de route CLAUDE.md, point 5) est implémenté un jour.
 struct AccumCache {
     bool valid = false;
+    int sinceRefresh = 0;  // mises à jour incrémentales depuis le dernier recalcul complet
     Bitboard byColor[COLOR_NB] = {0, 0};
     std::vector<float> acc[COLOR_NB];
 };
+// Recalcul complet toutes les REFRESH_INTERVAL évaluations. Les ajouts/retraits successifs de colonnes en float32
+// accumulent des erreurs d'arrondi qui ne se compensent pas : mesuré (2026-10-04), une même position passait de
+// 595 à 585 cp après trois recherches de profondeur 11, et dans gensfen (jamais de ucinewgame) l'accord entre le
+// score et le résultat des parties se dégradait du simple au double au fil d'un processus d'une heure (gen6/gen7).
+// Un recalcul coûte ~2 colonnes par pièce (la plupart des positions ont <= 8 pièces) : négligeable à cet intervalle.
+constexpr int REFRESH_INTERVAL = 256;
 AccumCache g_cache;
 
 bool read_exact(std::ifstream& f, void* dst, size_t bytes) {
@@ -360,8 +367,12 @@ void set_enabled(bool on) { g_wantEnabled = on; }
 void new_game() { g_cache.valid = false; }
 
 Value evaluate(const Position& pos) {
-    if (!g_cache.valid) recompute_from(pos);
-    else update_incremental(pos);
+    if (!g_cache.valid || ++g_cache.sinceRefresh >= REFRESH_INTERVAL) {
+        recompute_from(pos);
+        g_cache.sinceRefresh = 0;
+    } else {
+        update_incremental(pos);
+    }
 
     const float* __restrict acc = g_cache.acc[pos.sideToMove].data();
     if (g_stacked) return clamp_eval(int(std::lround(double(forward_stacked(acc, pos)) * SCORE_SCALE)));

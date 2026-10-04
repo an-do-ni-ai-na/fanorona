@@ -11,6 +11,21 @@ fanorona-dev, i7-6700T, 1 thread), justesse par `make test`, `perft` et `tools/n
 
 ## 2026-10-04
 
+### Moteur — BUG : dérive de l'accumulateur NNUE, données d'entraînement dégradées · `{COMMIT}`
+- Piste : entraîner sur gen6 + gen7 (40M positions, net_v6 professeur) donnait de MOINS bons réseaux que gen6
+  seul (12M). Mêmes paramètres, même professeur ; mais l'accord entre score et résultat des parties était bien
+  pire dans gen7 (0,043 contre 0,029), uniformément sur toutes les machines.
+- Cause : l'accumulateur incrémental (float32) n'était recalculé qu'au chargement du réseau ou sur `ucinewgame`.
+  Les ajouts/retraits successifs de colonnes accumulent des erreurs d'arrondi : une même position passe de 595 à
+  585 cp après 3 recherches de profondeur 11. `gensfen` n'envoie jamais `ucinewgame` : au fil d'un processus,
+  l'accord score/résultat passe de 0,025 à 0,050 (gen7, processus d'une heure, 3,5M positions) et de 0,020 à
+  0,039 (gen6, 923k positions par processus). Les processus plus longs de gen7 expliquent l'écart avec gen6.
+- Correctif : recalcul complet de l'accumulateur toutes les 256 évaluations (src/nnue.cpp). Plus aucune dérive
+  (595 cp après 9 recherches), même vitesse ; `verify.py` OK, tests OK ; signatures bench NNUE modifiées.
+- Portée : **toutes les données gen1 à gen7 sont dégradées**, d'autant plus que les processus étaient longs ;
+  les matchs l'étaient peu (`match.py` envoie `ucinewgame` à chaque partie) ; la GUI pas (un processus par coup).
+  Les conclusions « le réseau plafonne » des cycles 4, 5 et du balayage GPU sont à revoir avec des données propres.
+
 ### Outils — SPRT par paires d'ouvertures (pentanomial) : ~7x moins de parties · `4e49352`
 - Constat, sur les journaux de match : entre deux réseaux proches, les blancs gagnent ~54 % des parties et les
   noirs ~12 % ; 58 % des paires d'ouvertures (même ouverture, couleurs inversées) finissent 1-1, chaque moteur
