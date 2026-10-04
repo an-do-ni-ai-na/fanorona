@@ -184,7 +184,7 @@ class Host:
 
 def run(args, metrics):
     """Parties fixes (args.games paires) ou SPRT, avec args.concurrency paires de moteurs en parallèle."""
-    sprt = Sprt(args.elo0, args.elo1, args.alpha, args.beta) if args.sprt else None
+    sprt = Sprt(args.elo0, args.elo1, args.alpha, args.beta, pentanomial=not args.trinomial) if args.sprt else None
     if sprt:
         print(f"SPRT elo0={args.elo0} elo1={args.elo1} alpha={args.alpha} beta={args.beta} "
               f"bornes LLR=[{sprt.lower:.3f}, {sprt.upper:.3f}]")
@@ -197,7 +197,7 @@ def run(args, metrics):
           flush=True)
     metrics.log("match_hosts", hosts={h.name: sum(s is h for s in slots) for h in hosts.values()})
     lock = threading.Lock()
-    state = {"next": 0, "stop": False, "w": 0, "d": 0, "l": 0, "done": None, "error": None}
+    state = {"next": 0, "stop": False, "w": 0, "d": 0, "l": 0, "done": None, "error": None, "half": {}}
 
     def take_pair():
         with lock:
@@ -223,12 +223,18 @@ def run(args, metrics):
                 print(f"partie {n} (#{game_id + 1}): {res}  | engine1 +{state['w']} ={state['d']} -{state['l']}", flush=True)
                 return
             sprt.add_result(result)
+            score = {"win": 1.0, "draw": 0.5, "loss": 0.0}[result]
+            if game_id ^ 1 in state["half"]:  # les parties 2g et 2g+1 partagent la même ouverture
+                sprt.add_pair(state["half"].pop(game_id ^ 1), score)
+            else:
+                state["half"][game_id] = score
             xbar, var, _ = sprt.stats()
             llr = sprt.llr()
             metrics.log("sprt_update", game=game_id, raw_result=res, engine1_result=result, host=host, wins=sprt.wins,
                         draws=sprt.draws, losses=sprt.losses, llr=llr, lower=sprt.lower, upper=sprt.upper,
-                        mean_score=xbar)
+                        mean_score=xbar, pairs=list(sprt.pairs), pentanomial=sprt.pentanomial)
             print(f"partie {sprt.n}: {res}  | W{sprt.wins} D{sprt.draws} L{sprt.losses}  "
+                  f"paires {'-'.join(map(str, sprt.pairs))}  "
                   f"LLR {llr:+.3f} (bornes [{sprt.lower:.3f}, {sprt.upper:.3f}])", flush=True)
             decision = sprt.decision()
             if decision is not None:
@@ -295,6 +301,8 @@ def main():
     ap.add_argument("--sprt", action="store_true", help="arrêt séquentiel au lieu d'un nombre fixe de parties")
     ap.add_argument("--elo0", type=float, default=0.0, help="H0 : Elo réel <= elo0 (SPRT)")
     ap.add_argument("--elo1", type=float, default=5.0, help="H1 : Elo réel >= elo1 (SPRT)")
+    ap.add_argument("--trinomial", action="store_true",
+                    help="SPRT sur parties supposées indépendantes (ancien mode, ~7x plus lent) au lieu des paires")
     ap.add_argument("--alpha", type=float, default=0.05, help="erreur de type I (SPRT)")
     ap.add_argument("--beta", type=float, default=0.05, help="erreur de type II (SPRT)")
     ap.add_argument("--max-games", type=int, default=None, help="garde-fou : arrêt même sans conclusion (SPRT)")

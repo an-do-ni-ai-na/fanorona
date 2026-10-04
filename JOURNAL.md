@@ -11,6 +11,17 @@ fanorona-dev, i7-6700T, 1 thread), justesse par `make test`, `perft` et `tools/n
 
 ## 2026-10-04
 
+### Outils — SPRT par paires d'ouvertures (pentanomial) : ~7x moins de parties · `{COMMIT}`
+- Constat, sur les journaux de match : entre deux réseaux proches, les blancs gagnent ~54 % des parties et les
+  noirs ~12 % ; 58 % des paires d'ouvertures (même ouverture, couleurs inversées) finissent 1-1, chaque moteur
+  gagnant avec les blancs. Le SPRT traitait les parties comme indépendantes : variance surestimée ~8x
+  (erreur-type 0,0090 au lieu de 0,0032), d'où des tests ~7x trop longs.
+- `tools/sprt.py` + `match.py` : LLR sur les scores de paire (LL, LD, DD|WL, WD, WW), comme fishtest ; pas de
+  décision avant 50 paires ; ancien mode avec `--trinomial`. Journal live : champ `pairs`.
+- Rejoué sur les journaux : net_v6 contre net_v3 (H1 en 9823 parties) l'aurait été en ~1400 ; les SPRT arrêtés
+  sans verdict ces derniers jours (symétrie, balayage, g6a) auraient tous conclu H0 vers 1800-2600 parties :
+  les décisions prises restent valables.
+
 ### NNUE — balayage d'architectures sur GPU ; entraînement en CUDA Graph · `29fedba`
 - `train.py --cuda-graph` : 8 pas d'entraînement enregistrés dans un graphe CUDA et rejoués d'un seul appel,
   mélange des indices sur la carte, copie des données libérée de la RAM. La carte n'était occupée qu'à 27-44 %

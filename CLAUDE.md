@@ -73,7 +73,7 @@ g++ -g -O0 -std=c++17 -Isrc -fsanitize=address,undefined src/{bitboard,position,
 | `src/uci.*` | boucle de commandes (`position`, `go`, `stop`, `setoption`, `d`, `moves`, `eval`, `status`, `perft`, `bench`, `play`, `gensfen`) |
 | `tests/test_main.cpp` | tests des règles, perft, symétrie, clés, recherche |
 | `tools/match.py` | matchs entre deux binaires : parties fixes ou arrêt SPRT (`--sprt`), suivi live optionnel |
-| `tools/sprt.py` | test séquentiel SPRT (LLR gaussien sur le score moyen, cf. fishtest/cutechess-cli) |
+| `tools/sprt.py` | test séquentiel SPRT (LLR gaussien), **par paires d'ouvertures (pentanomial, défaut)** : ~7x moins de parties que le modèle par parties indépendantes (`match.py --trinomial`) |
 | `tools/rules/reference.py`, `crosscheck.py` | générateur de coups de référence indépendant ; confrontation exhaustive avec le moteur |
 | `tools/gui/server.py` | interface web : sert `index.html` + API JSON (`/api/state`, `/api/go`, `/api/eval` pour l'analyse), un processus moteur par requête ; niveaux de difficulté `LEVELS` (affaiblissement externe, le moteur n'a pas d'option de force) ; historique des parties `/api/games` (SQLite `data/gui_games.db`, hors git, non sauvegardé ailleurs que par la sauvegarde de la VM) |
 | `tools/gui/index.html` | page unique façon lichess : plateau SVG (clic/glisser), pendules, coups navigables, analyse d'après-partie. `positions[k]` est rejoué localement avec des identifiants de pièces stables (animations) ; la logique de capture JS ne sert qu'à l'affichage, le moteur valide |
