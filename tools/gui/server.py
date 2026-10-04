@@ -865,8 +865,8 @@ class Handler(BaseHTTPRequestHandler):
             self.wfile.write(body)
         elif path == "/api/config":
             nets = list(available_nets())
-            # réseau adopté le plus récent d'abord (net_v6 : couches empilées, 2026-10-03), sinon net_v3
-            default = next((n for n in ("net_v6", "net_v3") if n in nets), nets[-1] if nets else None)
+            # réseau adopté le plus récent d'abord (net_v8 : données gen8 sans dérive, 2026-10-04), sinon les précédents
+            default = next((n for n in ("net_v8", "net_v6", "net_v3") if n in nets), nets[-1] if nets else None)
             self.send_json(200, {"nets": nets, "defaultNet": default, "maxMovetime": MAX_MOVETIME,
                                  "levels": [{"id": k, "name": v["name"], "timed": v["mode"] != "sample",
                                              "strength": v["strength"]} for k, v in LEVELS.items()],

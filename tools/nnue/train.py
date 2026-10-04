@@ -88,11 +88,18 @@ class SfenDataset:
     lui-même. `iter_batches()` ci-dessous fait un seul slicing numpy vectorisé par batch."""
 
     def __init__(self, path, wdl_weight=0.5, score_scale=SCORE_SCALE, device="cpu"):
+        self.packed = None
         if str(path).endswith(".npz"):
             # Format binaire produit par --save-npz : évite l'analyse du texte (des minutes et plusieurs Go de
             # mémoire pour ~20M positions), indispensable sur une machine d'entraînement à 8 Go de RAM.
-            d = np.load(path)
-            self.features, self.scores, self.wdls = d["features"], d["scores"], d["wdl"]
+            # Plusieurs fichiers séparés par des virgules sont concaténés. Format compacté (clé "packed") : les 90
+            # entrées sur 12 octets (np.packbits), 7,5x moins de mémoire ; ancien format (clé "features") accepté.
+            parts = [np.load(p) for p in str(path).split(",")]
+            self.scores = np.concatenate([d["scores"] for d in parts])
+            self.wdls = np.concatenate([d["wdl"] for d in parts])
+            packed = [d["packed"] if "packed" in d else np.packbits(d["features"], axis=1) for d in parts]
+            self.packed = np.concatenate(packed) if len(packed) > 1 else packed[0]
+            self.features = None if torch.device(device).type != "cpu" else np.unpackbits(self.packed, axis=1)[:, :INPUT_SIZE]
         else:
             fens, scores, wdls = [], [], []
             with open(path) as f:
@@ -122,16 +129,24 @@ class SfenDataset:
         # de la carte et les batches y sont découpés : le processeur hôte ne fait presque rien.
         self.device = torch.device(device)
         if self.device.type != "cpu":
-            self.features_t = torch.from_numpy(self.features).to(self.device)
+            if self.packed is None:
+                self.packed = np.packbits(self.features, axis=1)
+            # compacté sur la carte (12 octets par position), décompacté batch par batch dans batch_x()
+            self.packed_t = torch.from_numpy(self.packed).to(self.device)
+            self.shifts = torch.arange(7, -1, -1, dtype=torch.uint8, device=self.device)
             self.targets_t = torch.from_numpy(self.targets).to(self.device)
             # libère la copie en RAM (la machine GPU n'a que 8 Go : permet plusieurs entraînements en parallèle)
-            self.features = self.scores = self.wdls = self.targets = None
+            self.features = self.packed = self.scores = self.wdls = self.targets = None
+
+    def batch_x(self, idx):
+        """Entrées (float) des positions d'indices `idx`, décompactées sur la carte."""
+        bits = (self.packed_t[idx].unsqueeze(2) >> self.shifts) & 1
+        return bits.reshape(len(idx), -1)[:, :INPUT_SIZE].float()
 
     def __len__(self):
         return len(self.targets_t) if self.targets is None else len(self.targets)
 
-    def save_npz(self, path):
-        np.savez(path, features=self.features, scores=self.scores, wdl=self.wdls)
+
 
 
     def iter_batches(self, indices, batch_size):
@@ -140,13 +155,41 @@ class SfenDataset:
             idx = torch.from_numpy(indices).to(self.device)
             for start in range(0, len(indices), batch_size):
                 b = idx[start : start + batch_size]
-                yield self.features_t[b].float(), self.targets_t[b]
+                yield self.batch_x(b), self.targets_t[b]
             return
         for start in range(0, len(indices), batch_size):
             b = indices[start : start + batch_size]
             x = torch.from_numpy(self.features[b].astype(np.float32, copy=False))
             y = torch.from_numpy(self.targets[b])
             yield x, y
+
+
+def convert_to_npz(text_path, npz_path):
+    """Convertit un fichier gensfen texte en .npz compacté, en flux : pas de liste Python de dizaines de millions de
+    lignes en mémoire (40M positions : ~0,5 Go d'entrées compactées au lieu de ~10 Go)."""
+    with open(text_path) as f:
+        n = sum(1 for line in f if line.strip())
+    packed = np.zeros((n, 12), dtype=np.uint8)
+    scores = np.zeros(n, dtype=np.float32)
+    wdls = np.zeros(n, dtype=np.float32)
+    i = 0
+    with open(text_path) as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            fen, score, wdl = line.split("|")
+            own_sq, opp_sq = parse_fen_features(fen)
+            v = 0
+            for k in own_sq:
+                v |= 1 << (95 - k)  # bit 7 de l'octet 0 = entrée 0 (ordre de np.packbits / np.unpackbits)
+            for k in opp_sq:
+                v |= 1 << (95 - SQUARE_NB - k)
+            packed[i] = np.frombuffer(v.to_bytes(12, "big"), dtype=np.uint8)
+            scores[i], wdls[i] = float(score), float(wdl)
+            i += 1
+    np.savez(npz_path, packed=packed, scores=scores, wdl=wdls)
+    return n
 
 
 class NNUE(nn.Module):
@@ -274,7 +317,7 @@ def main():
     device = torch.device("cuda" if args.device == "auto" and torch.cuda.is_available()
                           else ("cpu" if args.device == "auto" else args.device))
     if args.save_npz:
-        SfenDataset(args.data).save_npz(args.save_npz)
+        convert_to_npz(args.data, args.save_npz)
         print(f"données converties -> {args.save_npz}")
         return
     dataset = SfenDataset(args.data, args.wdl_weight, args.score_scale, device)
@@ -312,7 +355,7 @@ def main():
         def train_step():  # gk pas complets, chacun sur sa tranche de static_idx
             for k in range(gk):
                 idx = static_idx[k * bs:(k + 1) * bs]
-                x = dataset.features_t[idx].float()
+                x = dataset.batch_x(idx)
                 if args.augment:
                     x = x.gather(1, perms[torch.randint(0, 4, (bs,), device=device)])
                 pred = torch.sigmoid(model(x).squeeze(-1) * out_to_logit)

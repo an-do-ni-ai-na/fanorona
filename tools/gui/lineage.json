@@ -107,19 +107,43 @@
     },
     {
       "id": "net_v7", "name": "net_v7", "parent": "net_v6", "status": "rejected", "date": "2026-10-03",
-      "arch": "FNU2 : 2×45 → 128 → 16 → 32 → 1, 4 buckets, 25 epochs", "data": "à documenter",
+      "arch": "FNU2 : 2×45 → 128 → 16 → 32 → 1, 4 buckets, 25 epochs", "data": "gen3 + gen4, augmentation par symétrie (4 orientations)",
       "train_log": "train_v7.log",
       "tests": [{"log": "depth7_v7_v6.log", "kind": "match", "tc": "profondeur 7", "vs": "net_v6"},
                 {"log": "sprt_v7_v6.log", "kind": "sprt", "tc": "100 ms/coup", "vs": "net_v6"}],
-      "note": "Essai du 3 octobre, pas encore décrit dans CLAUDE.md."
+      "note": "Prédit mieux le résultat dans les 4 orientations, mais 49,8 % en partie : pas de gain."
     },
     {
-      "id": "net_v7b", "name": "net_v7b", "parent": "net_v6", "status": "testing", "date": "2026-10-03",
-      "arch": "FNU2 : 2×45 → 128 → 16 → 32 → 1, 4 buckets, 50 epochs", "data": "à documenter",
+      "id": "net_v7b", "name": "net_v7b", "parent": "net_v6", "status": "rejected", "date": "2026-10-03",
+      "arch": "FNU2 : 2×45 → 128 → 16 → 32 → 1, 4 buckets, 50 epochs", "data": "gen3 + gen4, augmentation par symétrie",
       "train_log": "train_v7b.log",
       "tests": [{"log": "depth7_v7b_v6.log", "kind": "match", "tc": "profondeur 7", "vs": "net_v6"},
                 {"log": "sprt_v7b_v6.log", "kind": "sprt", "tc": "100 ms/coup", "vs": "net_v6"}],
-      "note": "Variante longue de net_v7, SPRT en cours."
+      "note": "Asymétrie divisée par deux ; SPRT 50,2 % en 6862 parties (≈ +1 Elo)."
+    },
+    {
+      "id": "net_sw_d", "name": "net_sw_d", "parent": "net_v6", "status": "rejected", "date": "2026-10-04",
+      "arch": "FNU2 : 2×45 → 192 → 16 → 32 → 1, 4 buckets", "data": "gen3 + gen4, GPU (60 epochs, lots de 16 384)",
+      "train_log": "train_sw_d.log",
+      "tests": [{"log": "depth7_sw_d_v6.log", "kind": "match", "tc": "profondeur 7", "vs": "net_v6"},
+                {"log": "sprt_swd_v6.log", "kind": "sprt", "tc": "100 ms/coup", "vs": "net_v6"}],
+      "note": "Meilleur compromis du balayage GPU de 6 architectures ; 49,7 % à 100 ms : la taille ne paie pas."
+    },
+    {
+      "id": "net_g6a", "name": "net_g6a", "parent": "net_v6", "status": "rejected", "date": "2026-10-04",
+      "arch": "FNU2 : 2×45 → 128 → 16 → 32 → 1, 4 buckets, symétrie", "data": "gen6 : 12 M positions, professeur net_v6",
+      "tests": [{"log": "depth7_g6a_v6.log", "kind": "match", "tc": "profondeur 7", "vs": "net_v6"},
+                {"log": "sprt_g6a_v6.log", "kind": "sprt", "tc": "100 ms/coup", "vs": "net_v6"}],
+      "note": "Professeur net_v6, mais données encore dégradées par la dérive de l'accumulateur."
+    },
+    {
+      "id": "net_v8", "name": "net_v8", "parent": "net_v6", "status": "adopted", "date": "2026-10-04",
+      "arch": "FNU2 : 2×45 → 128 → 16 → 32 → 1, 4 buckets (5, 8, 12 pièces)",
+      "data": "gen8 : 64 M positions sans dérive (correctif 1a6930a), professeur net_v6, GPU 60 epochs",
+      "train_log": "train_n8.log",
+      "tests": [{"log": "depth7_n8_v6.log", "kind": "match", "tc": "profondeur 7", "vs": "net_v6"},
+                {"log": "sprt_n8_v6.log", "kind": "sprt", "tc": "100 ms/coup", "vs": "net_v6", "decides": true}],
+      "note": "Données propres : H1 en 293 parties (SPRT par paires), 52,9 %, ≈ +20 Elo."
     }
   ]
 }

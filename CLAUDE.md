@@ -152,8 +152,8 @@ g++ -g -O0 -std=c++17 -Isrc -fsanitize=address,undefined src/{bitboard,position,
 ## État actuel
 
 - HCE ~2,3 M nœuds/s, NNUE ~1,3-1,5 M nœuds/s (1 thread, fanorona-dev). Signatures bench 8 (2026-10-04, après le recalcul
-  périodique de l'accumulateur) : HCE 572 736 nœuds, NNUE net_v3 937 290 nœuds, NNUE net_v6 (réseau par défaut)
-  1 026 948 nœuds. **Toute donnée gensfen produite avant ce correctif est dégradée** (voir JOURNAL 2026-10-04).
+  périodique de l'accumulateur) : HCE 572 736 nœuds, NNUE net_v3 937 290 nœuds, NNUE net_v6 1 026 948 nœuds,
+  NNUE net_v8 (réseau par défaut depuis le 2026-10-04) 886 119 nœuds. **Toute donnée gensfen produite avant ce correctif est dégradée** (voir JOURNAL 2026-10-04).
 - Évaluation : matériel (100), points forts, connectivité, mobilité, menaces, bonus de simplification, tempo.
   Poids non réglés.
 
@@ -346,9 +346,17 @@ g++ -g -O0 -std=c++17 -Isrc -fsanitize=address,undefined src/{bitboard,position,
      140 s/epoch (plus lent que le CPU de fanorona-dev : le Core 2 limite le rythme des lancements) ; batch
      16384 = 12 s/epoch (~7× fanorona-dev). Recette net_v6 refaite en 13 min (60 epochs) : val_loss 0,01210
      contre 0,01215 en ~37 min sur CPU, éval identique sur positions jamais vues.
-   - **reste à faire** : quantification int16 (2× plus de voies par instruction ; avec FNU2 les couches denses
-     pèsent plus, le gain serait plus net qu'avant) ; un cycle de renforcement avec net_v6 comme professeur ;
-     entrées plus riches que les 2×45 cases (voisinages, lignes de capture).
+   - ~~cycle de renforcement avec net_v6 comme professeur~~ **fait** (2026-10-04) : **net_v8**, réseau par
+     défaut. Données gen8 générées APRÈS le correctif de dérive de l'accumulateur (1a6930a) : 40M positions
+     (fanorona-dev + c3, 78 min) + 24M (c1, 58 min), profondeur 6, net_v6 professeur ; accord score/résultat
+     stable à 0,018 au fil des processus (contre 0,032 -> 0,050 dans gen7). Même architecture que net_v6, entraîné
+     sur GPU (60 epochs, lots de 16 384, lr 0,004 × 0,95/epoch) : val_loss 0,00669. Contre net_v6 : 52,9 % à
+     profondeur 7 (2000 parties) et **SPRT par paires H1 en 293 parties** (W114 D82 L97, 52,9 %, ≈ +20 Elo).
+     Format de données compacté (`.npz` clé `packed`, 12 octets/position, conversion en flux) : 64M positions
+     = 770 Mo ; plusieurs `.npz` séparés par des virgules. **Leçon** : les plafonds des cycles 4, 5 et du balayage
+     GPU venaient en bonne partie de données dégradées ; à revoir sur données propres (n8a symétrie, 192/256).
+   - **reste à faire** : finir n8a (symétrie), n8d (192) et n8x (256) sur gen8 (interrompus le 2026-10-04,
+     machine GPU indisponible) ; quantification int16 ; cycle suivant avec net_v8 professeur ; entrées plus riches.
 5. **Lazy SMP** : option `Threads`, TT partagée (entrées rendues sûres par XOR clé/données).
 6. Améliorations de recherche — **en cours** (2026-10-01), chaque idée testée par SPRT (net_v3, 100 ms, 3 machines) :
    - **retenu** : LMP + futilité des coups calmes (positions sans capture, profondeur <= 3, hors PV) — séparément

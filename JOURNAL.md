@@ -11,6 +11,21 @@ fanorona-dev, i7-6700T, 1 thread), justesse par `make test`, `perft` et `tools/n
 
 ## 2026-10-04
 
+### NNUE — net_v8 : données propres, nouveau réseau par défaut (≈ +20 Elo) · `{COMMIT}`
+- gen8 générée avec le binaire corrigé (dérive de l'accumulateur) et net_v6 comme professeur : 40M positions sur
+  fanorona-dev + c3 (78 min) et 24M sur c1 (58 min), profondeur 6. Qualité stable du début à la fin de chaque
+  processus (accord score/résultat 0,018, contre 0,032 -> 0,050 dans gen7).
+- Format de données compacté pour tenir dans la machine GPU : 90 entrées sur 12 octets (`packed`), conversion en
+  flux depuis le texte, décompactage par batch sur la carte ; 64M positions = 770 Mo (5,8 Go avant).
+- net_v8 = architecture de net_v6, 60 epochs sur GPU : val_loss 0,00669 (0,01215 pour net_v6 sur ses données).
+  Contre net_v6 : 52,9 % à profondeur 7 (2000 parties), **SPRT par paires H1 en 293 parties** (W114 D82 L97,
+  paires 0-2-125-16-0). Signature `bench 8` : 886 119 nœuds.
+- Interface : net_v8 par défaut ; Elo des niveaux recalibré (744 parties) : 800, 1297, 1681, 1778, 1850, 2104.
+  Le haut de l'échelle baisse sans que le moteur faiblisse : l'ancre (Débutant = 800) joue aussi avec le réseau
+  et progresse avec lui.
+- Généalogie de la page Labo mise à jour (net_v7, net_v7b, net_sw_d, net_g6a, net_v8) et courbes d'entraînement
+  GPU copiées dans logs/.
+
 ### Moteur — BUG : dérive de l'accumulateur NNUE, données d'entraînement dégradées · `1a6930a`
 - Piste : entraîner sur gen6 + gen7 (40M positions, net_v6 professeur) donnait de MOINS bons réseaux que gen6
   seul (12M). Mêmes paramètres, même professeur ; mais l'accord entre score et résultat des parties était bien
