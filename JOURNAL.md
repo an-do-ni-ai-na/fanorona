@@ -11,7 +11,7 @@ fanorona-dev, i7-6700T, 1 thread), justesse par `make test`, `perft` et `tools/n
 
 ## 2026-10-04
 
-### Moteur — BUG : dérive de l'accumulateur NNUE, données d'entraînement dégradées · `{COMMIT}`
+### Moteur — BUG : dérive de l'accumulateur NNUE, données d'entraînement dégradées · `1a6930a`
 - Piste : entraîner sur gen6 + gen7 (40M positions, net_v6 professeur) donnait de MOINS bons réseaux que gen6
   seul (12M). Mêmes paramètres, même professeur ; mais l'accord entre score et résultat des parties était bien
   pire dans gen7 (0,043 contre 0,029), uniformément sur toutes les machines.
