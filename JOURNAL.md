@@ -11,7 +11,7 @@ fanorona-dev, i7-6700T, 1 thread), justesse par `make test`, `perft` et `tools/n
 
 ## 2026-10-05
 
-### NNUE — cycle gen9/gen10 (professeur net_v8) et variantes de net_v8 : aucun gain · `{COMMIT}`
+### NNUE — cycle gen9/gen10 (professeur net_v8) et variantes de net_v8 : aucun gain · `0778f62`
 - Données : gen9 = 30,8M positions (net_v8 professeur ; part de fanorona-dev écourtée, 4 lignes coupées
   retirées), gen10 = 20M (c1 + c3, 36 min). Format compacté ; indices du mode CUDA Graph passés en int32
   (`train.py`) pour tenir 115M positions dans les 8 Go de la carte.
