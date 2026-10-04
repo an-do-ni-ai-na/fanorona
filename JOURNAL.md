@@ -11,7 +11,7 @@ fanorona-dev, i7-6700T, 1 thread), justesse par `make test`, `perft` et `tools/n
 
 ## 2026-10-04
 
-### Outils — SPRT par paires d'ouvertures (pentanomial) : ~7x moins de parties · `{COMMIT}`
+### Outils — SPRT par paires d'ouvertures (pentanomial) : ~7x moins de parties · `4e49352`
 - Constat, sur les journaux de match : entre deux réseaux proches, les blancs gagnent ~54 % des parties et les
   noirs ~12 % ; 58 % des paires d'ouvertures (même ouverture, couleurs inversées) finissent 1-1, chaque moteur
   gagnant avec les blancs. Le SPRT traitait les parties comme indépendantes : variance surestimée ~8x
