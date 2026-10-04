@@ -349,7 +349,9 @@ def main():
 
     if graph:
         bs, gk = args.batch_size, args.graph_steps
-        static_idx = torch.zeros(gk * bs, dtype=torch.long, device=device)
+        # indices en int32 : avec ~100M positions, trois tableaux int64 (indices, permutation, copie mélangée)
+        # pèsent ~2,7 Go sur une carte de 8 Go ; int32 suffit jusqu à 2^31 positions.
+        static_idx = torch.zeros(gk * bs, dtype=torch.int32, device=device)
         loss_acc = torch.zeros((), device=device)
 
         def train_step():  # gk pas complets, chacun sur sa tranche de static_idx
@@ -373,7 +375,7 @@ def main():
                 static_idx.copy_(torch.from_numpy(train_idx[k * gk * bs:(k + 1) * gk * bs]).to(device))
                 train_step()
         torch.cuda.current_stream().wait_stream(side)
-        train_idx_t = torch.from_numpy(train_idx).to(device)
+        train_idx_t = torch.from_numpy(train_idx.astype(np.int32)).to(device)
         step_graph = torch.cuda.CUDAGraph()
         with torch.cuda.graph(step_graph):
             train_step()
@@ -387,7 +389,7 @@ def main():
         if not graph:
             rng.shuffle(train_idx)
         if graph:  # mélange sur la carte : ni tri sur le processeur hôte, ni transfert de 150 Mo d'indices
-            idx_t = train_idx_t[torch.randperm(len(train_idx_t), device=device)]
+            idx_t = train_idx_t[torch.randperm(len(train_idx_t), dtype=torch.int32, device=device)]
             n_chunks = len(train_idx) // (gk * bs)  # le reste (< gk batches, tiré au hasard) est ignoré
             loss_acc.zero_()
             for k in range(n_chunks):

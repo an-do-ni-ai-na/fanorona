@@ -9,7 +9,22 @@ fanorona-dev, i7-6700T, 1 thread), justesse par `make test`, `perft` et `tools/n
 
 ---
 
-## 2026-10-04
+## 2026-10-05
+
+### NNUE — cycle gen9/gen10 (professeur net_v8) et variantes de net_v8 : aucun gain · `{COMMIT}`
+- Données : gen9 = 30,8M positions (net_v8 professeur ; part de fanorona-dev écourtée, 4 lignes coupées
+  retirées), gen10 = 20M (c1 + c3, 36 min). Format compacté ; indices du mode CUDA Graph passés en int32
+  (`train.py`) pour tenir 115M positions dans les 8 Go de la carte.
+- Contre net_v8, profondeur 7 (2000 parties) puis SPRT par paires à 100 ms (c1 + c3) :
+  n8a (gen8, symétrie) 51,1 % / 50,5 % (1007 parties) ; n8d (gen8, 192) 51,1 % ; n8x (gen8, 256, val_loss
+  0,00619) 51,6 % mais ~20 % plus lent ; n9 (gen8 + gen9, 128) 51,2 % / 50,3 % (1010) ; n9d (gen8 + gen9, 192)
+  51,6 % / 50,4 % (1006). SPRT arrêtés sans verdict : écart de 1 à 2 Elo au plus. net_v8 reste le défaut.
+- Leçon : après le saut des données propres, on retrouve les rendements décroissants ; les gains à profondeur
+  égale (+8 à +11 Elo) ne passent pas à temps égal. Prochain levier : la quantification (rendre le 256 rapide).
+- Infra : pve2 montait à 86 °C sous gensfen (fanorona-dev, 5 processus) ; VM 3180 limitée à `cpulimit 1.2`
+  (≈ 69 °C ; repos ≈ 60-62 °C, marge thermique faible : refroidissement de pve2 à vérifier). Les gros calculs
+  passent sur c1 et c3. Machine GPU : mise en veille désactivée, files d'entraînement lancées détachées de SSH
+  (`wmic process call create`, journaux dans C:\fanorona\out).
 
 ### NNUE — net_v8 : données propres, nouveau réseau par défaut (≈ +20 Elo) · `c2e1091`
 - gen8 générée avec le binaire corrigé (dérive de l'accumulateur) et net_v6 comme professeur : 40M positions sur
