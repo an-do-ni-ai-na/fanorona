@@ -11,7 +11,7 @@ fanorona-dev, i7-6700T, 1 thread), justesse par `make test`, `perft` et `tools/n
 
 ## 2026-10-04
 
-### NNUE — net_v8 : données propres, nouveau réseau par défaut (≈ +20 Elo) · `{COMMIT}`
+### NNUE — net_v8 : données propres, nouveau réseau par défaut (≈ +20 Elo) · `c2e1091`
 - gen8 générée avec le binaire corrigé (dérive de l'accumulateur) et net_v6 comme professeur : 40M positions sur
   fanorona-dev + c3 (78 min) et 24M sur c1 (58 min), profondeur 6. Qualité stable du début à la fin de chaque
   processus (accord score/résultat 0,018, contre 0,032 -> 0,050 dans gen7).
