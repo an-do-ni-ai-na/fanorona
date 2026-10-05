@@ -522,6 +522,23 @@ dialog::backdrop { background: rgba(10, 8, 6, .55); backdrop-filter: blur(2px); 
   body.learning .moves-box, body.puzzle .moves-box { display: none; }
 }
 @media (max-width: 420px) { .brand-text { display: none; } }
+/* ---------- Plateau en plein écran (bouton de la barre de navigation, touche p) ----------
+   API Fullscreen sur .board-col (plateau + jauge) ; à défaut (Safari sur iPhone), .pseudo-fs simule le plein écran
+   en recouvrant la fenêtre. Le plateau reste jouable (choix approche/retrait, arrêt de capture) ; Échap ou le
+   bouton en haut à droite pour sortir. */
+.fs-exit { display: none; }
+.board-col:fullscreen, .board-col.pseudo-fs { background: var(--bg); display: flex; align-items: center; justify-content: center;
+  gap: 10px; padding: 12px; box-sizing: border-box; }
+.board-col.pseudo-fs { position: fixed; inset: 0; z-index: 1000; }
+.board-col:fullscreen .board-wrap, .board-col.pseudo-fs .board-wrap {
+  width: min(calc(100vw - 64px), calc((100vh - 24px) * var(--ar))); width: min(calc(100vw - 64px), calc((100dvh - 24px) * var(--ar))); }
+.board-col:fullscreen .fs-exit, .board-col.pseudo-fs .fs-exit { display: flex; align-items: center; justify-content: center; position: absolute;
+  top: 10px; right: 10px; width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--border); background: var(--surface);
+  color: var(--strong); cursor: pointer; z-index: 5; opacity: .85; }
+.board-col:fullscreen .fs-exit:hover, .board-col.pseudo-fs .fs-exit:hover { opacity: 1; }
+.board-col:fullscreen .fs-exit svg, .board-col.pseudo-fs .fs-exit svg { width: 20px; height: 20px; }
+.ctrls button.on { color: var(--accent); }
+
 /* ---------- Téléphone en paysage (PWA ou navigateur) : plateau plein écran ----------
    Sur les pages à plateau, plus d'en-tête ni de barre d'onglets : le plateau prend toute la hauteur, une colonne
    étroite à droite garde joueurs, pendules, coups et contrôles (ou la consigne en puzzles / tutoriel / révision).
@@ -669,6 +686,7 @@ dialog::backdrop { background: rgba(10, 8, 6, .55); backdrop-filter: blur(2px); 
       <div class="overlay bottom hidden" id="stopBox"><button class="stop" id="stopChain" data-i18n="stop_capture">Arrêter la capture</button></div>
       <div class="flash" id="flash"></div>
     </div>
+    <button class="fs-exit" id="fsExit" title="Quitter le plein écran (Échap)" data-i18n-title="exit_fullscreen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></svg></button>
   </div>
 
   <div class="table">
@@ -683,6 +701,7 @@ dialog::backdrop { background: rgba(10, 8, 6, .55); backdrop-filter: blur(2px); 
       <button id="bNew" title="Nouvelle partie" data-i18n-title="new_game"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg></button>
       <button id="bShare" title="Partager, exporter, importer" data-i18n-title="share_btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/></svg></button>
       <button id="bFlip" title="Retourner le plateau (f)" data-i18n-title="flip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 4v16M7 20l-3-3M7 20l3-3M17 20V4M17 4l-3 3M17 4l3 3"/></svg></button>
+      <button id="bFull" title="Plateau en plein écran (p)" data-i18n-title="fullscreen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
     </div>
     <div class="ctrls actions" id="actions"></div>
     <div class="pline pbot"><div class="ruser bottom" id="userBottom"></div><div class="clock bottom" id="clockBottom"></div></div>
@@ -2872,6 +2891,28 @@ $("bPrev").onclick = () => setView(viewPly - 1);
 $("bNext").onclick = () => setView(viewPly + 1);
 $("bLast").onclick = () => setView(game.moves.length);
 $("bFlip").onclick = () => { flipped = !flipped; buildBoard(); render(); save(); };
+
+// Plateau en plein écran : API Fullscreen sur .board-col, sinon (Safari sur iPhone) plein écran simulé.
+const fsCol = document.querySelector(".board-col");
+const fsNative = () => document.fullscreenElement === fsCol;
+const fsOn = () => fsNative() || fsCol.classList.contains("pseudo-fs");
+function fsSync() { $("bFull").classList.toggle("on", fsOn()); $("bFull").setAttribute("aria-pressed", fsOn() ? "true" : "false"); }
+function fsPseudo(on) { fsCol.classList.toggle("pseudo-fs", on); fsSync(); }
+function fsEnter() {
+  if (!fsCol.requestFullscreen) return fsPseudo(true);
+  fsCol.requestFullscreen({ navigationUI: "hide" }).then(() => {
+    // plateau 9 x 5 : sur téléphone, le paysage l'agrandit (refusé sans effet sur ordinateur)
+    try { screen.orientation && screen.orientation.lock && screen.orientation.lock("landscape").catch(() => {}); } catch (_) {}
+  }).catch(() => fsPseudo(true));
+}
+function fsExit() {
+  if (fsNative()) document.exitFullscreen().catch(() => {});
+  try { screen.orientation && screen.orientation.unlock && screen.orientation.unlock(); } catch (_) {}
+  fsPseudo(false);
+}
+document.addEventListener("fullscreenchange", fsSync);
+$("bFull").onclick = () => fsOn() ? fsExit() : fsEnter();
+$("fsExit").onclick = fsExit;
 $("chooseA").onclick = () => pendingAW && chooseKind("A");
 $("chooseW").onclick = () => pendingAW && chooseKind("W");
 $("stopChain").onclick = () => chosen && exactMove() && commit(exactMove());
@@ -2884,6 +2925,8 @@ document.addEventListener("keydown", e => {
   else if (e.key === "End" || e.key === "ArrowDown") { setView(game.moves.length); e.preventDefault(); }
   else if (e.key === "Escape" && chosen) cancelInput();
   else if (e.key === "f") $("bFlip").click();
+  else if (e.key === "p") $("bFull").click();
+  else if (e.key === "Escape" && fsCol.classList.contains("pseudo-fs")) fsExit();
 });
 
 let boardTheme = "wood", autoNight = false;

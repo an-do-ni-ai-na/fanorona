@@ -11,6 +11,15 @@ fanorona-dev, i7-6700T, 1 thread), justesse par `make test`, `perft` et `tools/n
 
 ## 2026-10-05
 
+### GUI — plateau en plein écran · `{COMMIT}`
+- Bouton « Plateau en plein écran » dans la barre de navigation (touche `p`) : plateau + jauge d'évaluation en
+  plein écran (API Fullscreen), toujours jouable (choix approche/retrait, arrêt de capture) ; sortie par le
+  bouton en haut à droite, Échap ou `p`. Sur téléphone, demande de passage en paysage. Sans API Fullscreen pour
+  un élément (Safari sur iPhone) : plein écran simulé recouvrant la fenêtre.
+- Testé dans Chromium (CDP, `--headless=new` : l'ancien mode headless laisse la demande en suspens) : plateau
+  582 x 329 -> 1216 x 687 en 1280 x 800 ; mode simulé 648 x 366 en 844 x 390 (téléphone en paysage) ; aucune
+  erreur JS. Textes en français et en malgache (i18n.json, malgache à relire).
+
 ### NNUE — cycle gen11 (professeur net_v9 quantifié) : pas de gain, plateau · `b80f62a`
 - gen11 : 40M positions sur c1 + c3 en 70 min (net_v9 quantifié, profondeur 6), chaîne automatique génération ->
   contrôle -> conversion compactée -> envoi -> entraînement GPU (n11d, 192 neurones, gen8 à gen11 = 155M positions,
