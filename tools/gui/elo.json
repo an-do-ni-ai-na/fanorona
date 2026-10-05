@@ -4,32 +4,32 @@
   "games": 744,
   "date": "2026-10-05",
   "ratings": [
-    603,
+    588,
     800,
-    947,
-    1259,
-    1327,
-    1650,
-    1702,
-    1609,
-    1739,
-    1801,
-    1905,
-    2023,
-    2027
+    956,
+    1281,
+    1376,
+    1711,
+    1769,
+    1667,
+    1795,
+    1880,
+    1987,
+    2127,
+    2152
   ],
   "pairs": {
     "0-1": {
       "games": 40,
-      "score_of_stronger": 0.762
+      "score_of_stronger": 0.775
     },
     "0-2": {
       "games": 24,
-      "score_of_stronger": 0.896
+      "score_of_stronger": 0.917
     },
     "1-2": {
       "games": 40,
-      "score_of_stronger": 0.688
+      "score_of_stronger": 0.7
     },
     "1-3": {
       "games": 24,
@@ -37,79 +37,79 @@
     },
     "2-3": {
       "games": 40,
-      "score_of_stronger": 0.875
+      "score_of_stronger": 0.887
     },
     "2-4": {
       "games": 24,
-      "score_of_stronger": 0.875
+      "score_of_stronger": 0.896
     },
     "3-4": {
       "games": 40,
-      "score_of_stronger": 0.6
+      "score_of_stronger": 0.688
     },
     "3-5": {
       "games": 24,
-      "score_of_stronger": 0.958
+      "score_of_stronger": 0.896
     },
     "4-5": {
       "games": 40,
-      "score_of_stronger": 0.875
+      "score_of_stronger": 0.887
     },
     "4-6": {
       "games": 24,
-      "score_of_stronger": 0.875
+      "score_of_stronger": 0.958
     },
     "5-6": {
       "games": 40,
-      "score_of_stronger": 0.55
+      "score_of_stronger": 0.613
     },
     "5-7": {
       "games": 24,
-      "score_of_stronger": 0.521
+      "score_of_stronger": 0.354
     },
     "6-7": {
       "games": 40,
-      "score_of_stronger": 0.388
+      "score_of_stronger": 0.375
     },
     "6-8": {
       "games": 24,
-      "score_of_stronger": 0.438
+      "score_of_stronger": 0.583
     },
     "7-8": {
       "games": 40,
-      "score_of_stronger": 0.738
+      "score_of_stronger": 0.675
     },
     "7-9": {
       "games": 24,
-      "score_of_stronger": 0.792
+      "score_of_stronger": 0.75
     },
     "8-9": {
       "games": 40,
-      "score_of_stronger": 0.55
+      "score_of_stronger": 0.65
     },
     "8-10": {
       "games": 24,
-      "score_of_stronger": 0.771
+      "score_of_stronger": 0.75
     },
     "9-10": {
       "games": 40,
-      "score_of_stronger": 0.662
+      "score_of_stronger": 0.688
     },
     "9-11": {
       "games": 24,
-      "score_of_stronger": 0.729
+      "score_of_stronger": 0.771
     },
     "10-11": {
       "games": 40,
-      "score_of_stronger": 0.662
+      "score_of_stronger": 0.688
     },
     "10-12": {
       "games": 24,
-      "score_of_stronger": 0.75
+      "score_of_stronger": 0.792
     },
     "11-12": {
       "games": 40,
-      "score_of_stronger": 0.463
+      "score_of_stronger": 0.5
     }
   }
 }

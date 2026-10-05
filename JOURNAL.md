@@ -11,6 +11,17 @@ fanorona-dev, i7-6700T, 1 thread), justesse par `make test`, `perft` et `tools/n
 
 ## 2026-10-05
 
+### NNUE — réseau 256 quantifié : non retenu ; Elo recalibré en quantifié · `{COMMIT}`
+- n10x (256 neurones, gen8-10, 115M) : un poids de 36,9 imposait une échelle réduite sur une couche dense
+  (corrigé dans b420ed9). Quantifié, il est presque aussi rapide que net_v9 ; 51,8 % à profondeur 7 mais
+  **SPRT par paires H0 en 527 parties** contre net_v9 quantifié (W175 D170 L182). net_v9 reste le réseau par
+  défaut ; 192 neurones est le bon compromis pour ces données.
+- Correctif GUI (7f23dc1) : `server.py` prenait la ligne « quantification int16 disponible » pour une erreur de
+  chargement (vu avec `tools/elo/calibrate.py`) ; seuls les vrais échecs (impossible d'ouvrir, invalide,
+  tronqué) sont maintenant des erreurs.
+- Elo des niveaux recalibré avec le moteur quantifié (fanorona-c1, 744 parties) : 800, 1281, 1711, 1795,
+  1880, 2152 (le haut de l'échelle remonte avec le gain de la quantification).
+
 ### Moteur — inférence NNUE quantifiée int16 (≈ +9 Elo à réseau égal), activée par défaut · `8c068c5`
 - Quantification construite au chargement des réseaux FNU2 : accumulateur int16 (exact, plus de dérive),
   couches denses int16 en AVX2 (`madd_epi16`), sortie en float. Échelle des activations QA choisie au chargement

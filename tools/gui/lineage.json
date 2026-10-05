@@ -177,6 +177,14 @@
       "tests": [{"log": "depth7_n10d_v8.log", "kind": "match", "tc": "profondeur 7", "vs": "net_v8"},
                 {"log": "sprt_n10d_v8.log", "kind": "sprt", "tc": "100 ms/coup", "vs": "net_v8", "decides": true}],
       "note": "Plus de données et 192 neurones : H1 en 1549 parties (SPRT par paires), 50,9 %, ≈ +6 Elo."
+    },
+    {
+      "id": "net_n10x", "name": "net_n10x", "parent": "net_v9", "status": "rejected", "date": "2026-10-05",
+      "arch": "FNU2 : 2×45 → 256 → 16 → 32 → 1, 4 buckets", "data": "gen8 + gen9 + gen10 (115 M)",
+      "train_log": "train_n10x.log",
+      "tests": [{"log": "depth7_n10x_v9.log", "kind": "match", "tc": "profondeur 7", "vs": "net_v9"},
+                {"log": "sprt_n10x_v9.log", "kind": "sprt", "tc": "100 ms/coup", "vs": "net_v9"}],
+      "note": "Même quantifié (aussi rapide que net_v9 en float), 256 neurones ne battent pas net_v9 : H0 en 527 parties."
     }
   ]
 }
