@@ -11,6 +11,16 @@ fanorona-dev, i7-6700T, 1 thread), justesse par `make test`, `perft` et `tools/n
 
 ## 2026-10-05
 
+### NNUE — cycle gen11 (professeur net_v9 quantifié) : pas de gain, plateau · `{COMMIT}`
+- gen11 : 40M positions sur c1 + c3 en 70 min (net_v9 quantifié, profondeur 6), chaîne automatique génération ->
+  contrôle -> conversion compactée -> envoi -> entraînement GPU (n11d, 192 neurones, gen8 à gen11 = 155M positions,
+  67 s/epoch, 7,9 Go sur la carte).
+- Contre net_v9 : 51,0 % à profondeur 7 ; SPRT par paires arrêté à 1214 parties (W412 D397 L405, LLR −0,7,
+  ≈ +1 Elo). net_v9 reste le réseau par défaut.
+- Bilan : après net_v8 (données propres, +20) et net_v9 (volume, +6), la boucle « générer avec le meilleur réseau
+  à profondeur 6, réentraîner » plafonne. Prochains leviers plausibles : étiquettes plus informatives (recherche
+  plus profonde maintenant que les données sont propres, ou tables de finales), réglage de la recherche (SPSA).
+
 ### NNUE — réseau 256 quantifié : non retenu ; Elo recalibré en quantifié · `deaa063`
 - n10x (256 neurones, gen8-10, 115M) : un poids de 36,9 imposait une échelle réduite sur une couche dense
   (corrigé dans b420ed9). Quantifié, il est presque aussi rapide que net_v9 ; 51,8 % à profondeur 7 mais

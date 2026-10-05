@@ -185,6 +185,14 @@
       "tests": [{"log": "depth7_n10x_v9.log", "kind": "match", "tc": "profondeur 7", "vs": "net_v9"},
                 {"log": "sprt_n10x_v9.log", "kind": "sprt", "tc": "100 ms/coup", "vs": "net_v9"}],
       "note": "Même quantifié (aussi rapide que net_v9 en float), 256 neurones ne battent pas net_v9 : H0 en 527 parties."
+    },
+    {
+      "id": "net_n11d", "name": "net_n11d", "parent": "net_v9", "status": "rejected", "date": "2026-10-05",
+      "arch": "FNU2 : 2×45 → 192 → 16 → 32 → 1, 4 buckets", "data": "gen8 à gen11 (155 M ; gen11 : 40 M, professeur net_v9 quantifié)",
+      "train_log": "train_n11d.log",
+      "tests": [{"log": "depth7_n11d_v9.log", "kind": "match", "tc": "profondeur 7", "vs": "net_v9"},
+                {"log": "sprt_n11d_v9.log", "kind": "sprt", "tc": "100 ms/coup", "vs": "net_v9"}],
+      "note": "51,0 % à profondeur 7, 50,3 % à 100 ms (1214 parties) : pas de gain, plateau des données auto-générées."
     }
   ]
 }
