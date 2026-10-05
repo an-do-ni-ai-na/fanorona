@@ -278,6 +278,11 @@ body.retro #contBox, body.puzzle #contBox, body.learning #contBox { display: non
 .cont-line .sc.w { background: #f4efe4; color: #1f1b16; } .cont-line .sc.b { background: #221d19; color: #f4efe4; }
 .cont-line .mv { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cont-note { font-size: 13px; color: var(--muted); }
+body.retro #bookBox, body.puzzle #bookBox, body.learning #bookBox { display: none; }
+.book-line .mv b { font-weight: 700; color: var(--strong); }
+.book-line.play { cursor: pointer; border-radius: 4px; }
+.book-line.play:hover { background: var(--surface-2); }
+.book-line .best { font: 600 10.5px var(--font-ui); color: var(--accent); text-transform: uppercase; letter-spacing: .04em; margin-left: auto; flex: none; }
 .path.cont { stroke: var(--hl-best); stroke-dasharray: none; }
 .path.cont.k2 { opacity: .55; stroke-width: 7; } .path.cont.k3 { opacity: .35; stroke-width: 6; }
 body.retro #metaBox, body.retro #engineBox, body.retro #analysisBox, body.retro #actions { display: none; }
@@ -655,6 +660,11 @@ dialog::backdrop { background: rgba(10, 8, 6, .55); backdrop-filter: blur(2px); 
       <h3><span data-i18n="cont_title">Analyse en continu</span>
         <label class="switch" title="Activer l'analyse en continu" data-i18n-title="cont_toggle"><input type="checkbox" id="contToggle"></label></h3>
       <div id="contBody"></div>
+    </section>
+    <section class="box panel" id="bookBox">
+      <h3><span data-i18n="book_title">Ouvertures</span>
+        <label class="switch" title="Afficher la base d'ouvertures" data-i18n-title="book_toggle"><input type="checkbox" id="bookToggle"></label></h3>
+      <div id="bookBody"></div>
     </section>
     <details class="box panel" id="engineBox">
       <summary><h3><span data-i18n="engine_details">Détails du moteur</span> <span id="engineState"></span></h3></summary>
@@ -1738,7 +1748,7 @@ function flash(msg) {
 
 function render() {
   renderBoard(); renderUsers(); renderClocks(); renderMoves(); renderActions(); renderMeta(); renderEngine(); renderGauge(); renderAnalysis();
-  renderLearn(); renderRetro(); renderPuzzle(); renderCont(); syncCont();
+  renderLearn(); renderRetro(); renderPuzzle(); renderCont(); syncCont(); syncBook(); renderBook();
   $("showEval").checked = cfg.showEval;
 }
 
@@ -2519,6 +2529,60 @@ function renderCont() {
   for (const b of body.querySelectorAll("[data-mpv]")) b.onclick = () => { cfg.contMpv = +b.dataset.mpv; save(); render(); };
 }
 $("contToggle").onchange = e => { cfg.contOn = e.target.checked; save(); render(); };
+
+// =====================================================================================================
+// Base d'ouvertures (tools/gui/book.json, analyse MultiPV profonde depuis la position initiale) : coups connus de
+// la position affichée avec leur évaluation ; un clic joue le coup quand c'est au joueur. Mêmes restrictions que
+// l'analyse en continu (pas pendant une partie en cours contre l'ordinateur) ; Fanoron-Tsivy, règles standard,
+// position initiale seulement.
+// =====================================================================================================
+const book = { cache: new Map(), key: null, data: null, gen: 0 };
+const bookRulesOk = () => (cfg.game || "tsivy") === "tsivy" && !velaSide() && cfg.variant !== "mandatory" && !cfg.startFen;
+const bookScore = v => (Math.abs(v) >= 29000 ? { type: "mate", value: Math.sign(v) * (30000 - Math.abs(v)) } : { type: "cp", value: v });
+function syncBook() {
+  if (!cfg.bookOn || !contAvailable() || !bookRulesOk()) return;
+  const moves = game.moves.slice(0, viewPly), key = moves.join(" ");
+  if (book.key === key) return;
+  book.key = key;
+  if (book.cache.has(key)) { book.data = book.cache.get(key); return; }
+  book.data = null;
+  const gen = ++book.gen;
+  api("/api/book", { moves, ...rulesReq() })
+    .then(d => { book.cache.set(key, d); if (gen === book.gen) { book.data = d; renderBook(); } })
+    .catch(e => { if (gen === book.gen) { book.data = { error: e.message }; renderBook(); } });
+}
+function renderBook() {
+  $("bookToggle").checked = !!cfg.bookOn;
+  const body = $("bookBody");
+  const note = txt => `<div class="cont-note">${txt}</div>`;
+  let html;
+  if (!cfg.bookOn) html = "";
+  else if (!contAvailable()) html = note(t(learn || puzzle || retro ? "cont_off_mode" : "cont_off_game"));
+  else if (!bookRulesOk()) html = note(t("book_off_rules"));
+  else {
+    const d = book.data;
+    if (!d) html = note("…");
+    else if (d.error) html = note(trErr(d.error));
+    else if (!d.available) html = note(t(d.reason === "absent" ? "book_absent" : "book_off_rules"));
+    else if (!d.node) html = note(t("book_none"));
+    else {
+      const side = sideAt(viewPly), can = canInput();
+      const rows = d.node.lines.map((l, i) => {
+        const sc = whiteScore(bookScore(l.score), side);
+        const cls = sc.cp > 0 ? "w" : sc.cp < 0 ? "b" : "";
+        const playable = can && game.legal.includes(l.move);
+        return `<div class="cont-line book-line${playable ? " play" : ""}" data-move="${l.move}"${playable ? ` title="${t("book_play")}"` : ""}>` +
+          `<span class="sc ${cls}">${sc.label}</span><span class="mv"><b>${hyphenate(l.move)}</b> ${(l.pv || []).slice(1, 5).map(hyphenate).join(" ")}</span>` +
+          (i === 0 ? `<span class="best">${t("book_best")}</span>` : "") + `</div>`;
+      }).join("");
+      html = `<div class="cont-head"><span>${t("book_info", { d: d.node.depth, net: d.net || "" })}</span></div><div class="cont-lines">${rows}</div>`;
+    }
+  }
+  if (body.dataset.html === html) return;
+  body.innerHTML = html; body.dataset.html = html;
+  for (const el of body.querySelectorAll(".book-line.play")) el.onclick = () => { if (canInput() && game.legal.includes(el.dataset.move)) pushMove(el.dataset.move, false); };
+}
+$("bookToggle").onchange = e => { cfg.bookOn = e.target.checked; save(); render(); };
 document.addEventListener("visibilitychange", () => { if (document.hidden && cont.running) stopCont(); else if (!document.hidden) render(); });
 
 // =====================================================================================================

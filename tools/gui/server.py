@@ -191,6 +191,32 @@ LEVELS = {
     6: {"name": "Maître", "mode": "full", "strength": 12},  # pleine force au temps choisi
 }
 ELO_FILE = HERE / "elo.json"
+# Base d'ouvertures (tools/book/build_book.py puis compile_book.py) : rechargée si le fichier change.
+BOOK_FILE = HERE / "book.json"
+_book = {"mtime": None, "data": None}
+
+
+def load_book():
+    try:
+        mtime = BOOK_FILE.stat().st_mtime
+    except OSError:
+        return None
+    if mtime != _book["mtime"]:
+        _book["data"], _book["mtime"] = json.loads(BOOK_FILE.read_text()), mtime
+    return _book["data"]
+
+
+def book_lookup(req):
+    """Coups de la base d'ouvertures pour la position atteinte par `moves` depuis la position initiale."""
+    book = load_book()
+    if not book:
+        return {"available": False, "reason": "absent"}
+    if req.get("game", "tsivy") != "tsivy" or req.get("vela") or req.get("variant") == "mandatory" or req.get("fen"):
+        return {"available": False, "reason": "rules"}
+    moves = check_moves(req.get("moves", []))
+    node = book["nodes"].get(" ".join(moves))
+    return {"available": True, "net": book.get("net"), "positions": book.get("positions"),
+            "node": node and {"depth": node["d"], "lines": [{"move": m, "score": sc, "pv": pv} for m, sc, pv in node["l"]]}}
 
 
 def strength_elos():
@@ -911,6 +937,8 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json(200, get_state(req))
             elif self.path == "/api/eval":
                 self.send_json(200, evaluate_plies(req))
+            elif self.path == "/api/book":
+                self.send_json(200, book_lookup(req))
             elif self.path == "/api/games":
                 self.send_json(200, save_game(req))
             elif self.path.startswith("/api/games/") and self.path.endswith("/analysis"):
