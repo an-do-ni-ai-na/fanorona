@@ -598,7 +598,7 @@ bool load(const std::string& path) {
 #endif
                 std::cout << "info string nnue: quantification int16 disponible (QA=" << g_QA << ")" << std::endl;
             } else {
-                std::cout << "info string nnue: quantification impossible pour ce réseau (reste en float)" << std::endl;
+                std::cout << "info string nnue: quantification non applicable à ce réseau (poids hors int16), inférence float" << std::endl;
             }
         }
         return ok;

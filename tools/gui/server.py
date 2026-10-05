@@ -223,8 +223,10 @@ class Engine:
         self.send(cmds)
         last = {}
         for line in self.p.stdout:
-            if line.startswith("info string illegal move") or (line.startswith("info string nnue:")
-                                                               and "chargé" not in line):
+            # erreur de chargement du réseau seulement (les autres lignes nnue: sont informatives : chargé,
+            # quantification disponible ou non applicable)
+            if line.startswith("info string illegal move") or (line.startswith("info string nnue:") and any(
+                    k in line for k in ("impossible d'ouvrir", "invalide", "tronqué"))):
                 raise EngineError(line.strip()[len("info string "):])
             if line.startswith("info depth"):
                 last = parse_info(line)
