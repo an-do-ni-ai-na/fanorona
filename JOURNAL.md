@@ -11,7 +11,7 @@ fanorona-dev, i7-6700T, 1 thread), justesse par `make test`, `perft` et `tools/n
 
 ## 2026-10-05
 
-### GUI — plateau en plein écran · `{COMMIT}`
+### GUI — plateau en plein écran · `e97805e`
 - Bouton « Plateau en plein écran » dans la barre de navigation (touche `p`) : plateau + jauge d'évaluation en
   plein écran (API Fullscreen), toujours jouable (choix approche/retrait, arrêt de capture) ; sortie par le
   bouton en haut à droite, Échap ou `p`. Sur téléphone, demande de passage en paysage. Sans API Fullscreen pour
