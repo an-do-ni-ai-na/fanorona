@@ -11,6 +11,17 @@ fanorona-dev, i7-6700T, 1 thread), justesse par `make test`, `perft` et `tools/n
 
 ## 2026-10-05
 
+### NNUE — net_v9 : 192 neurones sur 115M positions, nouveau réseau par défaut (≈ +6 Elo) · `{COMMIT}`
+- n10d = accumulateur 192 (couches 16 -> 32, 4 buckets), entraîné sur GPU sur gen8 + gen9 + gen10 (115M
+  positions, professeurs net_v6 et net_v8), 60 epochs ; ~6 % plus lent que net_v8.
+- Contre net_v8 : 52,4 % à profondeur 7 (2000 parties), puis **SPRT par paires H1 en 1549 parties**
+  (W551 D475 L523, 50,9 %, paires 0-43-661-68-1). Adopté sous le nom **net_v9** ; signature `bench 8` :
+  1 063 465 nœuds.
+- Interface et calibration : net_v9 par défaut ; Elo des niveaux recalibré sur fanorona-c1 (fanorona-dev est
+  bridé à 1,2 cœur pour la température de pve2) : 800, 1259, 1650, 1739, 1801, 2027.
+- Leçon : le volume de données propres (115M contre 95M ou 64M) a fait la différence que l'architecture seule
+  (n8d, n9d) ne faisait pas.
+
 ### NNUE — cycle gen9/gen10 (professeur net_v8) et variantes de net_v8 : aucun gain · `0778f62`
 - Données : gen9 = 30,8M positions (net_v8 professeur ; part de fanorona-dev écourtée, 4 lignes coupées
   retirées), gen10 = 20M (c1 + c3, 36 min). Format compacté ; indices du mode CUDA Graph passés en int32

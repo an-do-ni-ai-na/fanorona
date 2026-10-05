@@ -168,6 +168,15 @@
       "tests": [{"log": "depth7_n9d_v8.log", "kind": "match", "tc": "profondeur 7", "vs": "net_v8"},
                 {"log": "sprt_n9d_v8.log", "kind": "sprt", "tc": "100 ms/coup", "vs": "net_v8"}],
       "note": "51,6 % à profondeur 7, 50,4 % à 100 ms (1006 parties) : pas de gain."
+    },
+    {
+      "id": "net_v9", "name": "net_v9", "parent": "net_v8", "status": "adopted", "date": "2026-10-05",
+      "arch": "FNU2 : 2×45 → 192 → 16 → 32 → 1, 4 buckets (5, 8, 12 pièces)",
+      "data": "gen8 + gen9 + gen10 : 115 M positions (professeurs net_v6 et net_v8), GPU 60 epochs",
+      "train_log": "train_n10d.log",
+      "tests": [{"log": "depth7_n10d_v8.log", "kind": "match", "tc": "profondeur 7", "vs": "net_v8"},
+                {"log": "sprt_n10d_v8.log", "kind": "sprt", "tc": "100 ms/coup", "vs": "net_v8", "decides": true}],
+      "note": "Plus de données et 192 neurones : H1 en 1549 parties (SPRT par paires), 50,9 %, ≈ +6 Elo."
     }
   ]
 }

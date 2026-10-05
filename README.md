@@ -239,16 +239,16 @@ python3 tools/elo/calibrate.py --games 40 --gap2 24 --workers 5    # ~25 min sur
 ```
 
 L'échelle `STRENGTHS` de `tools/gui/server.py` va du tirage au sort pondéré après une recherche de profondeur 1
-à la pleine force à 1 s par coup (NNUE net_v8). Tournoi entre réglages voisins et à deux crans, en réutilisant le
+à la pleine force à 1 s par coup (NNUE net_v9). Tournoi entre réglages voisins et à deux crans, en réutilisant le
 code de jeu du serveur (2 demi-coups d'ouverture au hasard, couleurs alternées), puis classements Bradley-Terry
-(nulle = demi-point, une nulle virtuelle par paire), ancre : Débutant = 800. Calibration du 2026-10-04, avec le réseau net_v8 (744 parties, ajustement MM):
+(nulle = demi-point, une nulle virtuelle par paire), ancre : Débutant = 800. Calibration du 2026-10-05, avec le réseau net_v9, sur fanorona-c1 (744 parties, ajustement MM):
 
 | Niveau | 1 Débutant | 2 Facile | 3 Intermédiaire | 4 Confirmé | 5 Expert | 6 Maître (1 s) |
 |---|---|---|---|---|---|---|
-| Elo | 800 | 1297 | 1681 | 1778 | 1850 | 2104 |
+| Elo | 800 | 1259 | 1650 | 1739 | 1801 | 2027 |
 
 L'échelle n'est pas un Elo « officiel » (aucune population de joueurs classés de référence) : elle est interne et
-ne vaut que dans ces conditions (Fanoron-Tsivy, net_v8, 1 s/coup, cette machine). Environ ±100 Elo d'incertitude
+ne vaut que dans ces conditions (Fanoron-Tsivy, net_v9, 1 s/coup, machine de calibration). Environ ±100 Elo d'incertitude
 par écart entre réglages voisins (40 parties). Quelques petites inversions entre réglages voisins (ex. profondeur 3 fixe
 sous le tirage pondéré à profondeur 3) : le curseur de l'interface n'utilise que les réglages d'Elo strictement croissant.
 Ajustement : algorithme MM de Hunter (convergence garantie) ; une première version par montée de gradient à pas fixe

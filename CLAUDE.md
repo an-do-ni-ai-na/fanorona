@@ -153,7 +153,7 @@ g++ -g -O0 -std=c++17 -Isrc -fsanitize=address,undefined src/{bitboard,position,
 
 - HCE ~2,3 M nœuds/s, NNUE ~1,3-1,5 M nœuds/s (1 thread, fanorona-dev). Signatures bench 8 (2026-10-04, après le recalcul
   périodique de l'accumulateur) : HCE 572 736 nœuds, NNUE net_v3 937 290 nœuds, NNUE net_v6 1 026 948 nœuds,
-  NNUE net_v8 (réseau par défaut depuis le 2026-10-04) 886 119 nœuds. **Toute donnée gensfen produite avant ce correctif est dégradée** (voir JOURNAL 2026-10-04).
+  NNUE net_v8 886 119 nœuds, NNUE net_v9 (réseau par défaut depuis le 2026-10-05, 192 neurones) 1 063 465 nœuds. **Toute donnée gensfen produite avant ce correctif est dégradée** (voir JOURNAL 2026-10-04).
 - Évaluation : matériel (100), points forts, connectivité, mobilité, menaces, bonus de simplification, tempo.
   Poids non réglés.
 
