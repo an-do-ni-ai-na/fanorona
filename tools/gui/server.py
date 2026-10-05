@@ -215,8 +215,13 @@ def book_lookup(req):
         return {"available": False, "reason": "rules"}
     moves = check_moves(req.get("moves", []))
     node = book["nodes"].get(" ".join(moves))
-    return {"available": True, "net": book.get("net"), "positions": book.get("positions"),
-            "node": node and {"depth": node["d"], "lines": [{"move": m, "score": sc, "pv": pv} for m, sc, pv in node["l"]]}}
+    def line(l):  # [coup, score, variante, [victoires, nulles, défaites] du camp qui joue le coup (facultatif)]
+        d = {"move": l[0], "score": l[1], "pv": l[2]}
+        if len(l) > 3:
+            d["games"] = dict(zip("wdl", l[3]))
+        return d
+    return {"available": True, "net": book.get("net"), "positions": book.get("positions"), "games": book.get("games", 0),
+            "node": node and {"depth": node["d"], "lines": [line(l) for l in node["l"]]}}
 
 
 def strength_elos():

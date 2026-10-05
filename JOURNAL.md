@@ -11,6 +11,21 @@ fanorona-dev, i7-6700T, 1 thread), justesse par `make test`, `perft` et `tools/n
 
 ## 2026-10-05
 
+### GUI — score pratique de chaque coup de la base d'ouvertures · `{COMMIT}`
+- `tools/book/book_stats.py` : 10 000 parties rapides (net_v9, 50 ms par coup) sur c1 + c3 en ~2 h. Chaque
+  partie suit la base, coup tiré avec un poids exp((score − meilleur) / 100 cp) (coups à plus de 300 cp écartés),
+  puis le moteur joue les deux camps jusqu'au bout. Bilan global : 8,0 % de victoires des Blancs, 87,1 % de
+  nulles, 4,9 % de victoires des Noirs.
+- `compile_book.py --stats` ajoute [victoires, nulles, défaites] du camp qui joue à chaque coup de book.json ;
+  `/api/book` les renvoie (`games`) ; le panneau « Ouvertures » affiche sous chaque coup une barre victoires
+  Blancs / nulles / victoires Noirs, le % de points du camp qui joue et le nombre de parties (grisé sous 20).
+- Premier coup des Blancs : f2-e3A +0,43 → 54,3 % (4881 parties), d3-e3A −0,07 → 51,9 %, e2-e3A −1,21 → 50,8 %,
+  d2-e3A −1,41 → 43,5 %, d3-e3W −2,05 → 33,3 %. L'évaluation et le score pratique classent presque toujours les
+  coups de la même façon (2 positions sur celles à ≥ 200 parties par coup où le meilleur coup diffère, à 1 point
+  près). Le score pratique révèle surtout les pièges : après f2-e3A, d5-d4A-c5W (−1,35, proche de c3-d4W-c5W
+  −1,32) ne rapporte que 21,5 % aux Noirs (398 défaites, aucune victoire) contre 47,0 %.
+- Limite : parties moteur contre moteur rapides, pas des parties humaines ; à refaire si le réseau change.
+
 ### GUI — base d'ouvertures et panneau « Ouvertures » · `835bcd9, 006536e`
 - Le Fanorona est nul avec un jeu parfait (Schadd et al., 2008) : la base vise l'avantage pratique. Constat de
   départ (profondeur 16, net_v9) : les 5 premiers coups des Blancs vont de +0,43 (f2-e3A) à −2,05 (d3-e3W).

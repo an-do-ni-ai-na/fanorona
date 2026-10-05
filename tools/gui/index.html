@@ -282,7 +282,15 @@ body.retro #bookBox, body.puzzle #bookBox, body.learning #bookBox { display: non
 .book-line .mv b { font-weight: 700; color: var(--strong); }
 .book-line.play { cursor: pointer; border-radius: 4px; }
 .book-line.play:hover { background: var(--surface-2); }
-.book-line .best { font: 600 10.5px var(--font-ui); color: var(--accent); text-transform: uppercase; letter-spacing: .04em; margin-left: auto; flex: none; }
+.book-line .mv { flex: 1; }
+.book-line .best { font: 600 10.5px var(--font-ui); color: var(--accent); text-transform: uppercase; letter-spacing: .04em; flex: none; }
+.book-line.has-prac { flex-wrap: wrap; row-gap: 2px; }
+.book-line .prac { flex: 0 0 100%; display: flex; align-items: center; gap: 6px; padding-left: 60px; font-size: 11.5px; color: var(--muted); white-space: nowrap; }
+.book-line .prac b { font-weight: 600; color: var(--strong); min-width: 30px; text-align: right; }
+.book-line .prac.few b { color: var(--muted); font-weight: 400; }
+.book-line .wdl { display: flex; width: 56px; height: 8px; border-radius: 2px; overflow: hidden; border: 1px solid var(--border); align-self: center; }
+.book-line .wdl i { display: block; height: 100%; }
+.book-line .wdl .w { background: var(--chart-white); } .book-line .wdl .d { background: var(--muted); opacity: .45; } .book-line .wdl .b { background: var(--chart-black); }
 .path.cont { stroke: var(--hl-best); stroke-dasharray: none; }
 .path.cont.k2 { opacity: .55; stroke-width: 7; } .path.cont.k3 { opacity: .35; stroke-width: 6; }
 body.retro #metaBox, body.retro #engineBox, body.retro #analysisBox, body.retro #actions { display: none; }
@@ -2567,15 +2575,27 @@ function renderBook() {
     else if (!d.node) html = note(t("book_none"));
     else {
       const side = sideAt(viewPly), can = canInput();
+      // Score pratique (parties rapides moteur contre moteur suivant la base) : % des points du camp qui joue le
+      // coup ; barre victoires Blancs / nulles / victoires Noirs, comme l'évaluation (point de vue des Blancs).
+      const prac = g => {
+        if (!g) return `<span class="prac few" title="${t("book_prac_none")}"><b>–</b></span>`;
+        const n = g.w + g.d + g.l, pct = Math.round(100 * (g.w + g.d / 2) / n);
+        const [ww, bw] = side === "W" ? [g.w, g.l] : [g.l, g.w];
+        const seg = (c, v) => (v ? `<i class="${c}" style="width:${(100 * v / n).toFixed(1)}%"></i>` : "");
+        const tip = t("book_prac_tip", { pct, n, w: g.w, d: g.d, l: g.l });
+        return `<span class="prac${n < 20 ? " few" : ""}" title="${tip}"><span class="wdl">${seg("w", ww)}${seg("d", g.d)}${seg("b", bw)}</span><b>${pct}%</b><span>${t("book_prac_n", { n })}</span></span>`;
+      };
       const rows = d.node.lines.map((l, i) => {
         const sc = whiteScore(bookScore(l.score), side);
         const cls = sc.cp > 0 ? "w" : sc.cp < 0 ? "b" : "";
         const playable = can && game.legal.includes(l.move);
-        return `<div class="cont-line book-line${playable ? " play" : ""}" data-move="${l.move}"${playable ? ` title="${t("book_play")}"` : ""}>` +
+        const best = i === 0 ? `<span class="best">${t("book_best")}</span>` : "";
+        return `<div class="cont-line book-line${d.games ? " has-prac" : ""}${playable ? " play" : ""}" data-move="${l.move}"${playable ? ` title="${t("book_play")}"` : ""}>` +
           `<span class="sc ${cls}">${sc.label}</span><span class="mv"><b>${hyphenate(l.move)}</b> ${(l.pv || []).slice(1, 5).map(hyphenate).join(" ")}</span>` +
-          (i === 0 ? `<span class="best">${t("book_best")}</span>` : "") + `</div>`;
+          (d.games ? prac(l.games) : best) + `</div>`;
       }).join("");
-      html = `<div class="cont-head"><span>${t("book_info", { d: d.node.depth, net: d.net || "" })}</span></div><div class="cont-lines">${rows}</div>`;
+      const head = t("book_info", { d: d.node.depth, net: d.net || "" }) + (d.games ? " · " + t("book_prac_head", { n: d.games.toLocaleString() }) : "");
+      html = `<div class="cont-head"><span>${head}</span></div><div class="cont-lines">${rows}</div>`;
     }
   }
   if (body.dataset.html === html) return;
