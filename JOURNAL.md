@@ -11,7 +11,7 @@ fanorona-dev, i7-6700T, 1 thread), justesse par `make test`, `perft` et `tools/n
 
 ## 2026-10-05
 
-### GUI — score pratique de chaque coup de la base d'ouvertures · `{COMMIT}`
+### GUI — score pratique de chaque coup de la base d'ouvertures · `d9bac45`
 - `tools/book/book_stats.py` : 10 000 parties rapides (net_v9, 50 ms par coup) sur c1 + c3 en ~2 h. Chaque
   partie suit la base, coup tiré avec un poids exp((score − meilleur) / 100 cp) (coups à plus de 300 cp écartés),
   puis le moteur joue les deux camps jusqu'au bout. Bilan global : 8,0 % de victoires des Blancs, 87,1 % de
