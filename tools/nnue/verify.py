@@ -107,20 +107,31 @@ def load_nnue_quant(path):
             hi += np.maximum(cols[:, -22:], 0).sum(axis=1)
         if lo.min() < -32767 or hi.max() > 32767:
             continue
-        qst = [(np.clip(lround(w2 * 1024), -32767, 32767), lround(b2 * qa * 1024),
-                np.clip(lround(w3 * 1024), -32767, 32767), lround(b3 * qa * 1024), w4, b4)
-               for w2, b2, w3, b3, w4, b4 in stacks]
+        def shift_for(w):  # plus grande échelle 2^s (s <= 10) où tous les poids tiennent dans int16
+            for sh in range(10, 5, -1):
+                if np.abs(lround(w * (1 << sh))).max() <= 32767:
+                    return sh
+            raise ValueError("poids trop grands pour la quantification int16 (le moteur reste en float)")
+
+        qst = []
+        for w2, b2, w3, b3, w4, b4 in stacks:
+            s2, s3 = shift_for(w2), shift_for(w3)
+            qst.append((lround(w2 * (1 << s2)), lround(b2 * qa * (1 << s2)), s2,
+                        lround(w3 * (1 << s3)), lround(b3 * qa * (1 << s3)), s3, w4, b4))
+        # pas de débordement int32 dans la première couche dense (même contrôle que le moteur)
+        if any((np.abs(q[1]) + qa * np.abs(q[0]).sum(axis=1)).max() >= (1 << 31) - 1 for q in qst):
+            continue
         break
     else:
-        raise ValueError("aucune échelle QA ne tient dans int16")
+        raise ValueError("aucune échelle QA ne tient dans int16 (le moteur reste en float)")
 
-    def act(v):
-        return np.clip((v + 512) >> 10, 0, qa)
+    def act(v, sh):
+        return np.clip((v + (1 << (sh - 1))) >> sh, 0, qa)
 
     def forward(x):
-        w2, b2, w3, b3, w4, b4 = qst[sum(int(x.sum()) >= t for t in thresholds)]
+        w2, b2, s2, w3, b3, s3, w4, b4 = qst[sum(int(x.sum()) >= t for t in thresholds)]
         h1 = np.clip(w1q @ x.astype(np.int64) + b1q, 0, qa)
-        h3 = act(w3 @ act(w2 @ h1 + b2) + b3)
+        h3 = act(w3 @ act(w2 @ h1 + b2, s2) + b3, s3)
         out = np.float32(0)
         for k in range(l3):
             out = np.float32(out + np.float32(w4[k]) * np.float32(h3[k]))

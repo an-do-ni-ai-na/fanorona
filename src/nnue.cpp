@@ -83,12 +83,15 @@ AccumCache g_cache;
 //    dérive, pas de recalcul périodique) ; un dépassement transitoire pendant une mise à jour est sans effet
 //    (arithmétique modulo 2^16), seule la valeur finale doit tenir : vérifié au chargement par une borne sur le
 //    pire cas (22 pièces par camp), QA = 511, 255 ou 127, le plus grand qui tient ; sinon reste en float.
-//  - couches denses int16 (poids x QB = 1024, biais x QA x QB en int32), _mm256_madd_epi16 sur des paires
-//    d'entrées ; sortie de couche = arrondi de somme / QB, bornée à [0, QA].
+//  - couches denses int16 (poids x 2^s, biais x QA x 2^s en int32), _mm256_madd_epi16 sur des paires d'entrées ;
+//    sortie de couche = arrondi de somme / 2^s, bornée à [0, QA]. s = 10 (x1024) par défaut, réduit couche par
+//    couche si un poids ne tient pas dans int16 (un poids de 36,9 dans un réseau de 256 neurones : s = 9).
 //  - couche de sortie en float (32 termes, coût négligeable).
 // Écart mesuré avec le calcul float (net_v9, QA = 511) : 0,7 cp en médiane, 7 cp au 99e centile (|éval| < 1000).
-constexpr int QB_SHIFT = 10;  // QB = 1024
+constexpr int QB_SHIFT = 10;  // échelle par défaut des couches denses : x1024
+constexpr int QB_SHIFT_MIN = 6;
 struct StackQ {
+    int s2 = QB_SHIFT, s3 = QB_SHIFT;  // échelle (2^s) des poids de chaque couche dense
     std::vector<int16_t> w2p;  // [hidden/2][l2][2] : paires d'entrées consécutives pour madd_epi16
     std::vector<int32_t> b2q;  // [l2]
     std::vector<int16_t> w3p;  // [l2/2][l3][2]
@@ -391,24 +394,38 @@ bool build_quant() {
         for (size_t b = 0; b < g_stacks.size() && fits; ++b) {
             const Stack& s = g_stacks[b];
             StackQ& q = stq[b];
-            auto pack = [&](const std::vector<float>& wt, int nin, int nout, std::vector<int16_t>& dst) {
+            // plus grande échelle 2^s (s <= 10) où tous les poids de la couche tiennent dans int16
+            auto shift_for = [&](const std::vector<float>& wt) {
+                int sh = QB_SHIFT;
+                for (; sh >= QB_SHIFT_MIN; --sh) {
+                    bool ok = true;
+                    for (float w : wt) {
+                        const int64_t v = qround(double(w) * (1 << sh));
+                        if (v < -32767 || v > 32767) { ok = false; break; }
+                    }
+                    if (ok) return sh;
+                }
+                fits = false;
+                return QB_SHIFT_MIN;
+            };
+            auto pack = [&](const std::vector<float>& wt, int nin, int nout, int sh, std::vector<int16_t>& dst) {
                 dst.assign(size_t(nin) * size_t(nout), 0);
                 for (int p = 0; p < nin / 2; ++p)
                     for (int j = 0; j < nout; ++j)
-                        for (int t = 0; t < 2; ++t) {
-                            const int64_t v = qround(double(wt[size_t(2 * p + t) * size_t(nout) + size_t(j)]) * (1 << QB_SHIFT));
-                            if (v < -32767 || v > 32767) fits = false;
-                            dst[(size_t(p) * size_t(nout) + size_t(j)) * 2 + size_t(t)] = int16_t(std::clamp<int64_t>(v, -32767, 32767));
-                        }
+                        for (int t = 0; t < 2; ++t)
+                            dst[(size_t(p) * size_t(nout) + size_t(j)) * 2 + size_t(t)] = int16_t(std::clamp<int64_t>(
+                                qround(double(wt[size_t(2 * p + t) * size_t(nout) + size_t(j)]) * (1 << sh)), -32767, 32767));
             };
-            auto bias = [&](const std::vector<float>& bf, std::vector<int32_t>& dst) {
+            auto bias = [&](const std::vector<float>& bf, int sh, std::vector<int32_t>& dst) {
                 dst.resize(bf.size());
-                for (size_t j = 0; j < bf.size(); ++j) dst[j] = int32_t(qround(double(bf[j]) * qa * (1 << QB_SHIFT)));
+                for (size_t j = 0; j < bf.size(); ++j) dst[j] = int32_t(qround(double(bf[j]) * qa * (1 << sh)));
             };
-            pack(s.w2t, h, l2, q.w2p);
-            pack(s.w3t, l2, l3, q.w3p);
-            bias(s.b2, q.b2q);
-            bias(s.b3, q.b3q);
+            q.s2 = shift_for(s.w2t);
+            q.s3 = shift_for(s.w3t);
+            pack(s.w2t, h, l2, q.s2, q.w2p);
+            pack(s.w3t, l2, l3, q.s3, q.w3p);
+            bias(s.b2, q.s2, q.b2q);
+            bias(s.b3, q.s3, q.b3q);
             q.w4 = s.w4;
             q.b4 = s.b4;
             // pas de débordement int32 dans les sommes : QA x somme des |poids| + |biais| < 2^31
@@ -438,8 +455,8 @@ inline float output_q(const StackQ& q, const int32_t* h3) {
     return q.b4 + out / float(g_QA);
 }
 
-inline int32_t act_q(int64_t v) {  // arrondi de v / QB, borné à [0, QA]
-    return int32_t(std::clamp<int64_t>((v + (1 << (QB_SHIFT - 1))) >> QB_SHIFT, 0, g_QA));
+inline int32_t act_q(int64_t v, int sh) {  // arrondi de v / 2^sh, borné à [0, QA]
+    return int32_t(std::clamp<int64_t>((v + (int64_t(1) << (sh - 1))) >> sh, 0, g_QA));
 }
 
 // Passe avant quantifiée, version portable (référence de la version AVX2, et machines sans AVX2).
@@ -450,12 +467,12 @@ float forward_q_scalar(const int16_t* acc, const StackQ& q) {
     for (int j = 0; j < l2; ++j) {
         int64_t t = q.b2q[size_t(j)];
         for (int i = 0; i < h; ++i) t += int64_t(h1[size_t(i)]) * q.w2p[(size_t(i / 2) * size_t(l2) + size_t(j)) * 2 + size_t(i % 2)];
-        h2[size_t(j)] = act_q(t);
+        h2[size_t(j)] = act_q(t, q.s2);
     }
     for (int k = 0; k < l3; ++k) {
         int64_t t = q.b3q[size_t(k)];
         for (int j = 0; j < l2; ++j) t += int64_t(h2[size_t(j)]) * q.w3p[(size_t(j / 2) * size_t(l3) + size_t(k)) * 2 + size_t(j % 2)];
-        h3[size_t(k)] = act_q(t);
+        h3[size_t(k)] = act_q(t, q.s3);
     }
     return output_q(q, h3.data());
 }
@@ -495,7 +512,7 @@ float dense_q_avx2(const int16_t* acc, const StackQ& q) {
         _mm256_store_si256(reinterpret_cast<__m256i*>(s2 + 8 * v), t);
     }
     alignas(32) int16_t h2[L2];
-    for (int j = 0; j < L2; ++j) h2[j] = int16_t(act_q(int64_t(s2[j]) + q.b2q[size_t(j)]));
+    for (int j = 0; j < L2; ++j) h2[j] = int16_t(act_q(int64_t(s2[j]) + q.b2q[size_t(j)], q.s2));
 
     __m256i c[V3];
     for (int v = 0; v < V3; ++v) c[v] = zero;
@@ -510,7 +527,7 @@ float dense_q_avx2(const int16_t* acc, const StackQ& q) {
     }
     alignas(32) int32_t s3[L3], h3[L3];
     for (int v = 0; v < V3; ++v) _mm256_store_si256(reinterpret_cast<__m256i*>(s3 + 8 * v), c[v]);
-    for (int k = 0; k < L3; ++k) h3[k] = act_q(int64_t(s3[k]) + q.b3q[size_t(k)]);
+    for (int k = 0; k < L3; ++k) h3[k] = act_q(int64_t(s3[k]) + q.b3q[size_t(k)], q.s3);
     return output_q(q, h3);
 }
 
