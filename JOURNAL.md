@@ -11,7 +11,7 @@ fanorona-dev, i7-6700T, 1 thread), justesse par `make test`, `perft` et `tools/n
 
 ## 2026-10-05
 
-### Moteur — inférence NNUE quantifiée int16 (≈ +9 Elo à réseau égal), activée par défaut · `{COMMIT}`
+### Moteur — inférence NNUE quantifiée int16 (≈ +9 Elo à réseau égal), activée par défaut · `8c068c5`
 - Quantification construite au chargement des réseaux FNU2 : accumulateur int16 (exact, plus de dérive),
   couches denses int16 en AVX2 (`madd_epi16`), sortie en float. Échelle des activations QA choisie au chargement
   (511, 255 ou 127) selon une borne de pire cas garantissant l'absence de débordement ; sinon le moteur reste en
