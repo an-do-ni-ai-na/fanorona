@@ -11,7 +11,7 @@ fanorona-dev, i7-6700T, 1 thread), justesse par `make test`, `perft` et `tools/n
 
 ## 2026-10-05
 
-### NNUE — net_v9 : 192 neurones sur 115M positions, nouveau réseau par défaut (≈ +6 Elo) · `{COMMIT}`
+### NNUE — net_v9 : 192 neurones sur 115M positions, nouveau réseau par défaut (≈ +6 Elo) · `6187325`
 - n10d = accumulateur 192 (couches 16 -> 32, 4 buckets), entraîné sur GPU sur gen8 + gen9 + gen10 (115M
   positions, professeurs net_v6 et net_v8), 60 epochs ; ~6 % plus lent que net_v8.
 - Contre net_v8 : 52,4 % à profondeur 7 (2000 parties), puis **SPRT par paires H1 en 1549 parties**
