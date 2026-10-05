@@ -6,6 +6,7 @@
 #endif
 #include <cmath>
 #include <cstdint>
+#include <cstring>
 #include <fstream>
 #include <iostream>
 #include <vector>
@@ -76,6 +77,38 @@ struct AccumCache {
 constexpr int REFRESH_INTERVAL = 256;
 AccumCache g_cache;
 
+// ---- Inférence quantifiée (option UCI Quantized, réseaux FNU2) ------------------------------------------------
+// Quantifiée au chargement à partir des poids float du fichier (pas de format ni d'entraînement spécifique) :
+//  - accumulateur int16 : W1 et b1 multipliés par QA (ClippedReLU [0,1] -> [0,QA]). Mises à jour EXACTES (plus de
+//    dérive, pas de recalcul périodique) ; un dépassement transitoire pendant une mise à jour est sans effet
+//    (arithmétique modulo 2^16), seule la valeur finale doit tenir : vérifié au chargement par une borne sur le
+//    pire cas (22 pièces par camp), QA = 511, 255 ou 127, le plus grand qui tient ; sinon reste en float.
+//  - couches denses int16 (poids x QB = 1024, biais x QA x QB en int32), _mm256_madd_epi16 sur des paires
+//    d'entrées ; sortie de couche = arrondi de somme / QB, bornée à [0, QA].
+//  - couche de sortie en float (32 termes, coût négligeable).
+// Écart mesuré avec le calcul float (net_v9, QA = 511) : 0,7 cp en médiane, 7 cp au 99e centile (|éval| < 1000).
+constexpr int QB_SHIFT = 10;  // QB = 1024
+struct StackQ {
+    std::vector<int16_t> w2p;  // [hidden/2][l2][2] : paires d'entrées consécutives pour madd_epi16
+    std::vector<int32_t> b2q;  // [l2]
+    std::vector<int16_t> w3p;  // [l2/2][l3][2]
+    std::vector<int32_t> b3q;  // [l3]
+    std::vector<float> w4;     // [l3]
+    float b4 = 0.0f;
+};
+bool g_wantQuant = true;  // option UCI Quantized (défaut depuis 2026-10-05)
+bool g_quantReady = false;  // poids quantifiés disponibles pour le réseau chargé
+int g_QA = 0;
+std::vector<int16_t> g_w1q, g_b1q;  // [col][hidden], [hidden]
+std::vector<StackQ> g_stacksQ;
+std::vector<int16_t> g_h1q;
+struct AccumCacheQ {
+    bool valid = false;
+    Bitboard byColor[COLOR_NB] = {0, 0};
+    std::vector<int16_t> acc[COLOR_NB];
+};
+AccumCacheQ g_cacheQ;
+
 bool read_exact(std::ifstream& f, void* dst, size_t bytes) {
     f.read(reinterpret_cast<char*>(dst), std::streamsize(bytes));
     return bool(f) && size_t(f.gcount()) == bytes;
@@ -141,6 +174,43 @@ void update_incremental(const Position& pos) {
 
     g_cache.byColor[WHITE] = newWhite;
     g_cache.byColor[BLACK] = newBlack;
+}
+
+void add_col_q(std::vector<int16_t>& acc, int col, bool add) {
+    int16_t* __restrict a = acc.data();
+    const int16_t* __restrict w = g_w1q.data() + size_t(col) * size_t(g_hidden);
+    const int n = g_hidden;
+    if (add)
+        for (int i = 0; i < n; ++i) a[i] = int16_t(uint16_t(a[i]) + uint16_t(w[i]));  // modulo 2^16, exact
+    else
+        for (int i = 0; i < n; ++i) a[i] = int16_t(uint16_t(a[i]) - uint16_t(w[i]));
+}
+
+void apply_diff_q(Bitboard added, Bitboard removed, Color c) {
+    for (Bitboard b = added; b;) {
+        int sq = pop_lsb(b);
+        add_col_q(g_cacheQ.acc[c], sq, true);
+        add_col_q(g_cacheQ.acc[~c], SQUARE_NB + sq, true);
+    }
+    for (Bitboard b = removed; b;) {
+        int sq = pop_lsb(b);
+        add_col_q(g_cacheQ.acc[c], sq, false);
+        add_col_q(g_cacheQ.acc[~c], SQUARE_NB + sq, false);
+    }
+}
+
+void update_q(const Position& pos) {
+    if (!g_cacheQ.valid) {
+        g_cacheQ.acc[WHITE] = g_b1q;
+        g_cacheQ.acc[BLACK] = g_b1q;
+        g_cacheQ.byColor[WHITE] = g_cacheQ.byColor[BLACK] = 0;
+        g_cacheQ.valid = true;
+    }
+    for (Color c : {WHITE, BLACK}) {
+        const Bitboard now = pos.pieces(c), old = g_cacheQ.byColor[c];
+        apply_diff_q(now & ~old, old & ~now, c);
+        g_cacheQ.byColor[c] = now;
+    }
 }
 
 // Lit une matrice [rows][cols] (ordre de nn.Linear) et la renvoie transposée [cols][rows].
@@ -281,12 +351,191 @@ DenseFn pick_dense(int hidden, int l2, int l3) {
 }
 #endif
 
-// Couches denses du format FNU2, à partir de l'accumulateur du camp au trait.
-float forward_stacked(const float* acc, const Position& pos) {
+// Arrondi au plus proche, moitiés loin de zéro (std::lround) : tools/nnue/verify.py --quant fait le même calcul.
+inline int64_t qround(double x) { return std::llround(x); }
+
+// Quantifie le réseau FNU2 chargé ; false (et le moteur reste en float) si aucune échelle ne tient dans int16.
+bool build_quant() {
+    const int h = g_hidden, l2 = g_l2, l3 = g_l3;
+    g_quantReady = false;
+    if (h % 16 != 0 || l2 % 8 != 0 || l3 % 8 != 0) return false;
+    for (int qa : {511, 255, 127}) {
+        std::vector<int16_t> w1q(static_cast<size_t>(h) * INPUT_SIZE), b1q(static_cast<size_t>(h));
+        bool fits = true;
+        for (size_t k = 0; k < w1q.size() && fits; ++k) {
+            const int64_t v = qround(double(g_w1t[k]) * qa);
+            fits = v >= -32767 && v <= 32767;
+            w1q[k] = int16_t(v);
+        }
+        for (int i = 0; i < h && fits; ++i) {
+            const int64_t v = qround(double(g_b1[size_t(i)]) * qa);
+            fits = v >= -32767 && v <= 32767;
+            b1q[size_t(i)] = int16_t(v);
+            // pire cas : 22 pièces par camp ; dans chaque moitié (cases du camp au trait / adverses), les 22 poids
+            // les plus bas et les 22 plus hauts de ce neurone
+            int64_t lo = v, hi = v;
+            for (int half = 0; half < 2; ++half) {
+                std::vector<int> col(SQUARE_NB);
+                for (int sq = 0; sq < SQUARE_NB; ++sq)
+                    col[size_t(sq)] = w1q[size_t(half * SQUARE_NB + sq) * size_t(h) + size_t(i)];
+                std::sort(col.begin(), col.end());
+                for (int k = 0; k < 22; ++k) {
+                    lo += std::min(col[size_t(k)], 0);
+                    hi += std::max(col[size_t(SQUARE_NB - 1 - k)], 0);
+                }
+            }
+            fits = fits && lo >= -32767 && hi <= 32767;
+        }
+        if (!fits) continue;
+        std::vector<StackQ> stq(g_stacks.size());
+        for (size_t b = 0; b < g_stacks.size() && fits; ++b) {
+            const Stack& s = g_stacks[b];
+            StackQ& q = stq[b];
+            auto pack = [&](const std::vector<float>& wt, int nin, int nout, std::vector<int16_t>& dst) {
+                dst.assign(size_t(nin) * size_t(nout), 0);
+                for (int p = 0; p < nin / 2; ++p)
+                    for (int j = 0; j < nout; ++j)
+                        for (int t = 0; t < 2; ++t) {
+                            const int64_t v = qround(double(wt[size_t(2 * p + t) * size_t(nout) + size_t(j)]) * (1 << QB_SHIFT));
+                            if (v < -32767 || v > 32767) fits = false;
+                            dst[(size_t(p) * size_t(nout) + size_t(j)) * 2 + size_t(t)] = int16_t(std::clamp<int64_t>(v, -32767, 32767));
+                        }
+            };
+            auto bias = [&](const std::vector<float>& bf, std::vector<int32_t>& dst) {
+                dst.resize(bf.size());
+                for (size_t j = 0; j < bf.size(); ++j) dst[j] = int32_t(qround(double(bf[j]) * qa * (1 << QB_SHIFT)));
+            };
+            pack(s.w2t, h, l2, q.w2p);
+            pack(s.w3t, l2, l3, q.w3p);
+            bias(s.b2, q.b2q);
+            bias(s.b3, q.b3q);
+            q.w4 = s.w4;
+            q.b4 = s.b4;
+            // pas de débordement int32 dans les sommes : QA x somme des |poids| + |biais| < 2^31
+            for (int j = 0; j < l2 && fits; ++j) {
+                int64_t t = std::abs(int64_t(q.b2q[size_t(j)]));
+                for (int i = 0; i < h; ++i) t += int64_t(qa) * std::abs(int(q.w2p[(size_t(i / 2) * size_t(l2) + size_t(j)) * 2 + size_t(i % 2)]));
+                fits = t < (int64_t(1) << 31) - 1;
+            }
+        }
+        if (!fits) continue;
+        g_QA = qa;
+        g_w1q = std::move(w1q);
+        g_b1q = std::move(b1q);
+        g_stacksQ = std::move(stq);
+        g_h1q.assign(size_t(h), 0);
+        g_quantReady = true;
+        g_cacheQ.valid = false;
+        return true;
+    }
+    return false;
+}
+
+// Couche de sortie commune aux deux implémentations (même ordre d'addition : résultats identiques au bit près).
+inline float output_q(const StackQ& q, const int32_t* h3) {
+    float out = 0.0f;
+    for (int k = 0; k < g_l3; ++k) out += q.w4[size_t(k)] * float(h3[k]);
+    return q.b4 + out / float(g_QA);
+}
+
+inline int32_t act_q(int64_t v) {  // arrondi de v / QB, borné à [0, QA]
+    return int32_t(std::clamp<int64_t>((v + (1 << (QB_SHIFT - 1))) >> QB_SHIFT, 0, g_QA));
+}
+
+// Passe avant quantifiée, version portable (référence de la version AVX2, et machines sans AVX2).
+float forward_q_scalar(const int16_t* acc, const StackQ& q) {
+    const int h = g_hidden, l2 = g_l2, l3 = g_l3;
+    std::vector<int32_t> h1(static_cast<size_t>(h)), h2(static_cast<size_t>(l2)), h3(static_cast<size_t>(l3));
+    for (int i = 0; i < h; ++i) h1[size_t(i)] = std::clamp<int32_t>(acc[i], 0, g_QA);
+    for (int j = 0; j < l2; ++j) {
+        int64_t t = q.b2q[size_t(j)];
+        for (int i = 0; i < h; ++i) t += int64_t(h1[size_t(i)]) * q.w2p[(size_t(i / 2) * size_t(l2) + size_t(j)) * 2 + size_t(i % 2)];
+        h2[size_t(j)] = act_q(t);
+    }
+    for (int k = 0; k < l3; ++k) {
+        int64_t t = q.b3q[size_t(k)];
+        for (int j = 0; j < l2; ++j) t += int64_t(h2[size_t(j)]) * q.w3p[(size_t(j / 2) * size_t(l3) + size_t(k)) * 2 + size_t(j % 2)];
+        h3[size_t(k)] = act_q(t);
+    }
+    return output_q(q, h3.data());
+}
+
+#if defined(__AVX2__)
+// Version AVX2 pour une forme fixée à la compilation : chaque paire d'entrées (2 x int16, diffusée comme un int32)
+// est multipliée par les poids de 8 sorties à la fois (_mm256_madd_epi16 : 16 produits, sommés deux à deux en
+// int32), U paires à la fois dans des accumulateurs indépendants. Sommes entières : résultat identique à la version
+// portable quel que soit l'ordre.
+template <int L2, int L3>
+float dense_q_avx2(const int16_t* acc, const StackQ& q) {
+    constexpr int V2 = L2 / 8, U2 = 8 / V2, V3 = L3 / 8;
+    const int h = g_hidden;
+    int16_t* h1 = g_h1q.data();
+    const __m256i zero = _mm256_setzero_si256(), qa = _mm256_set1_epi16(int16_t(g_QA));
+    for (int i = 0; i < h; i += 16)
+        _mm256_storeu_si256(reinterpret_cast<__m256i*>(h1 + i),
+                            _mm256_min_epi16(_mm256_max_epi16(_mm256_loadu_si256(reinterpret_cast<const __m256i*>(acc + i)), zero), qa));
+
+    __m256i a[U2][V2];
+    for (int u = 0; u < U2; ++u)
+        for (int v = 0; v < V2; ++v) a[u][v] = zero;
+    const int16_t* w = q.w2p.data();
+    for (int p = 0; p < h / 2; p += U2)
+        for (int u = 0; u < U2; ++u) {
+            int32_t pair;
+            std::memcpy(&pair, h1 + 2 * (p + u), sizeof(pair));
+            const __m256i x = _mm256_set1_epi32(pair);
+            for (int v = 0; v < V2; ++v)
+                a[u][v] = _mm256_add_epi32(a[u][v], _mm256_madd_epi16(x, _mm256_loadu_si256(reinterpret_cast<const __m256i*>(
+                                                                              w + (size_t(p + u) * L2 + 8 * v) * 2))));
+        }
+    alignas(32) int32_t s2[L2];
+    for (int v = 0; v < V2; ++v) {
+        __m256i t = a[0][v];
+        for (int u = 1; u < U2; ++u) t = _mm256_add_epi32(t, a[u][v]);
+        _mm256_store_si256(reinterpret_cast<__m256i*>(s2 + 8 * v), t);
+    }
+    alignas(32) int16_t h2[L2];
+    for (int j = 0; j < L2; ++j) h2[j] = int16_t(act_q(int64_t(s2[j]) + q.b2q[size_t(j)]));
+
+    __m256i c[V3];
+    for (int v = 0; v < V3; ++v) c[v] = zero;
+    const int16_t* w3 = q.w3p.data();
+    for (int p = 0; p < L2 / 2; ++p) {
+        int32_t pair;
+        std::memcpy(&pair, h2 + 2 * p, sizeof(pair));
+        const __m256i x = _mm256_set1_epi32(pair);
+        for (int v = 0; v < V3; ++v)
+            c[v] = _mm256_add_epi32(c[v], _mm256_madd_epi16(x, _mm256_loadu_si256(reinterpret_cast<const __m256i*>(
+                                                                    w3 + (size_t(p) * L3 + 8 * v) * 2))));
+    }
+    alignas(32) int32_t s3[L3], h3[L3];
+    for (int v = 0; v < V3; ++v) _mm256_store_si256(reinterpret_cast<__m256i*>(s3 + 8 * v), c[v]);
+    for (int k = 0; k < L3; ++k) h3[k] = act_q(int64_t(s3[k]) + q.b3q[size_t(k)]);
+    return output_q(q, h3);
+}
+
+using DenseQFn = float (*)(const int16_t*, const StackQ&);
+DenseQFn g_denseQ = nullptr;
+
+DenseQFn pick_dense_q(int l2, int l3) {
+#define FANORONA_DENSE_Q(A, B) if (l2 == A && l3 == B) return dense_q_avx2<A, B>;
+    FANORONA_DENSE_Q(8, 16) FANORONA_DENSE_Q(8, 32) FANORONA_DENSE_Q(16, 16) FANORONA_DENSE_Q(16, 32)
+    FANORONA_DENSE_Q(32, 16) FANORONA_DENSE_Q(32, 32)
+#undef FANORONA_DENSE_Q
+    return nullptr;
+}
+#endif
+
+int bucket_of(const Position& pos) {
     const int pieces = popcount(pos.pieces(WHITE) | pos.pieces(BLACK));
     int b = 0;
     for (int t : g_thresholds) b += pieces >= t;
-    const Stack& s = g_stacks[size_t(b)];
+    return b;
+}
+
+// Couches denses du format FNU2, à partir de l'accumulateur du camp au trait.
+float forward_stacked(const float* acc, const Position& pos) {
+    const Stack& s = g_stacks[size_t(bucket_of(pos))];
 
 #if defined(__AVX2__) && defined(__FMA__)
     if (g_dense) return g_dense(acc, s);
@@ -325,6 +574,16 @@ bool load(const std::string& path) {
 #if defined(__AVX2__) && defined(__FMA__)
         if (ok) g_dense = pick_dense(g_hidden, g_l2, g_l3);
 #endif
+        if (ok) {
+            if (build_quant()) {
+#if defined(__AVX2__)
+                g_denseQ = pick_dense_q(g_l2, g_l3);
+#endif
+                std::cout << "info string nnue: quantification int16 disponible (QA=" << g_QA << ")" << std::endl;
+            } else {
+                std::cout << "info string nnue: quantification impossible pour ce réseau (reste en float)" << std::endl;
+            }
+        }
         return ok;
     }
     if (std::string(magic, 4) != "FNUE") {
@@ -356,6 +615,7 @@ bool load(const std::string& path) {
     g_w2 = std::move(w2);
     g_b2 = b2;
     g_stacked = false;
+    g_quantReady = false;
     g_loaded = true;
     g_cache.valid = false;  // les poids ont changé, l'accumulateur mis en cache ne vaut plus rien
     std::cout << "info string nnue: " << path << " chargé (hidden=" << hidden << ")" << std::endl;
@@ -364,9 +624,25 @@ bool load(const std::string& path) {
 
 bool enabled() { return g_loaded && g_wantEnabled; }
 void set_enabled(bool on) { g_wantEnabled = on; }
-void new_game() { g_cache.valid = false; }
+void set_quantized(bool on) { g_wantQuant = on; }
+bool quantized() { return g_loaded && g_stacked && g_quantReady && g_wantQuant; }
+void new_game() {
+    g_cache.valid = false;
+    g_cacheQ.valid = false;
+}
 
 Value evaluate(const Position& pos) {
+    if (quantized()) {
+        update_q(pos);  // exact : pas de recalcul périodique
+        const int16_t* acc = g_cacheQ.acc[pos.sideToMove].data();
+        const StackQ& q = g_stacksQ[size_t(bucket_of(pos))];
+#if defined(__AVX2__)
+        const float out = g_denseQ ? g_denseQ(acc, q) : forward_q_scalar(acc, q);
+#else
+        const float out = forward_q_scalar(acc, q);
+#endif
+        return clamp_eval(int(std::lround(double(out) * SCORE_SCALE)));
+    }
     if (!g_cache.valid || ++g_cache.sinceRefresh >= REFRESH_INTERVAL) {
         recompute_from(pos);
         g_cache.sinceRefresh = 0;

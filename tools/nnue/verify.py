@@ -71,8 +71,66 @@ def eval_fen_reference(fen, net):
     return round(net(x) * SCORE_SCALE)
 
 
-def eval_fens_engine(engine, nnue_path, fens):
-    cmds = [f"setoption name EvalFile value {nnue_path}", "setoption name UseNNUE value true"]
+def lround(x):
+    """Arrondi moitiés loin de zéro, comme std::llround (np.round arrondit les moitiés au pair)."""
+    return (np.sign(x) * np.floor(np.abs(x) + 0.5)).astype(np.int64)
+
+
+def load_nnue_quant(path):
+    """Référence numpy de l'inférence quantifiée int16 de src/nnue.cpp (build_quant / forward_q_scalar) :
+    mêmes arrondis, même choix de QA (511, 255 puis 127, borne de pire cas à 22 pièces par camp), mêmes calculs
+    entiers ; seule la couche de sortie est en float32, dans le même ordre d'addition. Renvoie (forward, QA)."""
+    with open(path, "rb") as f:
+        def floats(n):
+            return np.frombuffer(f.read(n * 4), dtype="<f4")
+
+        if f.read(4) != b"FNU2":
+            raise ValueError("quantification : réseau FNU2 seulement")
+        h, l2, l3, nb = struct.unpack("<4i", f.read(16))
+        thresholds = struct.unpack(f"<{nb - 1}i", f.read(4 * (nb - 1)))
+        w1 = floats(h * INPUT_SIZE).reshape(h, INPUT_SIZE).astype(np.float64)
+        b1 = floats(h).astype(np.float64)
+        stacks = []
+        for _ in range(nb):
+            w2, b2 = floats(l2 * h).reshape(l2, h).astype(np.float64), floats(l2).astype(np.float64)
+            w3, b3 = floats(l3 * l2).reshape(l3, l2).astype(np.float64), floats(l3).astype(np.float64)
+            w4, b4 = floats(l3).copy(), np.float32(floats(1)[0])
+            stacks.append((w2, b2, w3, b3, w4, b4))
+    for qa in (511, 255, 127):
+        w1q, b1q = lround(w1 * qa), lround(b1 * qa)
+        if np.abs(w1q).max() > 32767 or np.abs(b1q).max() > 32767:
+            continue
+        lo, hi = b1q.copy(), b1q.copy()
+        for half in (0, 1):
+            cols = np.sort(w1q[:, half * SQUARE_NB:(half + 1) * SQUARE_NB], axis=1)
+            lo += np.minimum(cols[:, :22], 0).sum(axis=1)
+            hi += np.maximum(cols[:, -22:], 0).sum(axis=1)
+        if lo.min() < -32767 or hi.max() > 32767:
+            continue
+        qst = [(np.clip(lround(w2 * 1024), -32767, 32767), lround(b2 * qa * 1024),
+                np.clip(lround(w3 * 1024), -32767, 32767), lround(b3 * qa * 1024), w4, b4)
+               for w2, b2, w3, b3, w4, b4 in stacks]
+        break
+    else:
+        raise ValueError("aucune échelle QA ne tient dans int16")
+
+    def act(v):
+        return np.clip((v + 512) >> 10, 0, qa)
+
+    def forward(x):
+        w2, b2, w3, b3, w4, b4 = qst[sum(int(x.sum()) >= t for t in thresholds)]
+        h1 = np.clip(w1q @ x.astype(np.int64) + b1q, 0, qa)
+        h3 = act(w3 @ act(w2 @ h1 + b2) + b3)
+        out = np.float32(0)
+        for k in range(l3):
+            out = np.float32(out + np.float32(w4[k]) * np.float32(h3[k]))
+        return float(np.float32(b4 + np.float32(out / np.float32(qa))))
+    return forward, qa
+
+
+def eval_fens_engine(engine, nnue_path, fens, quant=False):
+    cmds = [f"setoption name EvalFile value {nnue_path}", "setoption name UseNNUE value true",
+            f"setoption name Quantized value {'true' if quant else 'false'}"]
     for fen in fens:
         cmds += [f"position fen {fen}", "eval"]
     cmds.append("quit")
@@ -86,6 +144,7 @@ def main():
     ap.add_argument("--engine", default="./fanorona")
     ap.add_argument("--samples", default=None, help="fichier gensfen (fen|score|wdl) dont on prend les FEN")
     ap.add_argument("--n", type=int, default=50)
+    ap.add_argument("--quant", action="store_true", help="vérifie l'inférence quantifiée int16 (option Quantized)")
     ap.add_argument("--tol", type=int, default=1, help="tolérance en centipions (bruit d'arrondi flottant)")
     args = ap.parse_args()
 
@@ -99,9 +158,13 @@ def main():
     else:
         fens = ["BBBBBBBBB/BBBBBBBBB/BWBW1BWBW/WWWWWWWWW/WWWWWWWWW w 0 1"]
 
-    net = load_nnue(args.nnue)
+    if args.quant:
+        net, qa = load_nnue_quant(args.nnue)
+        print(f"référence quantifiée, QA = {qa}")
+    else:
+        net = load_nnue(args.nnue)
     ref_scores = [eval_fen_reference(fen, net) for fen in fens]
-    cpp_scores = eval_fens_engine(args.engine, args.nnue, fens)
+    cpp_scores = eval_fens_engine(args.engine, args.nnue, fens, args.quant)
 
     if len(cpp_scores) != len(fens):
         print(f"ERREUR : {len(cpp_scores)} scores C++ reçus pour {len(fens)} positions envoyées")

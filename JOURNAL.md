@@ -11,6 +11,19 @@ fanorona-dev, i7-6700T, 1 thread), justesse par `make test`, `perft` et `tools/n
 
 ## 2026-10-05
 
+### Moteur — inférence NNUE quantifiée int16 (≈ +9 Elo à réseau égal), activée par défaut · `{COMMIT}`
+- Quantification construite au chargement des réseaux FNU2 : accumulateur int16 (exact, plus de dérive),
+  couches denses int16 en AVX2 (`madd_epi16`), sortie en float. Échelle des activations QA choisie au chargement
+  (511, 255 ou 127) selon une borne de pire cas garantissant l'absence de débordement ; sinon le moteur reste en
+  float. Les poids des couches denses (jusqu'à ~14) excluent l'int8 sans réentraînement.
+- Exactitude : `verify.py --quant` (référence numpy des mêmes calculs entiers) = moteur au centipion près sur
+  2000 positions et 3 réseaux. Écart avec le float : ~1 cp en médiane.
+- Vitesse (c1, `bench 8`) : 128 neurones +16 %, 192 (net_v9) +23 %, 256 +36 % : le gain croît avec la taille.
+  net_v9 quantifié va aussi vite que net_v8 en float.
+- SPRT net_v9 quantifié contre net_v9 float, 100 ms, par paires : **H1 en 651 parties** (W222 D224 L205,
+  51,3 %). Option UCI `Quantized` (défaut true) ; signatures `bench 8` : net_v9 924 530, net_v8 891 093.
+- Suite : réseau 256 entraîné sur gen8-10 (n10x) puis testé quantifié contre net_v9 quantifié.
+
 ### NNUE — net_v9 : 192 neurones sur 115M positions, nouveau réseau par défaut (≈ +6 Elo) · `6187325`
 - n10d = accumulateur 192 (couches 16 -> 32, 4 buckets), entraîné sur GPU sur gen8 + gen9 + gen10 (115M
   positions, professeurs net_v6 et net_v8), 60 epochs ; ~6 % plus lent que net_v8.

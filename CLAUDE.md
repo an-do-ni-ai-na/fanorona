@@ -67,7 +67,7 @@ g++ -g -O0 -std=c++17 -Isrc -fsanitize=address,undefined src/{bitboard,position,
 | `src/movegen.*` | `generate_moves()` (tours complets dédupliqués), `generate_detailed()` (avec notation), `parse_move()`, `perft()` ; `generate_vela()` pour la phase 1 de la vela |
 | `src/telo.*` | Fanoron-Telo 3×3 (alignement, pose puis déplacement) : module à part, résolu par analyse rétrograde au démarrage (`Telo::init`), `go` parfait ou `go depth N` limité |
 | `src/evaluate.*` | évaluation manuelle (HCE), du point de vue du camp au trait ; bascule vers `NNUE::evaluate()` si activé |
-| `src/nnue.*` | inférence NNUE : formats FNUE (2×45→256→1) et FNU2 (2×45→hidden→16→32→1, couches denses en 4 exemplaires selon le nombre de pièces), accumulateur incrémental par diff, W1 transposé, couches en AVX2 |
+| `src/nnue.*` | inférence NNUE : formats FNUE (2×45→256→1) et FNU2 (2×45→hidden→16→32→1, couches denses en 4 exemplaires selon le nombre de pièces), accumulateur incrémental par diff, W1 transposé, couches en AVX2 ; **inférence quantifiée int16 par défaut** pour FNU2 (option UCI `Quantized`, quantification au chargement) |
 | `src/tt.*` | table de transposition, seaux de 2 entrées, générations |
 | `src/search.*` | `Search::think()` : ID, aspiration, PVS, qsearch, NMP, RFP, LMR, killers, historique, temps |
 | `src/uci.*` | boucle de commandes (`position`, `go`, `stop`, `setoption`, `d`, `moves`, `eval`, `status`, `perft`, `bench`, `play`, `gensfen`) |
@@ -153,7 +153,8 @@ g++ -g -O0 -std=c++17 -Isrc -fsanitize=address,undefined src/{bitboard,position,
 
 - HCE ~2,3 M nœuds/s, NNUE ~1,3-1,5 M nœuds/s (1 thread, fanorona-dev). Signatures bench 8 (2026-10-04, après le recalcul
   périodique de l'accumulateur) : HCE 572 736 nœuds, NNUE net_v3 937 290 nœuds, NNUE net_v6 1 026 948 nœuds,
-  NNUE net_v8 886 119 nœuds, NNUE net_v9 (réseau par défaut depuis le 2026-10-05, 192 neurones) 1 063 465 nœuds. **Toute donnée gensfen produite avant ce correctif est dégradée** (voir JOURNAL 2026-10-04).
+  NNUE net_v8 886 119 nœuds, NNUE net_v9 (réseau par défaut depuis le 2026-10-05, 192 neurones) 1 063 465 nœuds en
+  float ; **quantifié (défaut depuis le 2026-10-05)** : net_v9 924 530, net_v8 891 093 (net_v3, format FNUE, reste en float). **Toute donnée gensfen produite avant ce correctif est dégradée** (voir JOURNAL 2026-10-04).
 - Évaluation : matériel (100), points forts, connectivité, mobilité, menaces, bonus de simplification, tempo.
   Poids non réglés.
 
@@ -355,8 +356,19 @@ g++ -g -O0 -std=c++17 -Isrc -fsanitize=address,undefined src/{bitboard,position,
      Format de données compacté (`.npz` clé `packed`, 12 octets/position, conversion en flux) : 64M positions
      = 770 Mo ; plusieurs `.npz` séparés par des virgules. **Leçon** : les plafonds des cycles 4, 5 et du balayage
      GPU venaient en bonne partie de données dégradées ; à revoir sur données propres (n8a symétrie, 192/256).
-   - **reste à faire** : finir n8a (symétrie), n8d (192) et n8x (256) sur gen8 (interrompus le 2026-10-04,
-     machine GPU indisponible) ; quantification int16 ; cycle suivant avec net_v8 professeur ; entrées plus riches.
+   - ~~quantification~~ **fait** (2026-10-05) : inférence int16 pour les réseaux FNU2, construite AU CHARGEMENT
+     depuis les poids float (pas de nouveau format, pas de réentraînement). Accumulateur int16 (W1, b1 × QA ; mises à
+     jour exactes : plus de dérive ni de recalcul périodique ; débordement transitoire sans effet, arithmétique modulo
+     2^16) ; couches denses int16 (poids × 1024, `_mm256_madd_epi16` sur paires d'entrées, arrondi au plus proche)
+     ; sortie en float. QA = 511, 255 ou 127 : le plus grand dont la borne de pire cas (22 pièces par camp) tient
+     dans int16 (net_v9 : 255 ; net_v8, n8x : 511). Les poids denses vont jusqu'à ~14 : pas d'int8 sans
+     réentraînement avec bornage des poids. Écart avec le float (simulation, net_v9) : 1,2 cp en médiane, 13,6 cp au
+     99e centile pour |éval| < 1000 (QA = 255). `verify.py --quant` : référence numpy exacte (0 cp d'écart sur 2000
+     positions, 3 réseaux). Vitesse (c1, bench 8) : net_v8 1,32 -> 1,53 M nps, net_v9 1,09 -> 1,35 M, 256 neurones
+     0,94 -> 1,28 M. **SPRT net_v9 quantifié contre net_v9 float** (100 ms, par paires) : H1 en 651 parties
+     (W222 D224 L205, 51,3 %, ≈ +9 Elo). Option `Quantized` à true par défaut.
+   - **reste à faire** : réseau 256 sur gen8-10 (n10x, entraînement lancé le 2026-10-05), rentable maintenant ;
+     int8 avec bornage des poids à l'entraînement ; cycle suivant avec net_v9 professeur ; entrées plus riches.
 5. **Lazy SMP** : option `Threads`, TT partagée (entrées rendues sûres par XOR clé/données).
 6. Améliorations de recherche — **en cours** (2026-10-01), chaque idée testée par SPRT (net_v3, 100 ms, 3 machines) :
    - **retenu** : LMP + futilité des coups calmes (positions sans capture, profondeur <= 3, hors PV) — séparément

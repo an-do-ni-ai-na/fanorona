@@ -15,6 +15,11 @@ bool load(const std::string& path);
 bool enabled();
 void set_enabled(bool on);
 
+// Inférence quantifiée int16 (option UCI Quantized) pour les réseaux FNU2 : poids quantifiés au chargement si
+// le réseau s'y prête (sinon le moteur reste en float). quantized() = actif pour le réseau chargé.
+void set_quantized(bool on);
+bool quantized();
+
 // Invalide l'accumulateur mis en cache (voir evaluate() ci-dessous). Pas obligatoire pour la
 // justesse (le cache se corrige tout seul par diff quelle que soit sa fraîcheur), mais appelé
 // depuis "ucinewgame" par hygiène, comme Search::clear().
