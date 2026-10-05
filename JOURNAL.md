@@ -11,7 +11,7 @@ fanorona-dev, i7-6700T, 1 thread), justesse par `make test`, `perft` et `tools/n
 
 ## 2026-10-05
 
-### NNUE — réseau 256 quantifié : non retenu ; Elo recalibré en quantifié · `{COMMIT}`
+### NNUE — réseau 256 quantifié : non retenu ; Elo recalibré en quantifié · `deaa063`
 - n10x (256 neurones, gen8-10, 115M) : un poids de 36,9 imposait une échelle réduite sur une couche dense
   (corrigé dans b420ed9). Quantifié, il est presque aussi rapide que net_v9 ; 51,8 % à profondeur 7 mais
   **SPRT par paires H0 en 527 parties** contre net_v9 quantifié (W175 D170 L182). net_v9 reste le réseau par
