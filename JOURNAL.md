@@ -11,7 +11,7 @@ fanorona-dev, i7-6700T, 1 thread), justesse par `make test`, `perft` et `tools/n
 
 ## 2026-10-05
 
-### GUI — base d'ouvertures et panneau « Ouvertures » · `{COMMIT}`
+### GUI — base d'ouvertures et panneau « Ouvertures » · `835bcd9, 006536e`
 - Le Fanorona est nul avec un jeu parfait (Schadd et al., 2008) : la base vise l'avantage pratique. Constat de
   départ (profondeur 16, net_v9) : les 5 premiers coups des Blancs vont de +0,43 (f2-e3A) à −2,05 (d3-e3W).
 - `tools/book/build_book.py` : exploration en largeur depuis la position initiale, MultiPV 6 à profondeur 16
