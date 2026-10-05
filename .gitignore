@@ -9,3 +9,4 @@ __pycache__/
 /checkpoints/
 *.nnue
 /logs/
+/tools/gui/book.json

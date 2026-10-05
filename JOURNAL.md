@@ -11,6 +11,20 @@ fanorona-dev, i7-6700T, 1 thread), justesse par `make test`, `perft` et `tools/n
 
 ## 2026-10-05
 
+### GUI — base d'ouvertures et panneau « Ouvertures » · `{COMMIT}`
+- Le Fanorona est nul avec un jeu parfait (Schadd et al., 2008) : la base vise l'avantage pratique. Constat de
+  départ (profondeur 16, net_v9) : les 5 premiers coups des Blancs vont de +0,43 (f2-e3A) à −2,05 (d3-e3W).
+- `tools/book/build_book.py` : exploration en largeur depuis la position initiale, MultiPV 6 à profondeur 16
+  (deux premiers demi-coups) puis 14, répartie sur c1 + c3 par SSH, reprise automatique. Première passe
+  (coups à moins de 60 cp du meilleur, 10 demi-coups) : 1227 positions ; extension (100 cp, 5 coups,
+  14 demi-coups, plafond 30 000) : 30007 positions en ~25 min. Les positions profondes,
+  à captures forcées, se résolvent en une fraction de seconde.
+- Interface : panneau « Ouvertures » sur la page de jeu (désactivé par défaut, indisponible pendant une partie
+  contre l'ordinateur) : coups connus triés, évaluation du point de vue des Blancs, suite prévue ; un clic joue
+  le coup. `POST /api/book` ; `tools/gui/book.json` (~12 Mo) non versionné, à régénérer.
+- Pistes : statistiques de parties réelles par coup (score pratique), usage par le moteur (livre, à mesurer par
+  SPRT), leçons d'ouverture.
+
 ### GUI — plateau en plein écran · `e97805e`
 - Bouton « Plateau en plein écran » dans la barre de navigation (touche `p`) : plateau + jauge d'évaluation en
   plein écran (API Fullscreen), toujours jouable (choix approche/retrait, arrêt de capture) ; sortie par le
