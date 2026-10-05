@@ -13,6 +13,7 @@ make bench        # ./fanorona bench -> "Nodes searched" et NPS
 ./fanorona "position startpos" ...        # un argument = une commande, puis sortie
 python3 tools/match.py ./fanorona ./fanorona-old --games 20 --movetime 100   # auto-jeu, parties fixes
 python3 tools/match.py ./fanorona ./fanorona-old --sprt --elo0 0 --elo1 5 --movetime 100 --concurrency 5  # SPRT
+python3 tools/spsa.py ./fanorona --net checkpoints/net_v9.nnue --hosts "root@10.10.10.190:5,root@10.10.10.191:3" --out data/spsa_run1  # réglage SPSA des paramètres de recherche (options UCI QsDeltaPiece, RfpMargin, LmrDiv... ; défauts = code d'origine, bench inchangé)
 ./fanorona gensfen count 1000000 depth 6 opening-plies 8 out data/gensfen.txt   # données NNUE (auto-jeu)
 python3 tools/nnue/train.py data/gensfen.txt --epochs 20 --out checkpoints/net.pt   # entraînement NNUE (PyTorch, CPU)
 python3 tools/nnue/verify.py checkpoints/net.nnue --samples data/gensfen.txt --n 300   # C++ == référence numpy ?

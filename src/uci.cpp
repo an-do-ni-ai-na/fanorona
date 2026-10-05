@@ -373,8 +373,11 @@ void loop(int argc, char* argv[]) {
                       << "option name Quantized type check default true\n"
                       << "option name MultiPV type spin default 1 min 1 max 8\n"
                       << "option name Variant type combo default tsivy var tsivy var dimy var telo\n"
-                      << "option name Vela type combo default none var none var white var black\n"
-                      << "uciok" << std::endl;
+                      << "option name Vela type combo default none var none var white var black\n";
+            for (const auto& p : Search::tune_params())
+                std::cout << "option name " << p.name << " type spin default " << p.def << " min " << p.min
+                          << " max " << p.max << "\n";
+            std::cout << "uciok" << std::endl;
         } else if (token == "isready") {
             std::cout << "readyok" << std::endl;
         } else if (token == "ucinewgame") {
@@ -387,7 +390,8 @@ void loop(int argc, char* argv[]) {
             is >> t;  // "name"
             while (is >> t && t != "value") name += (name.empty() ? "" : " ") + t;
             is >> value;
-            if (name == "Hash") TT.resize(std::stoul(value));
+            if (Search::set_tune_param(name, std::atoi(value.c_str()))) {
+            } else if (name == "Hash") TT.resize(std::stoul(value));
             else if (name == "MultiPV") multiPV = std::clamp(std::stoi(value), 1, 8);
             else if (name == "MandatoryContinuation") Rules::mandatoryContinuation = value == "true";
             else if (name == "NoCaptureLimit") Rules::noCaptureLimit = std::stoi(value);

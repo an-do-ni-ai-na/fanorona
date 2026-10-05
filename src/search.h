@@ -38,6 +38,16 @@ extern std::atomic<bool> stopSignal;
 void init();
 void clear();
 
+// Paramètres de recherche réglables (options UCI, pour le réglage SPSA : tools/spsa.py). Les valeurs par défaut
+// sont celles du code d'origine : signature bench inchangée tant qu'on n'y touche pas.
+struct TuneParam {
+    const char* name;
+    int* value;
+    int def, min, max;
+};
+const std::vector<TuneParam>& tune_params();
+bool set_tune_param(const std::string& name, int value);  // false si inconnu
+
 // `history` contient les clés des positions de la partie, la dernière étant
 // celle de `pos` (sert à détecter les répétitions).
 // Si `verbose`, affiche des lignes "info ..." façon UCI.

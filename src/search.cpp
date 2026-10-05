@@ -28,6 +28,20 @@ constexpr int QS_MAX_DEPTH = 12;  // borne de sécurité sur les séquences de c
 
 int Reductions[MAX_PLY][64];
 
+// Paramètres réglables (voir tune_params) : marges en centipions, profondeurs en demi-coups.
+int QsDeltaPiece = 130;   // delta pruning : valeur d'une pièce capturée
+int QsDeltaBase = 150;    // delta pruning : marge fixe
+int RfpDepth = 6;         // reverse futility : profondeur maximale
+int RfpMargin = 90;       // reverse futility : marge par demi-coup
+int NmpBase = 3;          // coup nul : réduction de base (+ profondeur / 4)
+int FutDepth = 3;         // futilité et LMP : profondeur maximale
+int FutMargin = 110;      // futilité : marge par demi-coup
+int LmpBase = 3;          // LMP : coups examinés = LmpBase + profondeur²
+int LmrDiv = 225;         // LMR : réduction = ln(prof.) x ln(coups) / (LmrDiv / 100)
+int LmrHistory = 4000;    // LMR : historique au-dessus duquel on réduit d'un demi-coup de moins
+int AspDelta = 25;        // fenêtre d'aspiration initiale
+int HistCap = 400;        // bonus d'historique maximal
+
 // Tables d'historique conservées entre les recherches d'une même partie.
 int HistoryTable[COLOR_NB][SQUARE_NB][SQUARE_NB];
 
@@ -181,7 +195,7 @@ Value Worker::qsearch(const Position& pos, Value alpha, Value beta, int ply, int
         Move m = list.moves[i];
 
         // Delta pruning : même en gagnant ces pièces, on ne remonte pas alpha.
-        if (standPat + popcount(move_captured(m)) * 130 + 150 <= alpha) continue;
+        if (standPat + popcount(move_captured(m)) * QsDeltaPiece + QsDeltaBase <= alpha) continue;
 
         Position child = pos;
         child.do_move(m);
@@ -250,11 +264,11 @@ Value Worker::search(const Position& pos, Value alpha, Value beta, int depth, in
     // --- Élagages avant d'examiner les coups (positions calmes uniquement) ---
     if (!pvNode && !capturePos && std::abs(beta) < VALUE_MATE_IN_MAX_PLY) {
         // Reverse futility pruning
-        if (depth <= 6 && staticEval - 90 * depth >= beta) return staticEval;
+        if (depth <= RfpDepth && staticEval - RfpMargin * depth >= beta) return staticEval;
 
         // Null move pruning
         if (allowNull && depth >= 3 && staticEval >= beta && popcount(pos.pieces(us)) >= 3) {
-            int R = 3 + depth / 4;
+            int R = NmpBase + depth / 4;
             Position child = pos;
             child.do_null_move();
             keys.push_back(child.key);
@@ -295,12 +309,12 @@ Value Worker::search(const Position& pos, Value alpha, Value beta, int depth, in
         bool quiet = !is_capture(m);
         // Futilité : position calme, faible profondeur, évaluation statique très en dessous d'alpha : les coups
         // calmes après le premier ont peu de chances de remonter le score.
-        if (!pvNode && !capturePos && depth <= 3 && moveCount > 1 && staticEval + 110 * depth <= alpha &&
+        if (!pvNode && !capturePos && depth <= FutDepth && moveCount > 1 && staticEval + FutMargin * depth <= alpha &&
             best > -VALUE_MATE_IN_MAX_PLY)
             continue;
         // LMP : position calme (que des paika), faible profondeur, hors ligne principale : les derniers coups
         // (mal classés par l'historique) ne sont pas examinés.
-        if (!pvNode && !capturePos && depth <= 3 && moveCount > 3 + depth * depth && best > -VALUE_MATE_IN_MAX_PLY) break;
+        if (!pvNode && !capturePos && depth <= FutDepth && moveCount > LmpBase + depth * depth && best > -VALUE_MATE_IN_MAX_PLY) break;
 
         Position child = pos;
         child.do_move(m);
@@ -316,7 +330,7 @@ Value Worker::search(const Position& pos, Value alpha, Value beta, int depth, in
             if (depth >= 3 && moveCount > 3 && quiet && m != killers[ply][0] && m != killers[ply][1]) {
                 r = Reductions[std::min(depth, MAX_PLY - 1)][std::min(moveCount, 63)];
                 if (pvNode) --r;
-                if (scores[i] > 4000) --r;
+                if (scores[i] > LmrHistory) --r;
                 r = std::clamp(r, 0, newDepth - 1);
             }
             v = -search(child, -alpha - 1, -alpha, newDepth - r, ply + 1, false, true);
@@ -339,7 +353,7 @@ Value Worker::search(const Position& pos, Value alpha, Value beta, int depth, in
                 if (alpha >= beta) {
                     if (quiet) {
                         if (killers[ply][0] != m) killers[ply][1] = killers[ply][0], killers[ply][0] = m;
-                        int bonus = std::min(depth * depth, 400);
+                        int bonus = std::min(depth * depth, HistCap);
                         auto upd = [&](Move mv, int b) {
                             int& h = HistoryTable[us][move_from(mv)][move_to(mv)];
                             h += b - h * std::abs(b) / 16384;
@@ -399,7 +413,7 @@ SearchResult Worker::run() {
         for (int pvIdx = 0; pvIdx < multiPV; ++pvIdx) {
             selDepth = 0;
             Value prevScore = prevScores[pvIdx];
-            Value alpha = -VALUE_INFINITE, beta = VALUE_INFINITE, delta = 25;
+            Value alpha = -VALUE_INFINITE, beta = VALUE_INFINITE, delta = AspDelta;
             if (rootDepth >= 5 && prevScore != VALUE_NONE && std::abs(prevScore) < VALUE_MATE_IN_MAX_PLY) {
                 alpha = std::max(prevScore - delta, -VALUE_INFINITE);
                 beta = std::min(prevScore + delta, VALUE_INFINITE);
@@ -460,7 +474,29 @@ SearchResult Worker::run() {
 
 void init() {
     for (int d = 1; d < MAX_PLY; ++d)
-        for (int m = 1; m < 64; ++m) Reductions[d][m] = int(0.5 + std::log(d) * std::log(m) / 2.25);
+        for (int m = 1; m < 64; ++m) Reductions[d][m] = int(0.5 + std::log(d) * std::log(m) / (LmrDiv / 100.0));
+}
+
+const std::vector<TuneParam>& tune_params() {
+    static const std::vector<TuneParam> params = {
+        {"QsDeltaPiece", &QsDeltaPiece, 130, 40, 400}, {"QsDeltaBase", &QsDeltaBase, 150, 0, 500},
+        {"RfpDepth", &RfpDepth, 6, 1, 12},             {"RfpMargin", &RfpMargin, 90, 20, 300},
+        {"NmpBase", &NmpBase, 3, 1, 6},                {"FutDepth", &FutDepth, 3, 1, 8},
+        {"FutMargin", &FutMargin, 110, 20, 400},       {"LmpBase", &LmpBase, 3, 1, 12},
+        {"LmrDiv", &LmrDiv, 225, 100, 500},            {"LmrHistory", &LmrHistory, 4000, 0, 16000},
+        {"AspDelta", &AspDelta, 25, 5, 150},           {"HistCap", &HistCap, 400, 50, 2000},
+    };
+    return params;
+}
+
+bool set_tune_param(const std::string& name, int value) {
+    for (const auto& p : tune_params())
+        if (name == p.name) {
+            *p.value = std::clamp(value, p.min, p.max);
+            if (p.value == &LmrDiv) init();
+            return true;
+        }
+    return false;
 }
 
 void clear() {
