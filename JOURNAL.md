@@ -11,7 +11,7 @@ fanorona-dev, i7-6700T, 1 thread), justesse par `make test`, `perft` et `tools/n
 
 ## 2026-10-05
 
-### NNUE — cycle gen11 (professeur net_v9 quantifié) : pas de gain, plateau · `{COMMIT}`
+### NNUE — cycle gen11 (professeur net_v9 quantifié) : pas de gain, plateau · `b80f62a`
 - gen11 : 40M positions sur c1 + c3 en 70 min (net_v9 quantifié, profondeur 6), chaîne automatique génération ->
   contrôle -> conversion compactée -> envoi -> entraînement GPU (n11d, 192 neurones, gen8 à gen11 = 155M positions,
   67 s/epoch, 7,9 Go sur la carte).
