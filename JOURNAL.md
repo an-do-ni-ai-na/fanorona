@@ -11,6 +11,15 @@ fanorona-dev, i7-6700T, 1 thread), justesse par `make test`, `perft` et `tools/n
 
 ## 2026-10-06
 
+### Interface — Elo des forces « pleine force » recalibré avec le livre · `{COMMIT}`
+- Seuls les réglages 11 (300 ms) et 12 (1 s) utilisent le livre : les 100 parties qui les impliquent (paires
+  9-11, 10-11, 10-12, 11-12, mêmes graines donc mêmes ouvertures) rejouées sur c1 en ~1 h, les 616 autres reprises
+  de `data/elo_calibration_v9q.jsonl` (journal de c1, source de l'elo.json précédent ; celui de fanorona-dev,
+  plus ancien, ne le reproduit pas). Résultat (`data/elo_calibration_v9q_book.jsonl`) : 11 : 2127 -> 2157,
+  12 : 2152 -> 2181, autres inchangés.
+- Gain modeste au calibrage : les 2 premiers demi-coups y sont tirés au hasard, le livre ne sert que si la
+  position y figure ; contre un humain depuis la position initiale, il sert dès le premier coup.
+
 ### Moteur — livre d'ouvertures (OwnBook) : ~+70 à +130 Elo · `a38e268`
 - `src/book.cpp` : livre texte rejoué depuis la position initiale au chargement (clé Zobrist : transpositions
   comprises, 30 007 lignes -> 23 768 positions) ; au `go`, coup tiré selon les poids, réponse immédiate
