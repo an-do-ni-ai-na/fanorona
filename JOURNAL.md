@@ -11,7 +11,7 @@ fanorona-dev, i7-6700T, 1 thread), justesse par `make test`, `perft` et `tools/n
 
 ## 2026-10-06
 
-### Interface — Elo des forces « pleine force » recalibré avec le livre · `{COMMIT}`
+### Interface — Elo des forces « pleine force » recalibré avec le livre · `e4a73c8`
 - Seuls les réglages 11 (300 ms) et 12 (1 s) utilisent le livre : les 100 parties qui les impliquent (paires
   9-11, 10-11, 10-12, 11-12, mêmes graines donc mêmes ouvertures) rejouées sur c1 en ~1 h, les 616 autres reprises
   de `data/elo_calibration_v9q.jsonl` (journal de c1, source de l'elo.json précédent ; celui de fanorona-dev,
