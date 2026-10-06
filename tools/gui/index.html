@@ -1583,7 +1583,7 @@ function renderEngine() {
   $("sNodes").textContent = i && i.nodes != null ? fmtN(i.nodes) : "–";
   $("sNps").textContent = i && i.nps != null ? fmtN(i.nps) : "–";
   $("pv").textContent = !i ? "" : i.candidates ? t("random_pick", { n: i.candidates, l: cfg.level })
-    : i.pv && i.pv.length ? i.pv.join(" ") : "";
+    : i.pv && i.pv.length ? (i.book ? t("book_move") + " " : "") + i.pv.join(" ") : "";
   $("engineState").textContent = busy && engineToMove() ? t("thinking") : "";
 }
 function renderMoves() {

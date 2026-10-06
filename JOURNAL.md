@@ -11,6 +11,25 @@ fanorona-dev, i7-6700T, 1 thread), justesse par `make test`, `perft` et `tools/n
 
 ## 2026-10-06
 
+### Moteur — livre d'ouvertures (OwnBook) : ~+70 à +130 Elo · `{COMMIT}`
+- `src/book.cpp` : livre texte rejoué depuis la position initiale au chargement (clé Zobrist : transpositions
+  comprises, 30 007 lignes -> 23 768 positions) ; au `go`, coup tiré selon les poids, réponse immédiate
+  (`info string book <coup>`), pas en analyse (MultiPV, infinite). Fanoron-Tsivy standard uniquement. Options
+  `BookFile`, `OwnBook` (défaut false) ; bench inchangé (572736).
+- `tools/book/export_book.py` : coups à ≤ 60 cp de la meilleure évaluation ; s'ils ont ≥ 20 parties, score
+  pratique lissé (v + n/2 + 10) / (parties + 20), meilleur gardé (et ceux à ≤ 2 points) ; sinon meilleur coup
+  de l'analyse profonde. Constat : sans livre, le moteur joue d2-e3A en premier coup à 100 ms (−1,41 en analyse
+  profonde, 43,5 % en pratique) ; le livre joue f2-e3A (+0,43, 54,3 %).
+- SPRT livre contre sans livre (100 ms, 1er coup aléatoire, [0, 5]) : **H1 en 133 parties**, W27 D106 L0
+  (paires 0-0-39-26-0), ~+70 Elo. Match depuis la position initiale, 200 paires : **68,0 %**, W144 D256 L0
+  (~+130 Elo). Réserve : peu de variété (28 positions seulement à plusieurs coups dans le livre, adversaire
+  quasi déterministe) : beaucoup de parties se répètent ; le gain est réel mais son ampleur dépend de
+  l'ouverture.
+- GUI : `/api/go` active le livre en pleine force (niveau 6 « Maître », forces « full ») si `checkpoints/book.txt`
+  existe, depuis la position initiale, sans vela ni continuation obligatoire ; l'évaluation affichée vient de
+  l'analyse profonde, la ligne d'infos indique « Livre d'ouvertures : ». Les niveaux affaiblis gardent leur
+  calibrage ; les Elo des forces « full » (elo.json) sont désormais sous-estimés, à recalibrer.
+
 ### Recherche — réglage SPSA des 12 paramètres : rejeté par SPRT, défauts conservés · `0cd2a3d`
 - 12 constantes de la recherche exposées en options UCI (`Search::tune_params`, défauts d'origine, bench
   inchangé 572736) ; `tools/spsa.py` (SPSA façon fishtest, paires theta+/theta− sur 1148 ouvertures équilibrées de

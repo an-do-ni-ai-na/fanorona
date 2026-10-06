@@ -323,6 +323,13 @@ def search(req):
         if level is None:
             raise EngineError("niveau inconnu")
     opts = net_options(req)
+    # Livre d'ouvertures du moteur (checkpoints/book.txt, tools/book/export_book.py) : pleine force seulement (les
+    # niveaux affaiblis gardent leur calibrage Elo), Fanoron-Tsivy standard depuis la position initiale, avec réseau.
+    book_file = Path(args.nets) / "book.txt"
+    use_book = (level["mode"] == "full" and opts and book_file.exists() and not req.get("fen")
+                and not req.get("vela") and req.get("variant") != "mandatory")
+    if use_book:
+        opts = opts + [f"setoption name BookFile value {book_file}", "setoption name OwnBook value true"]
 
     legal = get_state(req)["legal"] if level["mode"] == "sample" else None
     if legal is not None and len(legal) == 1:
@@ -344,6 +351,15 @@ def search(req):
             eng.close()
     finally:
         search_slots.release()
+    if use_book and not info.get("depth"):  # coup du livre : pas de recherche, évaluation de l'analyse profonde
+        info = {"book": True}
+        node = (book_lookup(req) or {}).get("node")
+        for ln in (node or {}).get("lines", []):
+            if ln["move"] == best:
+                sc = ln["score"]
+                info.update(depth=node["depth"], pv=ln["pv"], score=(
+                    {"type": "mate", "value": (30000 - abs(sc)) * (1 if sc > 0 else -1)} if abs(sc) >= 29000
+                    else {"type": "cp", "value": sc}))
     return {"bestmove": best, "info": info}
 
 

@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "bitboard.h"
+#include "book.h"
 #include "evaluate.h"
 #include "movegen.h"
 #include "nnue.h"
@@ -40,6 +41,7 @@ struct Game {
 };
 
 int multiPV = 1;  // option UCI MultiPV (lignes d'analyse)
+bool ownBook = false;  // option UCI OwnBook : jouer les coups du livre (BookFile) quand la position y est
 
 bool is_telo() { return Rules::variant == Variant::Telo; }
 
@@ -373,7 +375,9 @@ void loop(int argc, char* argv[]) {
                       << "option name Quantized type check default true\n"
                       << "option name MultiPV type spin default 1 min 1 max 8\n"
                       << "option name Variant type combo default tsivy var tsivy var dimy var telo\n"
-                      << "option name Vela type combo default none var none var white var black\n";
+                      << "option name Vela type combo default none var none var white var black\n"
+                      << "option name OwnBook type check default false\n"
+                      << "option name BookFile type string default <empty>\n";
             for (const auto& p : Search::tune_params())
                 std::cout << "option name " << p.name << " type spin default " << p.def << " min " << p.min
                           << " max " << p.max << "\n";
@@ -392,6 +396,13 @@ void loop(int argc, char* argv[]) {
             is >> value;
             if (Search::set_tune_param(name, std::atoi(value.c_str()))) {
             } else if (name == "Hash") TT.resize(std::stoul(value));
+            else if (name == "OwnBook") ownBook = value == "true";
+            else if (name == "BookFile") {
+                if (value != "<empty>") {
+                    size_t n = Book::load(value);
+                    std::cout << "info string livre " << value << " : " << n << " positions" << std::endl;
+                }
+            }
             else if (name == "MultiPV") multiPV = std::clamp(std::stoi(value), 1, 8);
             else if (name == "MandatoryContinuation") Rules::mandatoryContinuation = value == "true";
             else if (name == "NoCaptureLimit") Rules::noCaptureLimit = std::stoi(value);
@@ -430,6 +441,15 @@ void loop(int argc, char* argv[]) {
             join();
             SearchLimits limits = parse_limits(is);
             limits.multiPV = multiPV;
+            // Livre d'ouvertures : coup immédiat, sans recherche (pas en analyse : MultiPV ou infinite).
+            if (ownBook && multiPV == 1 && !limits.infinite) {
+                Move bm = Book::probe(game.pos);
+                if (bm != MOVE_NONE) {
+                    std::string s = move_to_string(game.pos, bm);
+                    std::cout << "info string book " << s << "\nbestmove " << s << std::endl;
+                    continue;
+                }
+            }
             Search::stopSignal = false;
             Game snapshot = game;
             searchThread = std::thread([snapshot, limits]() {
