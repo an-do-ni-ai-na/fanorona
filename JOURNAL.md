@@ -9,6 +9,28 @@ fanorona-dev, i7-6700T, 1 thread), justesse par `make test`, `perft` et `tools/n
 
 ---
 
+## 2026-10-06
+
+### Recherche — réglage SPSA des 12 paramètres : rejeté par SPRT, défauts conservés · `0cd2a3d`
+- 12 constantes de la recherche exposées en options UCI (`Search::tune_params`, défauts d'origine, bench
+  inchangé 572736) ; `tools/spsa.py` (SPSA façon fishtest, paires theta+/theta− sur 1148 ouvertures équilibrées de
+  la base, 50 ms par coup, c1 + c3 [+ fanorona-dev]).
+- Passe 1 (c = 5 % de l'intervalle, r_end 0,004) : arrêtée à 8024 paires, paramètres quasi immobiles (1 à 3 %) :
+  pas trop petit face à ~87 % de nulles. Passe 2 depuis ces valeurs (c = 10 %, r_end 0,01, pas ~5x),
+  12 000 paires en 4 h 30 (41 à 46 paires/min ; theta+ 12003,5 – theta− 11996,5, aucun signal net). Valeurs
+  finales : QsDeltaPiece 126, QsDeltaBase 121, RfpDepth 5, RfpMargin 122, NmpBase 3, FutDepth 3, FutMargin 116,
+  LmpBase 3, LmrDiv 248, LmrHistory 5079, AspDelta 29, HistCap 337.
+- SPRT réglé contre défaut (100 ms, [0, 5] Elo, par paires) : **H0 acceptée** après 253 parties (W82 D84 L87,
+  paires 0-9-113-2-0, LLR −2,96). Les paires sont presque toutes 1–1 (ouvertures aléatoires où les Blancs
+  gagnent des deux côtés) : les 9 paires perdues contre 2 gagnées suffisent à conclure. Le réglage dérive
+  dans le bruit et dégrade un peu le jeu : **défauts conservés**.
+- Leçons : à 87 % de nulles, le gradient SPSA par paire est presque nul ; il faudrait des ouvertures plus
+  déséquilibrées (plus de parties décisives), moins de paramètres à la fois (LMR et élagages séparément) et
+  bien plus de paires. Les valeurs d'origine sont manifestement déjà proches d'un optimum local.
+- Thermique : régulateur temporaire sur pve2 (cpulimit de la VM 3180 ajusté toutes les 30 s, cible ≤ 75 °C) :
+  limite moyenne ~1,5 cœur, ~30 % du temps au-dessus de 75 °C (pics 80–82 °C) ; pve2 ne tient pas plus de
+  ~1,3 cœur sous 75 °C tant que son refroidissement n'est pas révisé. Retour à cpulimit 1.2.
+
 ## 2026-10-05
 
 ### GUI — score pratique de chaque coup de la base d'ouvertures · `d9bac45`
