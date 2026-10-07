@@ -11,6 +11,19 @@ fanorona-dev, i7-6700T, 1 thread), justesse par `make test`, `perft` et `tools/n
 
 ## 2026-10-07
 
+### NNUE — cycle gen12 (étiquettes à profondeur 8) : pas de gain · `{COMMIT}`
+- gen12 : 40 M positions à profondeur 8 (au lieu de 6), professeur net_v9 quantifié, c1 + c3 en 3 h 20
+  (~3200 pos/s). Entraînements GPU (192 neurones) : n12a (gen8 à gen12, 195 M) échoue en mémoire CUDA (8 Go) ;
+  n12b (gen11 + gen12, 80 M, 30 min) ; n12c (gen9 à gen12, 131 M, 57 min).
+- n12b : 49,6 % à profondeur 7 ; SPRT [0, 5] arrêté à 8000 parties sans conclusion (W2706 D2654 L2640,
+  ~+3 Elo). n12c : 51,2 % à profondeur 7 ; SPRT H0 en 5482 parties (W1850 D1810 L1822, ~+2 Elo).
+- Bilan : après le plafond de gen11 (profondeur 6), des étiquettes plus profondes sur données propres
+  n'apportent au mieux que 2-3 Elo : l'architecture 2×45 → 192 → 16 → 32 semble saturée pour ce jeu à 100 ms.
+  net_v9 reste par défaut. Pistes : tables de finales (valeurs exactes), architecture plus riche (entrées).
+- Exploitation : la chaîne a lancé un match avec un réseau inexistant après l'échec de n12a (32,9 %, sans
+  valeur) : vérifier la présence du .nnue avant les tests. Disque de fanorona-dev plein (97 %) : copies
+  identiques supprimées, vieux journaux /var/log/fanorona compressés, disque passé de 40 à 80 Go (VM 3180).
+
 ### Apprendre — chapitre « Les ouvertures » (leçons tirées de la base) · `df72dd9`
 - Nouveau type d'objectif `opening` (lessons.json : `line` = coups imposés depuis la position initiale, `goal` =
   {max coups blancs, tol cp}) : chaque coup des Blancs est comparé à la base (`/api/book`), accepté à moins de
