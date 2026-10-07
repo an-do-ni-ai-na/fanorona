@@ -487,8 +487,32 @@ def outcome_of(r):
     return "win" if (sc == "1-0") == (r["color"] == "W") else "loss"
 
 
+def final_fen(r):
+    """Position finale d'une partie enregistrée (miniatures de l'historique), ou None si le moteur échoue."""
+    try:
+        return get_state({"game": r["game"], "vela": r.get("vela") or None, "fen": r.get("fen") or None,
+                          "variant": r.get("variant"), "moves": r["moves"]})["fen"]
+    except (EngineError, OSError, ValueError):
+        return None
+
+
+def backfill_final_fen():
+    """Parties enregistrées avant l'ajout de final_fen : calculée une fois au démarrage (fil d'arrière-plan)."""
+    with db() as con:
+        rows = [dict(r) for r in con.execute("SELECT id, record FROM games WHERE json_extract(record, '$.final_fen') IS NULL")]
+    for row in rows:
+        rec = json.loads(row["record"])
+        fen = final_fen(rec)
+        if fen:
+            with db() as con:
+                con.execute("UPDATE games SET record = json_set(record, '$.final_fen', ?) WHERE id = ?", (fen, row["id"]))
+
+
 def save_game(rec):
     r = clean_record(rec)
+    fen = final_fen(r)
+    if fen:
+        r["final_fen"] = fen
     pid = rec.get("profile_id")
     pid = int(pid) if isinstance(pid, int) or (isinstance(pid, str) and pid.isdigit()) else None
     with db() as con:
@@ -563,7 +587,7 @@ def list_games(q):
     limit = max(1, min(int(q.get("limit", ["30"])[0]), 200))
     offset = max(0, int(q.get("offset", ["0"])[0]))
     sql = ("SELECT id, created, game, mode, level, color, result, outcome, plies, white, black, analysed,"
-           " json_extract(record, '$.result') AS res, json_extract(record, '$.vela') AS vela,"
+           " json_extract(record, '$.result') AS res, json_extract(record, '$.vela') AS vela, json_extract(record, '$.final_fen') AS final_fen,"
            " json_extract(record, '$.rating.delta') AS elo_delta, json_extract(record, '$.rating.engine_elo') AS engine_elo FROM games"
            + (" WHERE " + " AND ".join(where) if where else "") + " ORDER BY created DESC LIMIT ? OFFSET ?")
     with db() as con:
@@ -1014,6 +1038,7 @@ def main():
     search_slots = threading.BoundedSemaphore(args.max_searches)
     init_db()
     threading.Thread(target=analysis_janitor, daemon=True).start()
+    threading.Thread(target=backfill_final_fen, daemon=True).start()
     print(f"Fanorona GUI sur http://{args.host}:{args.port}/ (moteur {args.engine})", flush=True)
     ThreadingHTTPServer((args.host, args.port), Handler).serve_forever()
 

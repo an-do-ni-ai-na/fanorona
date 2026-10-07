@@ -90,6 +90,16 @@ masqués, plateau sur toute la hauteur, colonne étroite à droite (pendules, jo
 la consigne en puzzles / tutoriel / révision) ; le portrait rend la navigation.
 Texte secondaire `--muted` relevé (contraste ≥ 4,5:1 sur Papier), corps de texte 15 px, boutons ≥ 40 px de haut.
 
+## Miniatures et listes
+
+Miniature d'une position (`miniBoard(fen)`, SVG sans texture) : fond `--b-2`, lignes `--b-line`, pièces ivoire et
+ébène ; elle suit le plateau choisi et le filtre Veille. Accueil : carte « Reprendre la partie » avec la miniature de
+la position en cours ; dernières parties en une ligne (résultat, niveau, date courte sans l'année). Parties : chaque
+ligne est cliquable en entier (clavier : Entrée), miniature de la position finale (calculée par le serveur à
+l'enregistrement, `final_fen`), suppression en icône discrète ; plus de bouton d'accent répété par ligne (l'accent
+reste réservé à l'action principale). Badges de résultat : victoire en accent plein, défaite cerclée rouge, nulle
+cerclée neutre. Tableaux larges : défilement horizontal sur mobile plutôt que retour à la ligne.
+
 ## Formes et espacements
 
 Rayons 10 px (cartes) et 6 px (contrôles) ; bordures 1 px plutôt que des ombres marquées ; ombres légères
