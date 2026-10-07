@@ -212,11 +212,26 @@ details.panel[open] > summary { margin-bottom: 10px; }
 .btn { min-height: 40px; }
 
 /* ---------- Disposition principale ---------- */
-.round { display: grid; grid-template-columns: minmax(220px, 280px) minmax(0, 1fr) minmax(260px, 320px);
-  grid-template-areas: "side board table"; gap: 20px; padding: 8px 20px 32px; max-width: 1500px; margin: 0 auto; align-items: start; }
+.round { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 340px);
+  grid-template-areas: "board table" "side side"; gap: 16px 20px; padding: 12px 20px 32px; max-width: 1680px; margin: 0 auto; align-items: start; }
 .side { grid-area: side; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
 .board-col { grid-area: board; display: flex; gap: 8px; min-width: 0; justify-content: center; }
-.table { grid-area: table; display: flex; flex-direction: column; min-width: 0; align-self: center; }
+.table { grid-area: table; display: flex; flex-direction: column; min-width: 0; align-self: start; }
+/* Ordinateur : le plateau prend toute la largeur à gauche (il était bridé par deux colonnes latérales) ; les outils
+   (partie, analyse en continu, ouvertures, moteur) forment un bandeau de cartes pleine largeur sous le plateau,
+   l'analyse d'après partie sur toute la largeur ; la colonne de droite (joueurs, coups, actions) a exactement la
+   hauteur du plateau : la liste des coups remplit l'espace (hauteur intrinsèque nulle, elle ne pousse pas la ligne).
+   Tutoriel, puzzles, révision : la consigne occupe la colonne de droite, la liste des coups est masquée. */
+@media (min-width: 801px) {
+  .side { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); align-items: start; }
+  #analysisBox { grid-column: 1 / -1; }
+  .table { align-self: stretch; }
+  .moves-box { flex: 1 1 0; min-height: 150px; position: relative; }
+  .tview { position: absolute; inset: 0; height: auto; }
+  body.learning .round, body.puzzle .round, body.retro .round { grid-template-areas: "board side"; }
+  body.learning .side, body.puzzle .side, body.retro .side { display: flex; flex-direction: column; }
+  body.learning .table, body.puzzle .table, body.retro .table { display: none; }
+}
 .box { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); box-shadow: var(--shadow); }
 
 .meta { padding: 16px 18px; display: flex; flex-direction: column; gap: 12px; }
@@ -375,7 +390,7 @@ svg#board { width: 100%; height: auto; display: block; user-select: none; touch-
 .ruser .mat b { color: var(--accent); }
 .ruser.turn { box-shadow: inset 3px 0 0 var(--accent); }
 .pdot { width: 13px; height: 13px; border-radius: 50%; flex: none; border: 1px solid rgba(80, 60, 30, .5); background: #f4efe4; }
-.pdot.B { background: #221d19; border-color: #000; }
+.pdot.B { background: #221d19; border-color: var(--muted); }  /* anneau discret : visible aussi sur fond sombre */
 .ruser.top { border-radius: var(--r) var(--r) 0 0; } .ruser.bottom { border-radius: 0 0 var(--r) var(--r); }
 .moves-box { background: var(--surface); border-left: 1px solid var(--border); border-right: 1px solid var(--border); }
 .tview { height: 290px; overflow-y: auto; display: grid; grid-template-columns: 40px 1fr 1fr; align-content: start; font: 500 13px/1 var(--font-mono); }
@@ -492,7 +507,7 @@ dialog::backdrop { background: rgba(10, 8, 6, .55); backdrop-filter: blur(2px); 
 
 /* ---------- Adaptatif ---------- */
 @media (max-width: 1100px) {
-  .round { grid-template-columns: minmax(0, 1fr) minmax(250px, 300px); grid-template-areas: "board table" "side table"; }
+  .round { grid-template-columns: minmax(0, 1fr) minmax(260px, 300px); }
 }
 @media (max-width: 800px) {
   .topbar { height: 54px; padding: 0 12px; gap: 10px; } .brand { font-size: 21px; }

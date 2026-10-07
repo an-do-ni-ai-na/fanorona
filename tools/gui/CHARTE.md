@@ -78,8 +78,13 @@ y compris en Veille où le filtre assombrit tout le plateau (une marque foncée 
 
 En-tête collant : marque, onglets (l'actif est souligné par l'accent), puce de profil ouvrant un menu (profil,
 thème, plateau, langue, veille, sons). Sur mobile (< 800 px), les onglets passent dans une barre fixe en bas,
-avec icônes. Pages : Accueil (cartes), Jouer (plateau en 3 colonnes), Puzzles et Apprendre (plateau + panneau à
-gauche, sous le plateau sur mobile), Parties (historique). Le joueur au trait est surligné (fond accent léger).
+avec icônes. Pages : Accueil (cartes), Jouer, Puzzles et Apprendre, Parties (historique).
+Jouer, sur ordinateur (> 800 px) : **le plateau d'abord** — il prend toute la largeur à gauche (≈ 1000 px en
+1440 × 900, contre 740 avec trois colonnes) ; à droite une colonne de 300 à 340 px (joueurs, pendules, coups,
+navigation, actions) qui a exactement la hauteur du plateau (la liste des coups remplit l'espace) ; les outils
+(carte de partie, analyse en continu, ouvertures, moteur) forment un bandeau de cartes pleine largeur sous le
+plateau, l'analyse d'après partie sur toute la largeur. Puzzles, Apprendre et révision : même plateau, la consigne
+dans la colonne de droite (la liste des coups, inutile ici, est masquée). Sur mobile, consigne sous le plateau. Le joueur au trait est surligné (fond accent léger).
 Téléphone en paysage (hauteur ≤ 520 px, PWA ou navigateur) : sur les pages à plateau, en-tête et barre d onglets
 masqués, plateau sur toute la hauteur, colonne étroite à droite (pendules, joueurs, coups, contrôles en icônes, ou
 la consigne en puzzles / tutoriel / révision) ; le portrait rend la navigation.
