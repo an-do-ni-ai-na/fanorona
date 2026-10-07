@@ -11,7 +11,7 @@ fanorona-dev, i7-6700T, 1 thread), justesse par `make test`, `perft` et `tools/n
 
 ## 2026-10-07
 
-### Apprendre — chapitre « Les ouvertures » (leçons tirées de la base) · `{COMMIT}`
+### Apprendre — chapitre « Les ouvertures » (leçons tirées de la base) · `df72dd9`
 - Nouveau type d'objectif `opening` (lessons.json : `line` = coups imposés depuis la position initiale, `goal` =
   {max coups blancs, tol cp}) : chaque coup des Blancs est comparé à la base (`/api/book`), accepté à moins de
   `tol` du meilleur ; les Noirs répondent par le meilleur coup de la base. Échec : évaluation et score pratique du
