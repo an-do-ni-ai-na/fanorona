@@ -94,4 +94,9 @@ Texte secondaire `--muted` relevé (contraste ≥ 4,5:1 sur Papier), corps de te
 
 Rayons 10 px (cartes) et 6 px (contrôles) ; bordures 1 px plutôt que des ombres marquées ; ombres légères
 uniquement pour la profondeur (plateau, menus). Grille de 4 px. Focus clavier visible (contour accent 2 px).
-Transitions courtes (0,2 s), aucune animation décorative.
+Transitions courtes (0,2 s), aucune animation décorative. Retours de jeu (2026-10-08) : les pièces glissent (0,22 s), une pièce capturée
+rétrécit en s'estompant (0,25 s) ; pendant la réflexion du moteur, le point du joueur au trait pulse en plus de la
+barre de progression ; en fin de partie, une carte posée sur le plateau (panneau montant du bas sur téléphone)
+donne le résultat du point de vue du joueur (« Victoire ! » en accent, « Défaite », « Partie nulle ») et trois
+actions : Revanche (principale), Analyser, Voir le plateau. Vibration courte (capture, fin) sur appareil tactile,
+liée au réglage des sons.

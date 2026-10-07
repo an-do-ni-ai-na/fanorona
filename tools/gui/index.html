@@ -361,6 +361,30 @@ svg#board { width: 100%; height: auto; display: block; user-select: none; touch-
 .piece { transition: transform .22s cubic-bezier(.2, .7, .3, 1), opacity .25s ease; pointer-events: none; }
 .piece.drag { transition: none; filter: drop-shadow(0 8px 8px var(--hl-drag)); }
 .piece.gone { opacity: 0; }
+/* Pièce capturée : rétrécit en s'estompant (le g porte la translation, on met à l'échelle ses enfants). */
+.piece > * { transition: transform .25s ease; transform-box: fill-box; transform-origin: center; }
+.piece.gone > * { transform: scale(.55); }
+/* Le moteur réfléchit : le point du joueur au trait pulse (en plus de la barre de progression). */
+body.thinking .ruser.turn .pdot { animation: pulse 1s ease-in-out infinite; }
+/* Carte de fin de partie, posée sur le plateau : résultat du point de vue du joueur, actions directes. */
+.endcard { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 5;
+  background: rgba(20, 14, 8, .30); border-radius: var(--r); animation: endIn .22s ease-out; }
+.endcard .ecard { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); box-shadow: var(--shadow);
+  padding: 22px 26px 18px; text-align: center; width: min(400px, 90%); }
+.endcard .score { font: 600 13px var(--font-mono); color: var(--muted); letter-spacing: .08em; }
+.endcard h2 { margin: 6px 0 4px; font: 600 28px var(--font-brand); color: var(--strong); text-align: center; }
+.endcard.win h2 { color: var(--accent); }
+.endcard p { margin: 0 0 16px; color: var(--muted); font-size: 13.5px; }
+.endcard .row { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-top: 18px; }
+.endcard .row .btn { flex: 1 1 auto; white-space: nowrap; padding-left: 14px; padding-right: 14px; }
+@keyframes endIn { from { opacity: 0; } to { opacity: 1; } }
+/* Téléphone : le plateau est trop petit pour porter la carte, elle remonte du bas de l'écran (au-dessus des onglets). */
+@media (max-width: 800px) {
+  .endcard { position: fixed; inset: 0; z-index: 40; border-radius: 0; align-items: flex-end;
+    padding: 12px 12px calc(76px + env(safe-area-inset-bottom)); }
+  .endcard .ecard { width: 100%; max-width: 440px; margin: 0 auto; padding: 18px 16px 14px; }
+  .endcard h2 { font-size: 24px; } .endcard p { margin-bottom: 12px; }
+}
 .piece .shadow { fill: var(--hl-shadow); }
 .piece .rim-W { fill: none; stroke: rgba(80, 60, 30, .55); stroke-width: 1.6; }
 .piece .rim-B { fill: none; stroke: rgba(0, 0, 0, .8); stroke-width: 1.6; }
@@ -718,6 +742,7 @@ dialog::backdrop { background: rgba(10, 8, 6, .55); backdrop-filter: blur(2px); 
       <div class="overlay top hidden" id="awChoice"><button class="A" id="chooseA" data-i18n="approach">Approche</button><button class="W" id="chooseW" data-i18n="withdrawal">Retrait</button></div>
       <div class="overlay bottom hidden" id="stopBox"><button class="stop" id="stopChain" data-i18n="stop_capture">Arrêter la capture</button></div>
       <div class="flash" id="flash"></div>
+      <div class="endcard hidden" id="endCard"></div>
     </div>
     <button class="fs-exit" id="fsExit" title="Quitter le plein écran (Échap)" data-i18n-title="exit_fullscreen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></svg></button>
   </div>
@@ -1438,9 +1463,31 @@ function finish(status, reason) {
   }
   epoch++; busy = false; thinking(false);
   chosen = null; pendingAW = null; inputView = null;
+  game.justEnded = true;  // carte de fin de partie (pas pour une partie rouverte ou importée)
   sound("end");
   save();
   archiveGame();
+}
+function renderEndCard() {
+  const box = $("endCard");
+  const show = over() && live() && game.justEnded && !game.endDismissed && !learn && !puzzle && !retro;
+  box.classList.toggle("hidden", !show);
+  if (!show) { box.dataset.html = ""; return; }
+  const r = game.result, me = cfg.mode === "computer" ? cfg.color : null;
+  const won = me && ((r.score === "1-0" && me === "W") || (r.score === "0-1" && me === "B"));
+  const kind = r.score === "½-½" ? "draw" : !me ? "" : won ? "win" : "loss";
+  const title = kind === "draw" ? t("end_draw") : kind === "win" ? t("end_win") : kind === "loss" ? t("end_loss") : resText(r);
+  const n = nextGame();
+  const html = `<div class="ecard"><div class="score">${r.score}</div><h2>${title}</h2><p>${resWhy(r)}</p><div class="row">` +
+    `<button class="btn primary" id="eRematch" title="${n.title}">${n.label}</button>` +
+    `<button class="btn" id="eAnalyse" ${analysis && (analysis.running || analysis.done) ? "disabled" : ""}>${t("analyse_btn")}</button>` +
+    `<button class="btn" id="eView">${t("end_view")}</button></div></div>`;
+  box.className = "endcard " + kind;
+  if (box.dataset.html === html) return;
+  box.innerHTML = html; box.dataset.html = html;
+  $("eRematch").onclick = () => nextGame().go();
+  $("eAnalyse").onclick = () => { game.endDismissed = true; runAnalysis(); render(); };
+  $("eView").onclick = () => { game.endDismissed = true; render(); };
 }
 
 // =====================================================================================================
@@ -1482,6 +1529,9 @@ function renderClocks() {
 let actx = null;
 function sound(kind) {
   if (!cfg.sound) return;
+  // Vibration courte sur appareil tactile (même réglage que les sons) : capture, fin de partie.
+  const vib = { capture: 18, end: [40, 60, 40] }[kind];
+  if (vib && navigator.vibrate && matchMedia("(pointer: coarse)").matches) { try { navigator.vibrate(vib); } catch (e) { /* refusé */ } }
   try {
     actx = actx || new (window.AudioContext || window.webkitAudioContext)();
     const t = actx.currentTime;
@@ -1757,6 +1807,7 @@ async function runAnalysis() {
 let thinkTimer = null;
 function thinking(on) {
   clearInterval(thinkTimer);
+  document.body.classList.toggle("thinking", !!on);
   const bar = $("thinkBar");
   bar.style.width = "0";
   if (!on) return;
@@ -1771,7 +1822,7 @@ function flash(msg) {
 }
 
 function render() {
-  renderBoard(); renderUsers(); renderClocks(); renderMoves(); renderActions(); renderMeta(); renderEngine(); renderGauge(); renderAnalysis();
+  renderBoard(); renderUsers(); renderClocks(); renderMoves(); renderActions(); renderMeta(); renderEngine(); renderGauge(); renderAnalysis(); renderEndCard();
   renderLearn(); renderRetro(); renderPuzzle(); renderCont(); syncCont(); syncBook(); renderBook();
   $("showEval").checked = cfg.showEval;
 }
