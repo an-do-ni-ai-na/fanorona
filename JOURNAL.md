@@ -11,7 +11,7 @@ fanorona-dev, i7-6700T, 1 thread), justesse par `make test`, `perft` et `tools/n
 
 ## 2026-10-07
 
-### NNUE — cycle gen12 (étiquettes à profondeur 8) : pas de gain · `{COMMIT}`
+### NNUE — cycle gen12 (étiquettes à profondeur 8) : pas de gain · `55009ba`
 - gen12 : 40 M positions à profondeur 8 (au lieu de 6), professeur net_v9 quantifié, c1 + c3 en 3 h 20
   (~3200 pos/s). Entraînements GPU (192 neurones) : n12a (gen8 à gen12, 195 M) échoue en mémoire CUDA (8 Go) ;
   n12b (gen11 + gen12, 80 M, 30 min) ; n12c (gen9 à gen12, 131 M, 57 min).
