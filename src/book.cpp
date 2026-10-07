@@ -12,12 +12,7 @@ namespace fanorona::Book {
 
 namespace {
 
-struct Entry {
-    std::vector<Move> moves;
-    std::vector<int> weights;
-};
-
-std::unordered_map<Key, Entry> table;
+std::unordered_map<std::string, std::string> table;  // suite de coups -> "<coup> <poids> ..."
 std::mt19937_64 rng{std::random_device{}()};
 
 bool rules_ok() {
@@ -36,38 +31,30 @@ size_t load(const std::string& path) {
         if (line.empty() || line[0] == '#') continue;
         auto tab = line.find('\t');
         if (tab == std::string::npos) continue;
-        Position pos;
-        pos.set(start_fen());
-        std::istringstream seq(line.substr(0, tab)), mv(line.substr(tab + 1));
-        std::string tok;
-        bool ok = true;
-        while (ok && seq >> tok) {
-            if (tok == "-") break;
-            Move m = parse_move(pos, tok);
-            if (m == MOVE_NONE) ok = false;
-            else pos.do_move(m);
-        }
-        if (!ok) continue;
-        Entry e;
-        int w;
-        while (mv >> tok >> w) {
-            Move m = parse_move(pos, tok);
-            if (m != MOVE_NONE && w > 0) e.moves.push_back(m), e.weights.push_back(w);
-        }
-        if (!e.moves.empty()) table[pos.key] = std::move(e);
+        std::string seq = line.substr(0, tab);
+        table[seq == "-" ? std::string() : seq] = line.substr(tab + 1);
     }
     return table.size();
 }
 
 size_t size() { return table.size(); }
 
-Move probe(const Position& pos) {
+Move probe(const Position& pos, const std::string& line) {
     if (table.empty() || !rules_ok()) return MOVE_NONE;
-    auto it = table.find(pos.key);
+    auto it = table.find(line);
     if (it == table.end()) return MOVE_NONE;
-    const Entry& e = it->second;
-    std::discrete_distribution<size_t> d(e.weights.begin(), e.weights.end());
-    return e.moves[d(rng)];
+    std::istringstream is(it->second);
+    std::vector<Move> moves;
+    std::vector<int> weights;
+    std::string tok;
+    int w;
+    while (is >> tok >> w) {
+        Move m = parse_move(pos, tok);
+        if (m != MOVE_NONE && w > 0) moves.push_back(m), weights.push_back(w);
+    }
+    if (moves.empty()) return MOVE_NONE;
+    std::discrete_distribution<size_t> d(weights.begin(), weights.end());
+    return moves[d(rng)];
 }
 
 }  // namespace fanorona::Book

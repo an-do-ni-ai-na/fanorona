@@ -23,6 +23,11 @@ fanorona-dev, i7-6700T, 1 thread), justesse par `make test`, `perft` et `tools/n
   400 parties (W80 D320 L0) contre 68 % pour le v1 : le v1, sans variété, rejouait les mêmes parties gagnantes
   contre un adversaire quasi déterministe ; le v2 varie ses ouvertures et bat le v1 en confrontation directe.
 - Déployé : `checkpoints/book.txt` = v2 (`book_v1.txt` gardé) ; book.json 44 Mo (serveur ~370 Mo de mémoire).
+- Correctif de latence : la GUI relance un moteur par coup et le chargement rejouait chaque ligne depuis la
+  position initiale : 4,2 s par coup avec le v2. Chargement désormais paresseux (lignes indexées par suite de
+  coups, décodées à la consultation ; `Game::line` garde les coups canoniques depuis `position startpos`) :
+  0,1 s, coup du livre servi en ~0,11 s. Les transpositions ne sont plus reconnues (le livre est construit par
+  suites de coups, comme book.json). Bench inchangé.
 
 ## 2026-10-06
 

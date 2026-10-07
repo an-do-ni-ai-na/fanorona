@@ -29,10 +29,15 @@ struct Game {
     Position pos;
     std::vector<Key> history;  // clés depuis le début de la partie (dernière = position courante)
     Telo::State telo;          // position si la variante est le Fanoron-Telo (pos inutilisée)
+    // Coups joués depuis la position initiale (notation canonique), pour le livre ; vide si départ d'un FEN.
+    std::string line;
+    bool fromStart = false;
 
     void reset(const Position& p) {
         pos = p;
         history.assign(1, p.key);
+        line.clear();
+        fromStart = false;
     }
     void play(Move m) {
         pos.do_move(m);
@@ -107,12 +112,14 @@ void cmd_position(Game& g, std::istringstream& is) {
         return;
 
     g.reset(p);
+    g.fromStart = fen.empty();
     while (is >> token) {
         Move m = parse_move(g.pos, token);
         if (m == MOVE_NONE) {
             std::cout << "info string illegal move " << token << std::endl;
             break;
         }
+        if (g.fromStart) g.line += (g.line.empty() ? "" : " ") + move_to_string(g.pos, m);
         g.play(m);
     }
 }
@@ -442,8 +449,8 @@ void loop(int argc, char* argv[]) {
             SearchLimits limits = parse_limits(is);
             limits.multiPV = multiPV;
             // Livre d'ouvertures : coup immédiat, sans recherche (pas en analyse : MultiPV ou infinite).
-            if (ownBook && multiPV == 1 && !limits.infinite) {
-                Move bm = Book::probe(game.pos);
+            if (ownBook && multiPV == 1 && !limits.infinite && game.fromStart) {
+                Move bm = Book::probe(game.pos, game.line);
                 if (bm != MOVE_NONE) {
                     std::string s = move_to_string(game.pos, bm);
                     std::cout << "info string book " << s << "\nbestmove " << s << std::endl;
