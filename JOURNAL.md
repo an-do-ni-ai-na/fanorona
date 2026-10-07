@@ -11,7 +11,7 @@ fanorona-dev, i7-6700T, 1 thread), justesse par `make test`, `perft` et `tools/n
 
 ## 2026-10-07
 
-### Livre d'ouvertures v2 : réponses aux écarts, variété ; +13 Elo contre le livre v1 · `{COMMIT}`
+### Livre d'ouvertures v2 : réponses aux écarts, variété ; +13 Elo contre le livre v1 · `5b4d385`
 - `build_book.py --replies` : après un coup jouable par le livre (à ≤ 60 cp du meilleur), toutes les réponses
   analysées (MultiPV 8) sont approfondies, y compris les mauvaises : le livre sait punir les écarts. 60 000
   positions de plus en 46 min sur c1 + c3 (90 007 analysées, jusqu'à 12 demi-coups ; 88 708 dans book.json).
