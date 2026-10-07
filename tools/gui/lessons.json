@@ -272,6 +272,99 @@
       }
     },
     {
+      "id": "ouvertures",
+      "title": "Les ouvertures",
+      "intro": "Tirées de la base d'ouvertures du moteur : analyse profonde et dizaines de milliers de parties.",
+      "steps": [
+        {
+          "id": "open-1",
+          "title": "Le premier coup",
+          "text": "Au départ, les Blancs n'ont que cinq coups, tous des captures vers le centre (e3). L'analyse profonde les sépare pourtant de plus de deux pions. Trouvez le meilleur.",
+          "hint": "Approchez par la diagonale : f2-e3A.",
+          "line": [],
+          "goal": {
+            "type": "opening",
+            "max": 1,
+            "tol": 30
+          },
+          "success": "f2-e3A est le meilleur coup (+0,4) et rapporte plus de la moitié des points en pratique ; d3-e3W, le pire (−2,0), laisse l'avantage aux Noirs.",
+          "mg": {
+            "title": "Ny dia voalohany",
+            "text": "Amin'ny fiandohana, dia dimy ihany no azon'ny Fotsy atao, samy fakana mankany afovoany (e3) avokoa. Mihoatra ny vato roa anefa ny elanelana eo amin'izy ireo araka ny famakafakana lalina. Tadiavo ny tsara indrindra.",
+            "hint": "Manatona amin'ny tsipika mitsivalana : f2-e3A.",
+            "success": "f2-e3A no dia tsara indrindra (+0,4) ary mahazo mihoatra ny antsasaky ny isa amin'ny lalao ; d3-e3W, ratsy indrindra (−2,0), dia manome tombony ho an'ny Mainty."
+          }
+        },
+        {
+          "id": "open-2",
+          "title": "La ligne principale",
+          "text": "Jouez quatre coups de la ligne principale avec les Blancs. Les Noirs répondent selon l'analyse ; un coup à plus de 0,4 du meilleur est refusé.",
+          "hint": "f2-e3A, puis d3-d4A, d4-d5W et d2-e3A-d4W.",
+          "line": [],
+          "goal": {
+            "type": "opening",
+            "max": 4,
+            "tol": 40
+          },
+          "success": "Vous connaissez la ligne principale : après huit demi-coups, la position reste équilibrée, avec un léger avantage blanc.",
+          "mg": {
+            "title": "Ny lalana fototra",
+            "text": "Milalao dia efatra amin'ny lalana fototra amin'ny Fotsy. Mamaly araka ny famakafakana ny Mainty ; lavina ny dia mihoatra ny 0,4 ambanin'ny tsara indrindra.",
+            "hint": "f2-e3A, avy eo d3-d4A, d4-d5W ary d2-e3A-d4W.",
+            "success": "Fantatrao ny lalana fototra : aorian'ny antsasa-dia valo, mbola mifandanja ny toerana, misy tombony kely ho an'ny Fotsy."
+          }
+        },
+        {
+          "id": "open-3",
+          "title": "Le piège de f1-f2A",
+          "text": "Après f2-e3A, les Noirs ont répondu d5-d4A-c5W. Le coup tranquille f1-f2A semble tenir d'après l'analyse, mais les Blancs ont perdu toutes les parties jouées avec ce coup. Trouvez la bonne réponse.",
+          "hint": "Capturez tout de suite : e2-e3A, puis enchaînez vers d3 par retrait.",
+          "line": [
+            "f2e3A",
+            "d5d4Ac5W"
+          ],
+          "goal": {
+            "type": "opening",
+            "max": 1,
+            "tol": 30
+          },
+          "success": "e2-e3A-d3W reprend l'avantage (+1,2). Un coup « équivalent » selon l'analyse peut cacher une défense impossible à tenir en pratique.",
+          "mg": {
+            "title": "Ny fandrika f1-f2A",
+            "text": "Taorian'ny f2-e3A, namaly d5-d4A-c5W ny Mainty. Toa mahatanty araka ny famakafakana ny dia milamina f1-f2A, nefa resy tamin'ny lalao rehetra nilalaovana azy ny Fotsy. Tadiavo ny valiny marina.",
+            "hint": "Makà avy hatrany : e2-e3A, avy eo tohizo mankany d3 amin'ny fihemorana.",
+            "success": "e2-e3A-d3W no mamerina ny tombony (+1,2). Mety hanafina fiarovana tsy azo tazonina amin'ny lalao ny dia « mitovy » araka ny famakafakana."
+          }
+        },
+        {
+          "id": "open-4",
+          "title": "Une autre ouverture : d3-e3A",
+          "text": "Les Blancs ont ouvert par d3-e3A et les Noirs ont répondu c3-d3A. Jouez deux bons coups dans cette ligne moins connue.",
+          "hint": "f2-e3A-f3W ou f2-f3A-e3A sont les plus solides.",
+          "line": [
+            "d3e3A",
+            "c3d3A"
+          ],
+          "goal": {
+            "type": "opening",
+            "max": 2,
+            "tol": 30
+          },
+          "success": "d3-e3A rapporte presque autant que f2-e3A en pratique : un bon choix pour varier ses ouvertures.",
+          "mg": {
+            "title": "Fanokafana hafa : d3-e3A",
+            "text": "Nanokatra tamin'ny d3-e3A ny Fotsy ary namaly c3-d3A ny Mainty. Milalao dia tsara roa amin'ity lalana tsy dia fantatra ity.",
+            "hint": "f2-e3A-f3W na f2-f3A-e3A no matanjaka indrindra.",
+            "success": "Mitovitovy amin'ny f2-e3A ny isa azon'ny d3-e3A amin'ny lalao : safidy tsara hanovana ny fanokafana."
+          }
+        }
+      ],
+      "mg": {
+        "title": "Ny fanokafana",
+        "intro": "Avy amin'ny tahirin'ny fanokafana an'ny motera : famakafakana lalina sy lalao an'aliny maro."
+      }
+    },
+    {
       "id": "telo",
       "title": "Fanoron-Telo (3 × 3)",
       "intro": "Le petit Fanorona des enfants de l'Imerina : un jeu d'alignement, sans capture.",

@@ -119,6 +119,20 @@ def engine_check(step):
     return (info[-1].split(" pv ")[0] if info else "?"), (best[-1] if best else "?")
 
 
+def opening_check(step):
+    """Leçon d'ouverture : la suite imposée doit être dans la base (tools/gui/book.json) ; coups acceptés."""
+    book = HERE / "book.json"
+    if not book.exists():
+        return False, "book.json absent (non vérifiable)"
+    nodes = json.loads(book.read_text())["nodes"]
+    node = nodes.get(" ".join(step.get("line", [])))
+    if not node or not node["l"]:
+        return False, "suite hors de la base"
+    best = node["l"][0][1]
+    ok = [f"{m} {sc:+d}" for m, sc, *_ in node["l"] if sc >= best - step["goal"].get("tol", 30)]
+    return True, "accepté au 1er coup : " + ", ".join(ok)
+
+
 def main():
     global args
     ap = argparse.ArgumentParser()
@@ -130,7 +144,10 @@ def main():
         for st in ch["steps"]:
             g = st["goal"]
             solo = g["type"] in ("reach", "clear", "telo_win") or (g["type"] == "captures" and "level" not in g)
-            if solo:
+            if g["type"] == "opening":
+                good, status = opening_check(st)
+                ok &= good
+            elif solo:
                 par, line = solve(st)
                 status = f"par {par} : {' '.join(line)}" if par else "IMPOSSIBLE"
                 ok &= par is not None

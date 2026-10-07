@@ -11,6 +11,21 @@ fanorona-dev, i7-6700T, 1 thread), justesse par `make test`, `perft` et `tools/n
 
 ## 2026-10-07
 
+### Apprendre — chapitre « Les ouvertures » (leçons tirées de la base) · `{COMMIT}`
+- Nouveau type d'objectif `opening` (lessons.json : `line` = coups imposés depuis la position initiale, `goal` =
+  {max coups blancs, tol cp}) : chaque coup des Blancs est comparé à la base (`/api/book`), accepté à moins de
+  `tol` du meilleur ; les Noirs répondent par le meilleur coup de la base. Échec : évaluation et score pratique du
+  coup joué et du meilleur. 3 étoiles si tous les coups sont les meilleurs, 2 sinon.
+- 4 leçons : le premier coup (f2-e3A), la ligne principale (4 coups), le piège de f1-f2A (après f2-e3A
+  d5-d4A-c5W : +0,05 en analyse mais 0 % sur 194 parties ; bonne réponse e2-e3A-d3W, +1,21), une autre
+  ouverture (d3-e3A). Le piège a été trouvé en cherchant dans la base les coups blancs à moins de 1,2 pion du
+  meilleur mais à ≤ 25 % de score pratique (≥ 50 parties) : c'est le seul net. Avec 25 000 parties, d5-d4A-c5W
+  n'est plus un piège pour les Noirs (43 %, contre 21,5 % à 10 000 parties : l'exploration plus large montre que
+  les Blancs le punissent mal).
+- `verify_lessons.py` : contrôle des leçons d'ouverture contre book.json (suite imposée dans la base, coups
+  acceptés). Testé dans Chromium (CDP) : refus avec explication, réussite, ligne principale complète, piège.
+  Textes fr/mg (malgache à relire).
+
 ### Livre d'ouvertures v2 : réponses aux écarts, variété ; +13 Elo contre le livre v1 · `5b4d385`
 - `build_book.py --replies` : après un coup jouable par le livre (à ≤ 60 cp du meilleur), toutes les réponses
   analysées (MultiPV 8) sont approfondies, y compris les mauvaises : le livre sait punir les écarts. 60 000
