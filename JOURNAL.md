@@ -9,6 +9,21 @@ fanorona-dev, i7-6700T, 1 thread), justesse par `make test`, `perft` et `tools/n
 
 ---
 
+## 2026-10-07
+
+### Livre d'ouvertures v2 : réponses aux écarts, variété ; +13 Elo contre le livre v1 · `{COMMIT}`
+- `build_book.py --replies` : après un coup jouable par le livre (à ≤ 60 cp du meilleur), toutes les réponses
+  analysées (MultiPV 8) sont approfondies, y compris les mauvaises : le livre sait punir les écarts. 60 000
+  positions de plus en 46 min sur c1 + c3 (90 007 analysées, jusqu'à 12 demi-coups ; 88 708 dans book.json).
+- `book_stats.py` : +15 000 parties (25 000 au total) en 2 h 40 sur le livre élargi.
+- `export_book.py --eval-spread 10` : sans score pratique suffisant, coups à ≤ 10 cp de la meilleure
+  évaluation gardés (poids exp(−écart/10)) ; 16 338 positions à plusieurs coups (28 dans le livre v1).
+- SPRT livre v2 contre livre v1 (100 ms, 1er coup aléatoire) : **H1 en 438 parties**, W23 D408 L7
+  (paires 0-6-189-22-0), ~+13 Elo. Contre le moteur sans livre depuis la position initiale : 60,0 % sur
+  400 parties (W80 D320 L0) contre 68 % pour le v1 : le v1, sans variété, rejouait les mêmes parties gagnantes
+  contre un adversaire quasi déterministe ; le v2 varie ses ouvertures et bat le v1 en confrontation directe.
+- Déployé : `checkpoints/book.txt` = v2 (`book_v1.txt` gardé) ; book.json 44 Mo (serveur ~370 Mo de mémoire).
+
 ## 2026-10-06
 
 ### Interface — Elo des forces « pleine force » recalibré avec le livre · `e4a73c8`

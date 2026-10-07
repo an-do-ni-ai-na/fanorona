@@ -87,9 +87,22 @@ def prepare_host(spec, args):
     return [*ssh, spec, f"{d}/{os.path.basename(args.engine)}"], f"{d}/{os.path.basename(args.net)}"
 
 
-def children(node, args):
+def is_reply_node(node, done, args):
+    """Position atteinte par un coup que le livre peut jouer (à moins de --window du meilleur de la position
+    précédente) : c'est à l'adversaire de jouer, et il peut s'écarter n'importe comment."""
+    if node["ply"] == 0:
+        return False
+    parent = done.get(" ".join(node["moves"][:-1]))
+    if not parent or not parent["lines"]:
+        return False
+    best = max(l["score"] for l in parent["lines"])
+    return any(l["move"] == node["moves"][-1] and l["score"] >= best - args.window for l in parent["lines"])
+
+
+def children(node, args, done=None):
     """Coups à approfondir : tous au premier demi-coup, sinon ceux à moins de --window du meilleur (au plus
-    --max-children), tant que la position n'est pas déjà décidée."""
+    --max-children), tant que la position n'est pas déjà décidée. Avec --replies : après un coup jouable par le
+    livre, toutes les réponses analysées (MultiPV), y compris les mauvaises, pour que le livre sache les punir."""
     lines = sorted(node["lines"], key=lambda l: -l["score"])
     if not lines or node["ply"] >= args.max_ply:
         return []
@@ -97,6 +110,8 @@ def children(node, args):
     if node["ply"] > 0 and abs(best) > args.decided:
         return []
     if node["ply"] == 0:
+        return [l["move"] for l in lines]
+    if args.replies and done is not None and is_reply_node(node, done, args):
         return [l["move"] for l in lines]
     return [l["move"] for l in lines if l["score"] >= best - args.window][:args.max_children]
 
@@ -116,6 +131,8 @@ def main():
     ap.add_argument("--max-children", type=int, default=4)
     ap.add_argument("--decided", type=int, default=400, help="au-delà de cet écart (cp), position non approfondie")
     ap.add_argument("--max-nodes", type=int, default=20000)
+    ap.add_argument("--replies", action="store_true",
+                    help="après un coup jouable par le livre, approfondir toutes les réponses analysées")
     ap.add_argument("--hash", type=int, default=128)
     args = ap.parse_args()
 
@@ -131,7 +148,7 @@ def main():
         queue.append([])
         seen.add("")
     for key in sorted(done, key=lambda k: len(k.split())):  # reprise : enfants pas encore analysés
-        for m in children(done[key], args):
+        for m in children(done[key], args, done):
             child = done[key]["moves"] + [m]
             ck = " ".join(child)
             if ck not in seen:
@@ -166,11 +183,12 @@ def main():
                 lines = w.analyse(moves, depth)
                 node = {"moves": moves, "ply": ply, "depth": depth, "lines": lines}
                 with lock:
+                    done[" ".join(moves)] = node
                     out.write(json.dumps(node) + "\n")
                     out.flush()
                     state["count"] += 1
                     state["busy"] -= 1
-                    for m in children(node, args):
+                    for m in children(node, args, done):
                         child = moves + [m]
                         ck = " ".join(child)
                         if ck not in seen:

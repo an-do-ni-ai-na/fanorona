@@ -9,7 +9,8 @@ Choix des coups, position par position :
 - avec le score pratique (parties de tools/book/book_stats.py) : score lissé (v + n/2 + k/2) / (parties + k),
   qui tire les coups peu joués vers 50 % ; on garde le meilleur et ceux à moins de --spread de lui, pondérés
   par exp((score - meilleur) / --temp) : variété sans tomber dans les pièges ;
-- sans parties (positions profondes) : le meilleur coup de l'analyse seul.
+- sans assez de parties (positions profondes) : les coups à moins de --eval-spread cp du meilleur selon
+  l'analyse, pondérés par exp(-écart / --eval-spread) (variété sans concession).
 Format : <coups depuis la position initiale, ou "-">\\t<coup> <poids> [<coup> <poids> ...]
 """
 import argparse
@@ -25,7 +26,8 @@ def choose(lines, a):
     cand = [l for l in lines if l[1] >= best_eval - a.margin]
     with_stats = [l for l in cand if len(l) > 3 and sum(l[3]) >= a.min_games]
     if not with_stats:
-        return [(lines[0][0], 100)]
+        return [(l[0], max(1, round(100 * math.exp((l[1] - best_eval) / max(a.eval_spread, 1)))))
+                for l in lines if l[1] >= best_eval - a.eval_spread]
     scored = []
     for l in with_stats:
         w, d, lo = l[3]
@@ -44,6 +46,8 @@ def main():
     ap.add_argument("--k", type=float, default=20, help="lissage du score pratique (parties fictives à 50 %%)")
     ap.add_argument("--spread", type=float, default=0.02, help="écart maximal au meilleur score pratique")
     ap.add_argument("--temp", type=float, default=0.01, help="température des poids")
+    ap.add_argument("--eval-spread", type=int, default=10,
+                    help="sans score pratique : coups gardés à moins de cet écart à la meilleure évaluation (cp)")
     a = ap.parse_args()
     b = json.loads(Path(a.book).read_text())
     out, multi = [], 0
@@ -54,7 +58,8 @@ def main():
         multi += len(ch) > 1
         out.append(f"{key or '-'}\t" + " ".join(f"{m} {w}" for m, w in ch))
     head = (f"# Livre d'ouvertures Fanoron-Tsivy ({b.get('net')}, {b.get('date')}, {b.get('games', 0)} parties) : "
-            f"tools/book/export_book.py --margin {a.margin} --min-games {a.min_games} --spread {a.spread}\n")
+            f"tools/book/export_book.py --margin {a.margin} --min-games {a.min_games} --spread {a.spread} "
+            f"--eval-spread {a.eval_spread}\n")
     Path(a.out).write_text(head + "\n".join(sorted(out, key=lambda s: (s.count(" ", 0, s.index("\t")), s))) + "\n")
     print(f"{len(out)} positions ({multi} avec plusieurs coups) -> {a.out}")
 
