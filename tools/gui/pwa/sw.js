@@ -3,7 +3,7 @@
 // est vue au prochain chargement, et l'application s'ouvre encore si le serveur est injoignable.
 // API (/api/…) : jamais mise en cache. Moteur WebAssembly et réseau (/engine/…) : dans la coquille, pour jouer hors
 // ligne (la page bascule sur le moteur local quand le serveur est injoignable). Polices Google : cache d'abord.
-const CACHE = "fanorona-v2";
+const CACHE = "fanorona-v3";
 const SHELL = ["/", "/i18n.json", "/lessons.json", "/puzzles.json", "/manifest.webmanifest",
   "/icons/icon-192.png", "/icons/icon-512.png", "/icons/apple-touch-icon.png", "/icons/favicon-32.png",
   "/engine/worker.js", "/engine/fanorona.js", "/engine/fanorona.wasm", "/engine/fanorona-simd.wasm", "/engine/net.nnue"];
@@ -32,8 +32,10 @@ self.addEventListener("fetch", e => {
   if (url.origin !== location.origin) return;
   // Navigation : toujours la page d'accueil de l'application (paramètres et ancre #g= gérés par la page).
   const key = req.mode === "navigate" ? "/" : url.pathname;
+  // Réponse d'erreur (403 du proxy hors du LAN admin, 502/503 serveur arrêté…) : la copie en cache si elle existe,
+  // sinon la réponse telle quelle.
   e.respondWith(fetch(req).then(res => {
-    if (res.ok) caches.open(CACHE).then(c => c.put(key, res.clone()));
-    return res;
+    if (res.ok) { caches.open(CACHE).then(c => c.put(key, res.clone())); return res; }
+    return caches.match(key).then(hit => hit || res);
   }).catch(() => caches.match(key).then(hit => hit || Response.error())));
 });

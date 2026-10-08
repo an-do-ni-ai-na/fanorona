@@ -1508,6 +1508,13 @@ async function api(path, body, method) {
     setOffline(true);
     return loc(body || {});
   }
+  // Serveur joignable mais refusé ou arrêté (403 du proxy hors du LAN admin, 502/503/504) : comme hors ligne.
+  if ([403, 502, 503, 504].includes(r.status)) {
+    const loc = LOCAL_API[path], cfgLocal = path === "/api/config" && localConfig();
+    if (cfgLocal) { setOffline(true); return cfgLocal; }
+    if (loc) { setOffline(true); return loc(body || {}); }
+    throw new Error(t("offline_unavailable"));
+  }
   setOffline(false);
   if (path === "/api/config" && r.ok) {
     const j = await r.json();
