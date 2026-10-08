@@ -9,7 +9,22 @@ fanorona-dev, i7-6700T, 1 thread), justesse par `make test`, `perft` et `tools/n
 
 ---
 
-## 2026-10-08
+## 2026-10-09
+
+### Tables de finales : mesure de faisabilité — non retenu (le moteur joue déjà les finales sans faute) · `{COMMIT}`
+- `tools/endgame/` : `eg_stats.py` (fréquence des finales dans un journal live de SPRT), `eg_deep.py` (recherche
+  de 3 s, réseau net_v9, sur les positions d'entrée en finale), `eg_report.py` (verdict contre résultat réel).
+- Fréquence (SPRT n12c, 5482 parties à 100 ms) : 39 % des parties atteignent ≤ 4 pièces, 52 % ≤ 5, 70 % ≤ 6, 88 %
+  ≤ 8. Matériel le plus fréquent à l'entrée : 2v2, 1v3 (≤ 4) ; 2v3, 3v2, 1v4 (≤ 5) ; 3v3, 2v4, 1v5, 4v2 (≤ 6).
+- Taille (9 x 5, 4 symétries) : ≤ 5 pièces 19 M positions (4,6 Mo en gain/nulle/perte), ≤ 6 : 272 M (65 Mo),
+  ≤ 7 : 3,1 G (746 Mo) — faisable jusqu'à 6, voire 7.
+- Qualité de jeu (900 positions, 300 par seuil ≤ 4 / ≤ 5 / ≤ 6) : 260 gains forcés (mats jusqu'à 17 coups, trouvés
+  en 3 s) tous convertis à 100 ms, 281 pertes forcées toutes perdues (aucun sauvetage), 238 positions équilibrées
+  toutes nulles (aucune perdue). Seuls 11 avantages non forcés sur 76 finissent nuls (et 13 désavantages sur 45) :
+  au plus ~1 % des positions de finale où une table pourrait changer le résultat, soit moins de ~3 Elo.
+- Conclusion : pas de tables de finales pour la force. Intérêt possible seulement pédagogique (entraîneur de
+  finales exactes). Piège rencontré : fermer stdin juste après « go » = « quit » (la première série de
+  recherches « longues » s'arrêtait tout de suite).
 
 ### GUI — refonte UX et jeu hors ligne · `a1578d4`, `6470fa1`, `0077e1f`, `b150e4a`, `b24285d`, `07478de`
 - Audit (captures ordinateur / téléphone, clair / sombre) puis refonte en phases, identité conservée (CHARTE.md) :
