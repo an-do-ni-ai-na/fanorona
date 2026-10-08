@@ -368,6 +368,10 @@ svg#board { width: 100%; height: auto; display: block; user-select: none; touch-
 .piece { transition: transform .22s cubic-bezier(.2, .7, .3, 1), opacity .25s ease; pointer-events: none; }
 .piece.drag { transition: none; filter: drop-shadow(0 8px 8px var(--hl-drag)); }
 .piece.gone { opacity: 0; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+/* Curseur clavier sur le plateau (visible seulement quand le plateau a le focus clavier) */
+svg#board:focus { outline: none; } svg#board:focus-visible { box-shadow: 0 0 0 3px var(--accent), 0 14px 34px rgba(0, 0, 0, .18); }
+.kbd { fill: none; stroke: var(--accent); stroke-width: 5; stroke-dasharray: 10 7; }
 /* Pièce capturée : rétrécit en s'estompant (le g porte la translation, on met à l'échelle ses enfants). */
 .piece > * { transition: transform .25s ease; transform-box: fill-box; transform-origin: center; }
 .piece.gone > * { transform: scale(.55); }
@@ -496,11 +500,17 @@ dialog::backdrop { background: rgba(10, 8, 6, .55); backdrop-filter: blur(2px); 
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .field select { width: 100%; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r-sm); padding: 8px 9px; }
 .colors { display: flex; justify-content: center; gap: 18px; align-items: center; padding-top: 4px; }
-.colors button { width: 64px; height: 64px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface-2); cursor: pointer; display: flex;
-  align-items: center; justify-content: center; transition: transform .12s, background .12s, border-color .12s; }
+/* Choix du camp (= lancement) collé en bas de la fenêtre : toujours visible, même quand les réglages défilent. */
+.dlg-foot { position: sticky; bottom: 0; background: var(--surface); border-top: 1px solid var(--border); margin: 0 -22px -22px; padding: 10px 22px 16px; z-index: 2; }
+.colors-head { text-align: center; font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); margin-top: 6px; }
+.colors button { width: 84px; height: 84px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface-2); cursor: pointer; display: flex;
+  flex-direction: column; gap: 4px; align-items: center; justify-content: center; transition: transform .12s, background .12s, border-color .12s;
+  color: var(--strong); font-size: 12.5px; font-weight: 500; }
 .colors button:hover { border-color: var(--accent); background: var(--accent-soft); transform: translateY(-2px); }
-.colors button.rand { width: 80px; height: 80px; }
-.colors svg { width: 70%; height: 70%; }
+.colors button.rand { width: 100px; height: 100px; border-color: var(--accent); }
+.colors svg { width: 46px; height: 46px; } .colors .rand svg { width: 56px; height: 56px; }
+#segLevel button { display: flex; flex-direction: column; align-items: center; gap: 1px; line-height: 1.1; }
+#segLevel button small { font-size: 10.5px; opacity: .75; font-variant-numeric: tabular-nums; }
 .start-row { display: flex; justify-content: center; }
 .copyrow { display: flex; gap: 8px; }
 .copyrow input { flex: 1; min-width: 0; font: 12.5px var(--font-mono); background: var(--surface-2); border: 1px solid var(--border);
@@ -753,7 +763,9 @@ dialog::backdrop { background: rgba(10, 8, 6, .55); backdrop-filter: blur(2px); 
   <div class="board-col">
     <div class="gauge" id="gauge" title="Évaluation" data-i18n-title="evaluation"><div class="w" id="gaugeW"></div><div class="tick"></div></div>
     <div class="board-wrap">
-      <svg id="board" viewBox="0 0 920 520" data-dyn="1" aria-label="Plateau de Fanorona" data-i18n-aria="board_label"></svg>
+      <svg id="board" viewBox="0 0 920 520" data-dyn="1" tabindex="0" role="application" aria-label="Plateau de Fanorona" data-i18n-aria="board_label" aria-describedby="boardHelp"></svg>
+      <p class="sr-only" id="boardHelp" data-i18n="board_help">Flèches : déplacer le curseur ; Entrée ou Espace : choisir la pièce puis chaque point d'arrivée ; Échap : annuler.</p>
+      <div class="sr-only" id="liveMsg" aria-live="polite"></div>
       <div class="overlay top hidden" id="awChoice"><button class="A" id="chooseA" data-i18n="approach">Approche</button><button class="W" id="chooseW" data-i18n="withdrawal">Retrait</button></div>
       <div class="overlay bottom hidden" id="stopBox"><button class="stop" id="stopChain" data-i18n="stop_capture">Arrêter la capture</button></div>
       <div class="flash" id="flash"></div>
@@ -810,12 +822,15 @@ dialog::backdrop { background: rgba(10, 8, 6, .55); backdrop-filter: blur(2px); 
       <div class="field" id="fVariant"><label data-i18n="variant">Variante</label>
         <select id="dVariant"><option value="free" data-i18n="variant_free">Standard (arrêt libre)</option><option value="mandatory" data-i18n="variant_mandatory">Continuation obligatoire</option></select></div>
     </div>
+    <div class="dlg-foot">
+    <div class="colors-head" id="colorHead" data-i18n="start_with">Commencer avec</div>
     <div class="colors" id="colorRow">
-      <button data-c="B" title="Jouer les Noirs" data-i18n-title="play_black"><svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="16" fill="#2a2622" stroke="#000" stroke-width="2"/><circle cx="20" cy="20" r="10" fill="none" stroke="#4a443c" stroke-width="2"/></svg></button>
-      <button data-c="R" class="rand" title="Couleur aléatoire" data-i18n-title="play_random"><svg viewBox="0 0 40 40"><path d="M20 4a16 16 0 0 1 0 32z" fill="#2a2622"/><path d="M20 4a16 16 0 0 0 0 32z" fill="#fbf8f1"/><circle cx="20" cy="20" r="16" fill="none" stroke="#8e836f" stroke-width="2"/></svg></button>
-      <button data-c="W" title="Jouer les Blancs" data-i18n-title="play_white"><svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="16" fill="#fbf8f1" stroke="#8e836f" stroke-width="2"/><circle cx="20" cy="20" r="10" fill="none" stroke="#d8cfbe" stroke-width="2"/></svg></button>
+      <button data-c="B" title="Jouer les Noirs" data-i18n-title="play_black"><svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="16" fill="#2a2622" stroke="#000" stroke-width="2"/><circle cx="20" cy="20" r="10" fill="none" stroke="#4a443c" stroke-width="2"/></svg><span data-i18n="side_black">Noirs</span></button>
+      <button data-c="R" class="rand" title="Couleur aléatoire" data-i18n-title="play_random"><svg viewBox="0 0 40 40"><path d="M20 4a16 16 0 0 1 0 32z" fill="#2a2622"/><path d="M20 4a16 16 0 0 0 0 32z" fill="#fbf8f1"/><circle cx="20" cy="20" r="16" fill="none" stroke="#8e836f" stroke-width="2"/></svg><span data-i18n="side_random">Au hasard</span></button>
+      <button data-c="W" title="Jouer les Blancs" data-i18n-title="play_white"><svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="16" fill="#fbf8f1" stroke="#8e836f" stroke-width="2"/><circle cx="20" cy="20" r="10" fill="none" stroke="#d8cfbe" stroke-width="2"/></svg><span data-i18n="side_white">Blancs</span></button>
     </div>
     <div class="start-row hidden" id="startRow"><button class="btn primary" id="startBtn" data-i18n="start_game">Commencer la partie</button></div>
+    </div>
   </div>
 </dialog>
 
@@ -1180,6 +1195,7 @@ function renderBoard() {
       for (const t of nextTargets().keys()) hl(t, "dest", 15, layers.over);
     }
   }
+  if (kbdOn()) hl(kbdSq, "kbd", 46, layers.over);
   $("awChoice").classList.toggle("hidden", !pendingAW);
   $("stopBox").classList.toggle("hidden", !(chosen && chosen.steps.length && !pendingAW && exactMove()));
 }
@@ -1242,20 +1258,18 @@ function squareAt(evt) {
   for (let s = 0; s < W * H; s++) { const [cx, cy] = pos(s), d = (cx - p.x) ** 2 + (cy - p.y) ** 2; if (d < bd) { bd = d; best = s; } }
   return { sq: best, x: p.x, y: p.y };
 }
-svg.addEventListener("pointerdown", e => {
-  if (e.button !== 0) return;
-  if (!live()) { flash(t("flash_back_to_end")); return; }
-  if (!canInput()) return;
-  const { sq } = squareAt(e);
-  if (sq < 0) return;
+// Appui sur un point (souris, toucher ou clavier) : renvoie l'état de « glisser » (null si rien à faire).
+function pressSquare(sq, e) {
+  if (!live()) { flash(t("flash_back_to_end")); return null; }
+  if (!canInput() || sq < 0) return null;
   const board = shownBoard(), p = board[sq];
   let justSelected = false;
-  if (pendingAW) { drag = { from: sq, click: true }; return; }
+  if (pendingAW) return { from: sq, click: true };
   if (teloPlacing()) {
     const str = sqName(sq);
     if (game.legal.includes(str)) commit({ str, from: sq, steps: [] });
     else flash(p ? t("flash_place_free") : t("flash_place_impossible"));
-    return;
+    return null;
   }
   if ((!chosen || chosen.steps.length === 0) && p && p.c === sideAt(game.moves.length)) {
     if (!chosen || chosen.from !== sq) {
@@ -1263,15 +1277,31 @@ svg.addEventListener("pointerdown", e => {
         flash(game.legal.some(m => /[AW]/.test(m)) ? t("flash_must_capture")
           : velaSide() && velaSide() !== sideAt(game.moves.length) && count(liveBoard(), sideAt(game.moves.length)) > VELA_REMAINING
             ? t("flash_vela_leave") : t("flash_cannot_move"));
-        return;
+        return null;
       }
       select(sq); justSelected = true; render();
     }
   }
-  if (chosen && sq === curSquare()) {
-    drag = { from: sq, id: shownBoard()[sq].id, moved: false, justSelected, x0: e.clientX, y0: e.clientY };
-    svg.setPointerCapture(e.pointerId);
-  } else drag = { from: sq, click: true };
+  if (chosen && sq === curSquare())
+    return { from: sq, id: shownBoard()[sq].id, moved: false, justSelected, x0: e ? e.clientX : 0, y0: e ? e.clientY : 0, capture: !!e };
+  return { from: sq, click: true };
+}
+// Relâchement sans glisser (clic, toucher ou Entrée) sur un point.
+function releaseClick(sq, d) {
+  if (pendingAW) { for (const k of ["A", "W"]) if (pendingAW.lines[k].includes(sq)) return chooseKind(k); return; }
+  if (!chosen) return;
+  if (sq === curSquare()) {
+    if (chosen.steps.length === 0 && !d.justSelected) return cancelInput();
+    if (chosen.steps.length > 0 && exactMove()) return commit(exactMove());
+    return;
+  }
+  if (sq >= 0 && tryStep(sq)) return;
+  if (chosen.steps.length === 0) cancelInput();
+}
+svg.addEventListener("pointerdown", e => {
+  if (e.button !== 0) return;
+  drag = pressSquare(squareAt(e).sq, e);
+  if (drag && drag.capture) svg.setPointerCapture(e.pointerId);
 });
 svg.addEventListener("pointermove", e => {
   if (!drag || drag.click) return;
@@ -1291,16 +1321,35 @@ svg.addEventListener("pointerup", e => {
   const g = d.id && pieceEls.get(d.id);
   if (g) g.classList.remove("drag");
   if (d.moved) { if (!(sq >= 0 && tryStep(sq))) render(); return; }
-  // Clic simple
-  if (pendingAW) { for (const k of ["A", "W"]) if (pendingAW.lines[k].includes(sq)) return chooseKind(k); return; }
-  if (!chosen) return;
-  if (sq === curSquare()) {
-    if (chosen.steps.length === 0 && !d.justSelected) return cancelInput();
-    if (chosen.steps.length > 0 && exactMove()) return commit(exactMove());
-    return;
+  releaseClick(sq, d);
+});
+// Clavier : curseur sur les points (flèches, dans le sens de l'écran), Entrée / Espace = clic, Échap = annuler.
+let kbdSq = null;
+const kbdOn = () => document.activeElement === svg && kbdSq !== null;
+svg.addEventListener("focus", () => {
+  if (kbdSq === null || kbdSq >= W * H) {
+    const mine = game.legal.length ? parseMove(game.legal[0]).from : null;
+    kbdSq = mine !== null && !teloPlacing() ? mine : Math.floor(H / 2) * W + Math.floor(W / 2);
   }
-  if (sq >= 0 && tryStep(sq)) return;
-  if (chosen.steps.length === 0) cancelInput();
+  renderBoard();
+});
+svg.addEventListener("blur", () => renderBoard());
+svg.addEventListener("keydown", e => {
+  const dir = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, 1], ArrowDown: [0, -1] }[e.key];
+  if (dir) {
+    e.preventDefault(); e.stopPropagation();
+    const [x, y] = xy(kbdSq ?? 0), f = flipped ? -1 : 1;
+    const nx = Math.max(0, Math.min(W - 1, x + dir[0] * f)), ny = Math.max(0, Math.min(H - 1, y + dir[1] * f));
+    kbdSq = ny * W + nx;
+    renderBoard();
+    const p = shownBoard()[kbdSq];
+    $("liveMsg").textContent = sqName(kbdSq) + (p ? " : " + t(p.c === "W" ? "sr_white_piece" : "sr_black_piece") : "");
+  } else if (e.key === "Enter" || e.key === " ") {
+    e.preventDefault(); e.stopPropagation();
+    if (kbdSq === null) return;
+    const d = pressSquare(kbdSq, null);
+    if (d) releaseClick(kbdSq, d);
+  } else if (e.key === "Escape" && chosen) { e.stopPropagation(); cancelInput(); }
 });
 svg.addEventListener("contextmenu", e => { if (chosen) { e.preventDefault(); cancelInput(); } });
 
@@ -1336,12 +1385,19 @@ function applyServerState(st) {
   if (learn && !learn.solo) learnCheck();
 }
 
+// Coup lu à voix haute : « Blancs : f2, e3 approche ; 2 pièces prises ».
+function announceMove(str, mover, before, after) {
+  const m = parseMove(str), taken = count(before, other(mover)) - count(after, other(mover));
+  const steps = [sqName(m.from), ...m.steps.map(st => sqName(st.to) + (st.kind ? " " + t(st.kind === "A" ? "approach" : "withdrawal").toLowerCase() : ""))];
+  $("liveMsg").textContent = `${colorName(mover)} : ${steps.join(", ")}` + (taken > 0 ? " ; " + t("sr_taken", { n: taken }) : "");
+}
 async function pushMove(str, byEngine) {
   const mover = sideAt(game.moves.length);
   const wasLive = live();
   const before = liveBoard();
   game.moves.push(str);
   positions.push(applyMove(before, str, mover, 100 + game.moves.length - 1));
+  announceMove(str, mover, before, liveBoard());
   if (wasLive) viewPly = game.moves.length;
   if (clock && game.moves.length > 2) clock[mover] += clock.inc;
   clockMark = performance.now();
@@ -1664,7 +1720,7 @@ function renderEngine() {
   $("sNodes").textContent = i && i.nodes != null ? fmtN(i.nodes) : "–";
   $("sNps").textContent = i && i.nps != null ? fmtN(i.nps) : "–";
   $("pv").textContent = !i ? "" : i.candidates ? t("random_pick", { n: i.candidates, l: cfg.level })
-    : i.pv && i.pv.length ? (i.book ? t("book_move") + " " : "") + i.pv.join(" ") : "";
+    : i.pv && i.pv.length ? (i.book ? t("book_move") + " " : "") + i.pv.map(hyphenate).join(" ") : "";
   $("engineState").textContent = busy && engineToMove() ? t("thinking") : "";
 }
 function renderMoves() {
@@ -1675,7 +1731,7 @@ function renderMoves() {
     if (i > n) return `<div class="mv"></div>`;
     const hide = retro && i >= retro.list[retro.k];  // coup d'essai de la révision : pas d'annotation d'origine
     const j = analysis && !hide ? judgment(i) : null, e = analysis && !hide ? evalAt(i) : null;
-    return `<div class="mv${i === viewPly ? " active" : ""}" data-ply="${i}">${game.moves[i - 1]}` +
+    return `<div class="mv${i === viewPly ? " active" : ""}" data-ply="${i}">${hyphenate(game.moves[i - 1])}` +
       (j ? `<span class="g ${j.cls}" title="${j.name}">${j.g}</span>` : "") + (e ? `<span class="ev">${e.label}</span>` : "") + `</div>`;
   };
   // Si les Noirs commencent (vela, puzzle, tutoriel), la première ligne est « 1. … coup noir ».
@@ -2342,7 +2398,7 @@ function renderPuzzle() {
 // Lien de partage : #g=<JSON en base64url> dans l'URL (rien n'est stocké côté serveur).
 // =====================================================================================================
 const GAME_TAG = { tsivy: "Fanoron-Tsivy", dimy: "Fanoron-Dimy", telo: "Fanoron-Telo" };
-const hyphenate = m => m.replace(/([a-i][1-5][AW]?)(?=[a-i][1-5])/g, "$1-");
+function hyphenate(m) { return m.replace(/([a-i][1-5][AW]?)(?=[a-i][1-5])/g, "$1-"); }
 function fgnDate(d = new Date()) { return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, "0")}.${String(d.getDate()).padStart(2, "0")}`; }
 function exportData() {
   const r = game.result;
@@ -3077,7 +3133,8 @@ function openDialog() {
 }
 function syncDialog() {
   for (const b of $("segMode").children) b.classList.toggle("on", b.dataset.v === draft.mode);
-  $("segLevel").innerHTML = levels.map(l => `<button data-v="${l.id}" class="${l.id === draft.level ? "on" : ""}">${l.id}</button>`).join("");
+  $("segLevel").innerHTML = levels.map(l => { const e = draft.game === "tsivy" ? levelElo(l.id) : null;
+    return `<button data-v="${l.id}" class="${l.id === draft.level ? "on" : ""}" title="${levelName(l.id)}">${l.id}${e ? `<small>${e}</small>` : ""}</button>`; }).join("");
   if (draft.strength != null) for (const b of $("segLevel").children) b.classList.remove("on");
   for (const b of $("segLevel").children) b.onclick = () => { draft.level = +b.dataset.v; draft.strength = null; syncDialog(); };
   const le = levelElo(draft.level);
@@ -3099,6 +3156,7 @@ function syncDialog() {
   $("fLevel").classList.toggle("hidden", draft.mode !== "computer");
   $("dClock").value = draft.clock; $("dMovetime").value = String(draft.movetime); $("dNet").value = draft.net; $("dVariant").value = draft.variant;
   $("colorRow").classList.toggle("hidden", draft.mode !== "computer");
+  $("colorHead").classList.toggle("hidden", draft.mode !== "computer");
   $("startRow").classList.toggle("hidden", draft.mode === "computer");
   $("dlgTitle").textContent = t("dlg_" + draft.mode);
   for (const b of $("segGame").children) b.classList.toggle("on", b.dataset.v === draft.game);
@@ -3171,6 +3229,7 @@ $("stopChain").onclick = () => chosen && exactMove() && commit(exactMove());
 $("showEval").onchange = e => { cfg.showEval = e.target.checked; save(); renderGauge(); };
 document.addEventListener("keydown", e => {
   if ($("dlg").open || e.target.tagName === "SELECT" || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (e.target === svg && /^Arrow|^Enter$|^ $/.test(e.key)) return;  // plateau au clavier
   if (e.key === "ArrowLeft") { setView(viewPly - 1); e.preventDefault(); }
   else if (e.key === "ArrowRight") { setView(viewPly + 1); e.preventDefault(); }
   else if (e.key === "Home" || e.key === "ArrowUp") { setView(0); e.preventDefault(); }

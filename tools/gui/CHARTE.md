@@ -100,6 +100,17 @@ l'enregistrement, `final_fen`), suppression en icône discrète ; plus de bouton
 reste réservé à l'action principale). Badges de résultat : victoire en accent plein, défaite cerclée rouge, nulle
 cerclée neutre. Tableaux larges : défilement horizontal sur mobile plutôt que retour à la ligne.
 
+## Notation, fenêtre de partie, accessibilité
+
+Notation des coups avec tirets partout (`f2-e3A`, liste des coups, variante du moteur, analyse, ouvertures) ;
+l'export garde la notation compacte. Fenêtre « Nouvelle partie » : niveaux avec leur Elo, choix du camp en
+pied de fenêtre collant (« Commencer avec » Noirs / Au hasard / Blancs, libellés sous les icônes) : l'action
+principale reste visible quand les réglages défilent. Plateau jouable au clavier : il prend le focus (Tab),
+flèches = curseur (sens de l'écran, plateau retourné compris), Entrée / Espace = choisir la pièce puis chaque
+point d'arrivée, Échap = annuler ; curseur en anneau pointillé accent, contour accent du plateau au focus clavier.
+Hors du plateau, les flèches gardent la navigation dans la partie. Lecteurs d'écran : chaque coup est annoncé
+(« Blancs : d2, e3 approche ; 2 pièces prises »), le curseur annonce le point et la pièce.
+
 ## Formes et espacements
 
 Rayons 10 px (cartes) et 6 px (contrôles) ; bordures 1 px plutôt que des ombres marquées ; ombres légères
