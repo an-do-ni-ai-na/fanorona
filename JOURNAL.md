@@ -11,7 +11,7 @@ fanorona-dev, i7-6700T, 1 thread), justesse par `make test`, `perft` et `tools/n
 
 ## 2026-10-08
 
-### GUI — refonte UX et jeu hors ligne · `a1578d4`, `6470fa1`, `0077e1f`, `b150e4a`, `b24285d`, `{COMMIT}`
+### GUI — refonte UX et jeu hors ligne · `a1578d4`, `6470fa1`, `0077e1f`, `b150e4a`, `b24285d`, `07478de`
 - Audit (captures ordinateur / téléphone, clair / sombre) puis refonte en phases, identité conservée (CHARTE.md) :
   plateau d'abord sur ordinateur (1022 x 578 au lieu de 740 x 420 en 1440 x 900, colonne de droite à la hauteur
   du plateau, outils en bandeau dessous ; consigne à droite en tutoriel / puzzles / révision) ; carte de fin de
