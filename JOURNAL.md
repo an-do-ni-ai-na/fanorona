@@ -11,7 +11,7 @@ fanorona-dev, i7-6700T, 1 thread), justesse par `make test`, `perft` et `tools/n
 
 ## 2026-10-09
 
-### Tables de finales : mesure de faisabilité — non retenu (le moteur joue déjà les finales sans faute) · `{COMMIT}`
+### Tables de finales : mesure de faisabilité — non retenu (le moteur joue déjà les finales sans faute) · `ee26e23`
 - `tools/endgame/` : `eg_stats.py` (fréquence des finales dans un journal live de SPRT), `eg_deep.py` (recherche
   de 3 s, réseau net_v9, sur les positions d'entrée en finale), `eg_report.py` (verdict contre résultat réel).
 - Fréquence (SPRT n12c, 5482 parties à 100 ms) : 39 % des parties atteignent ≤ 4 pièces, 52 % ≤ 5, 70 % ≤ 6, 88 %
