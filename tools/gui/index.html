@@ -318,6 +318,13 @@ body.retro #bookBox, body.puzzle #bookBox, body.learning #bookBox { display: non
 body.retro #metaBox, body.retro #engineBox, body.retro #analysisBox, body.retro #actions { display: none; }
 body.puzzle #metaBox, body.puzzle #engineBox, body.puzzle #analysisBox, body.puzzle #actions { display: none; }
 .prating { display: flex; align-items: baseline; gap: 10px; }
+.pz-themes { flex-wrap: wrap; gap: 5px; }
+.pz-themes button { font-size: 12px; padding: 3px 9px; }
+.pz-recent { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; font-size: 12px; color: var(--muted); }
+.pz-recent span { margin-right: 4px; }
+.pz-dot { width: 12px; height: 12px; border-radius: 50%; border: 0; padding: 0; cursor: pointer; }
+.pz-dot.ok { background: var(--accent); } .pz-dot.ko { background: transparent; box-shadow: inset 0 0 0 2px var(--j-blun); }
+.pz-daily { align-self: flex-start; font-weight: 600; } .pz-daily.done { color: var(--muted); }
 .prating b { font: 600 30px var(--font-brand); color: var(--strong); }
 .prating .delta { font-weight: 600; font-variant-numeric: tabular-nums; }
 .prating .delta.up { color: var(--accent); } .prating .delta.down { color: var(--j-blun); }
@@ -513,6 +520,7 @@ dialog::backdrop { background: rgba(10, 8, 6, .55); backdrop-filter: blur(2px); 
 #segLevel button small { font-size: 10.5px; opacity: .75; font-variant-numeric: tabular-nums; }
 .start-row { display: flex; justify-content: center; }
 .copyrow { display: flex; gap: 8px; }
+.share-img { display: block; width: 100%; height: auto; border-radius: var(--r-sm); border: 1px solid var(--border); background: var(--surface-2); min-height: 120px; }
 .copyrow input { flex: 1; min-width: 0; font: 12.5px var(--font-mono); background: var(--surface-2); border: 1px solid var(--border);
   border-radius: var(--r-sm); padding: 8px 9px; color: var(--strong); }
 #shareDlg textarea { width: 100%; font: 12.5px/1.5 var(--font-mono); background: var(--surface-2); border: 1px solid var(--border);
@@ -852,7 +860,7 @@ dialog::backdrop { background: rgba(10, 8, 6, .55); backdrop-filter: blur(2px); 
 <dialog id="shareDlg">
   <div class="dlg-head"><span data-i18n="share_title">Partager la partie</span><button class="icon-btn" id="shareClose" title="Fermer" data-i18n-title="close">✕</button></div>
   <div class="dlg-body">
-    <div class="seg" id="shareTabs"><button data-v="link" class="on" data-i18n="tab_link">Lien</button><button data-v="fgn" data-i18n="tab_fgn">Notation</button><button data-v="import" data-i18n="tab_import">Importer</button></div>
+    <div class="seg" id="shareTabs"><button data-v="link" class="on" data-i18n="tab_link">Lien</button><button data-v="fgn" data-i18n="tab_fgn">Notation</button><button data-v="image" data-i18n="tab_image">Image</button><button data-v="import" data-i18n="tab_import">Importer</button></div>
     <div class="share-pane" data-v="link">
       <div class="field"><label data-i18n="link_label">Lien vers cette partie</label>
         <div class="copyrow"><input id="shareUrl" readonly><button class="btn" data-copy="shareUrl" data-i18n="copy">Copier</button></div></div>
@@ -865,6 +873,12 @@ dialog::backdrop { background: rgba(10, 8, 6, .55); backdrop-filter: blur(2px); 
       <textarea id="fgnText" readonly rows="10" spellcheck="false"></textarea>
       <div class="row2"><button class="btn" data-copy="fgnText" data-i18n="copy">Copier</button><button class="btn primary" id="fgnDownload" data-i18n="download">Télécharger (.fgn)</button></div>
       <p class="note" data-i18n="fgn_note"></p>
+    </div>
+    <div class="share-pane hidden" data-v="image">
+      <img id="shareImg" class="share-img" alt="">
+      <div class="row2"><button class="btn" id="imgDownload" data-i18n="img_download">Télécharger (.jpg)</button>
+        <button class="btn primary" id="imgShare" data-i18n="img_share">Partager…</button></div>
+      <p class="note" data-i18n="img_note">Image de la position affichée, avec les joueurs et le résultat : elle se partage partout, sans accès au site.</p>
     </div>
     <div class="share-pane hidden" data-v="import">
       <textarea id="importText" rows="8" spellcheck="false" placeholder="Collez une partie : notation FGN, simple liste de coups (d3e3A c3d3W …) ou lien de partage." data-i18n-placeholder="import_placeholder"></textarea>
@@ -2260,18 +2274,31 @@ async function openPuzzles() {
   if (!puzzle) parkGame();
   nextPuzzle();
 }
+// Thème choisi (filtre), derniers résultats et puzzle du jour : préférences locales au navigateur.
+const PZ_THEMES = ["paika", "approche", "retrait", "chaine", "rafle", "combinaison"];
+const lsGet = (k, d) => { try { const v = JSON.parse(localStorage.getItem(k)); return v ?? d; } catch (e) { return d; } };
+const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* stockage indisponible */ } };
+const today = () => new Date().toISOString().slice(0, 10);
+// Puzzle du jour : le même pour tous ce jour-là (hachage de la date), parmi les puzzles de 1000 à 1500.
+function dailyPuzzle() {
+  const pool = puzzles.filter(p => p.rating >= 1000 && p.rating <= 1500);
+  let h = 2166136261;
+  for (const ch of today()) h = Math.imul(h ^ ch.charCodeAt(0), 16777619) >>> 0;
+  return pool[h % pool.length];
+}
 function nextPuzzle() {
-  const st = pstate(), seen = new Set(st.seen);
-  let pool = puzzles.filter(p => !seen.has(p.id));
-  if (!pool.length) { if (!profile) { st.seen = []; psave(st); } pool = puzzles.slice(); }
+  const st = pstate(), seen = new Set(st.seen), theme = lsGet("fanorona-pz-theme", "");
+  const all = theme ? puzzles.filter(p => p.themes.includes(theme)) : puzzles;
+  let pool = all.filter(p => !seen.has(p.id));
+  if (!pool.length) { if (!profile && !theme) { st.seen = []; psave(st); } pool = all.slice(); }
   pool.sort((a, b) => Math.abs(a.rating - st.rating) - Math.abs(b.rating - st.rating));
   const near = pool.slice(0, 12);
   loadPuzzle(near[Math.floor(Math.random() * near.length)]);
 }
-function loadPuzzle(p) {
+function loadPuzzle(p, daily = false) {
   const side = p.fen.split(" ")[1] === "b" ? "B" : "W";
   Object.assign(cfg, { game: "tsivy", vela: "", velaWho: "", startFen: p.fen, clock: "0", mode: "friend", color: side, variant: "free" });
-  puzzle = { p, k: 0, st: "play", failed: false, counted: false, msg: "", delta: null, side };
+  puzzle = { p, k: 0, st: "play", failed: false, counted: false, msg: "", delta: null, side, daily };
   startBoard = null;
   document.body.classList.add("puzzle");
   startGame().then(() => { flipped = side === "B"; buildBoard(); render(); });
@@ -2280,6 +2307,8 @@ function exitPuzzles() { showPage("play"); }
 function puzzleScore(win) {
   if (puzzle.counted) return;
   puzzle.counted = true;
+  lsSet("fanorona-pz-hist", [...lsGet("fanorona-pz-hist", []), { id: puzzle.p.id, win, r: puzzle.p.rating }].slice(-12));
+  if (puzzle.daily && win) lsSet("fanorona-pz-daily", today());
   if (profile) {  // Elo calculé par le serveur (même formule), rangé dans le profil
     const pz = puzzle, prof = profile;
     api(`/api/profiles/${prof.id}/puzzle`, { puzzle: pz.p.id, rating: pz.p.rating, win })
@@ -2370,7 +2399,13 @@ function renderPuzzle() {
   if (!puzzle) return;
   const st = pstate(), pz = puzzle, done = pz.st === "solved" || pz.st === "shown";
   const d = pz.delta;
-  const html = `<div class="crumbs"><span>${t("pz_title")}${done ? " · " + pz.p.id : ""}</span><button id="pQuit">${t("quit")}</button></div>
+  const theme = lsGet("fanorona-pz-theme", ""), dailyDone = lsGet("fanorona-pz-daily", "") === today();
+  const hist = lsGet("fanorona-pz-hist", []);
+  const chips = `<div class="chips pz-themes" id="pThemes">` + ["", ...PZ_THEMES].map(th =>
+    `<button data-th="${th}" class="${th === theme ? "on" : ""}">${th ? themeName(th) : t("pz_all")}</button>`).join("") + `</div>`;
+  const recent = hist.length ? `<div class="pz-recent"><span>${t("pz_recent")}</span>` + hist.map(h =>
+    `<button class="pz-dot ${h.win ? "ok" : "ko"}" data-id="${h.id}" title="${h.id} · ${h.r}" aria-label="${h.id} · ${h.win ? t("pz_success") : t("pz_failed")}"></button>`).join("") + `</div>` : "";
+  const html = `<div class="crumbs"><span>${pz.daily ? t("pz_daily") : t("pz_title")}${done ? " · " + pz.p.id : ""}</span><button id="pQuit">${t("quit")}</button></div>
     <div class="prating"><b>${st.rating}</b><span>${t("pz_rating")}</span>${d !== null ? `<span class="delta ${d >= 0 ? "up" : "down"}">${d >= 0 ? "+" : ""}${d}</span>` : ""}</div>
     <div class="pstats"><span>${t("pz_solved_stat")} <b>${st.solved}/${st.played}</b></span><span>${t("pz_streak")} <b>${st.streak}</b></span><span>${t("pz_best")} <b>${st.best}</b></span></div>
     <h2>${done ? (pz.failed ? t("pz_failed") : t("pz_success")) : t("pz_find")}</h2>
@@ -2380,10 +2415,19 @@ function renderPuzzle() {
     ${done ? `<div class="tags">${pz.p.themes.map(t => `<span class="tag">${themeName(t)}</span>`).join("")}</div>` : ""}
     <div class="row">` + (done ? `<button class="btn" id="pRetry">${t("retry")}</button>` :
       `<button class="btn" id="pShow" ${pz.st === "busy" || pz.st === "wrong" ? "disabled" : ""}>${t("show_solution")}</button>`) +
-    `<button class="btn primary" id="pNext">${done ? t("pz_next") : t("skip")}</button></div>`;
+    `<button class="btn primary" id="pNext">${done ? t("pz_next") : t("skip")}</button></div>
+    <button class="link-btn pz-daily${dailyDone ? " done" : ""}" id="pDaily">${dailyDone ? "★ " + t("pz_daily_done") : "☆ " + t("pz_daily")}</button>
+    ${chips}${recent}`;
   if (box.dataset.html === html) return;
   box.innerHTML = html; box.dataset.html = html;
   $("pQuit").onclick = () => showPage("play");
+  for (const b of $("pThemes").children) b.onclick = () => {
+    lsSet("fanorona-pz-theme", b.dataset.th);
+    if (!done && !pz.counted && pz.k > 0) puzzleScore(false);
+    nextPuzzle();
+  };
+  $("pDaily").onclick = () => { if (!done && !pz.counted && pz.k > 0) puzzleScore(false); loadPuzzle(dailyPuzzle(), true); };
+  for (const b of box.querySelectorAll(".pz-dot")) b.onclick = () => { const q = puzzles.find(x => x.id === b.dataset.id); if (q) loadPuzzle(q); };
   if ($("pShow")) $("pShow").onclick = puzzleShow;
   if ($("pRetry")) $("pRetry").onclick = () => loadPuzzle(pz.p);
   $("pNext").onclick = () => { if (!done && !pz.counted) puzzleScore(false); nextPuzzle(); };
@@ -2518,7 +2562,66 @@ function fenOf(k) { return boardFen(positions[k], sideAt(k)); }
 function setShareTab(v) {
   for (const b of $("shareTabs").children) b.classList.toggle("on", b.dataset.v === v);
   for (const p of document.querySelectorAll(".share-pane")) p.classList.toggle("hidden", p.dataset.v !== v);
+  if (v === "image") makeShareImage();
 }
+// Image de la position affichée : copie exacte du plateau SVG (feuille de style et variables du thème intégrées,
+// textures comprises), dessinée au double de la résolution, avec un bandeau (joueurs, résultat ou coup, site).
+let shareBlob = null;
+async function positionImage() {
+  const src = $("board"), vb = src.viewBox.baseVal, k = 2, cap = 132;
+  const clone = src.cloneNode(true);
+  clone.querySelectorAll(".kbd").forEach(n => n.remove());
+  const css = [...document.querySelectorAll("style")].map(x => x.textContent).join("\n");
+  const cs = getComputedStyle(document.documentElement);
+  const vars = [...new Set(css.match(/--[a-z0-9-]+/g))].map(v => `${v}:${cs.getPropertyValue(v)}`).join(";");
+  clone.setAttribute("xmlns", NS);
+  clone.setAttribute("width", vb.width * k); clone.setAttribute("height", vb.height * k);
+  clone.setAttribute("style", vars + ";border-radius:0;box-shadow:none");
+  const st = document.createElementNS(NS, "style"); st.textContent = css; clone.insertBefore(st, clone.firstChild);
+  const img = new Image();
+  img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(new XMLSerializer().serializeToString(clone));
+  await img.decode();
+  const c = document.createElement("canvas"), W2 = vb.width * k, H2 = vb.height * k;
+  c.width = W2; c.height = H2 + cap;
+  const g = c.getContext("2d");
+  g.fillStyle = cs.getPropertyValue("--surface") || "#fff"; g.fillRect(0, 0, c.width, c.height);
+  g.drawImage(img, 0, 0, W2, H2);
+  const strong = cs.getPropertyValue("--strong"), muted = cs.getPropertyValue("--muted"), accent = cs.getPropertyValue("--accent");
+  const n = viewPly, r = game.result && n === game.moves.length ? game.result : null;
+  g.fillStyle = strong; g.font = "600 46px Fraunces, Georgia, serif"; g.textBaseline = "alphabetic";
+  g.fillText(`${playerName("W").name} – ${playerName("B").name}`, 40, H2 + 62);
+  g.fillStyle = muted; g.font = "500 30px Inter, system-ui, sans-serif";
+  const line2 = r ? `${r.score} · ${resWhy(r) || resText(r)}` : n ? t("img_after", { n, m: hyphenate(game.moves[n - 1]) }) : t("img_start");
+  g.fillText(line2, 40, H2 + 106);
+  g.textAlign = "right"; g.fillStyle = accent; g.font = "600 40px Fraunces, Georgia, serif";
+  g.fillText("Fanorona", W2 - 40, H2 + 62);
+  g.fillStyle = muted; g.font = "500 26px Inter, system-ui, sans-serif"; g.fillText(location.host, W2 - 40, H2 + 106);
+  return new Promise(res => c.toBlob(res, "image/jpeg", 0.9));
+}
+async function makeShareImage() {
+  try {
+    shareBlob = await positionImage();
+    const im = $("shareImg");
+    if (im.src.startsWith("blob:")) URL.revokeObjectURL(im.src);
+    im.src = URL.createObjectURL(shareBlob);
+    im.alt = t("img_alt");
+  } catch (e) { console.warn("image de la position", e); flash(t("img_failed")); }
+  const file = shareBlob && new File([shareBlob], "fanorona.jpg", { type: "image/jpeg" });
+  $("imgShare").classList.toggle("hidden", !(file && navigator.canShare && navigator.canShare({ files: [file] })));
+}
+$("imgDownload").onclick = () => {
+  if (!shareBlob) return;
+  const a = document.createElement("a"), d = new Date();
+  a.href = URL.createObjectURL(shareBlob);
+  a.download = `fanorona-${fgnDate(d).replace(/\./g, "")}-${String(d.getHours()).padStart(2, "0")}${String(d.getMinutes()).padStart(2, "0")}.jpg`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+};
+$("imgShare").onclick = async () => {
+  if (!shareBlob) return;
+  try { await navigator.share({ files: [new File([shareBlob], "fanorona.jpg", { type: "image/jpeg" })], title: "Fanorona" }); }
+  catch (e) { if (e.name !== "AbortError") flash(t("img_failed")); }
+};
 for (const b of $("shareTabs").children) b.onclick = () => setShareTab(b.dataset.v);
 $("shareClose").onclick = () => $("shareDlg").close();
 $("bShare").onclick = () => openShare();

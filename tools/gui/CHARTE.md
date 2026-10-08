@@ -111,6 +111,16 @@ point d'arrivée, Échap = annuler ; curseur en anneau pointillé accent, contou
 Hors du plateau, les flèches gardent la navigation dans la partie. Lecteurs d'écran : chaque coup est annoncé
 (« Blancs : d2, e3 approche ; 2 pièces prises »), le curseur annonce le point et la pièce.
 
+## Partage en image, puzzles
+
+Partager > Image : copie exacte du plateau affiché (SVG cloné avec la feuille de style et les variables du thème,
+textures comprises) dessinée au double de la résolution, bandeau en pied (joueurs en Fraunces, coup ou résultat,
+« Fanorona » en accent, adresse du site), JPEG 90 % ; « Partager… » (feuille de partage native, mobile) ou
+téléchargement. L'image passe partout, contrairement aux aperçus de lien (le site n'est joignable qu'en LAN /
+Tailscale). Puzzles : filtre par thème (puces, mémorisé), « Puzzle du jour » (même puzzle pour tous ce jour-là,
+1000-1500, ★ une fois résolu), derniers résultats en pastilles (accent = réussi, cerclé rouge = raté ; clic =
+rejouer).
+
 ## Formes et espacements
 
 Rayons 10 px (cartes) et 6 px (contrôles) ; bordures 1 px plutôt que des ombres marquées ; ombres légères
