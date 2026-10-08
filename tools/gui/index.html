@@ -481,6 +481,10 @@ svg.chart { width: 100%; height: auto; display: block; cursor: crosshair; border
 .btn { border: 1px solid var(--border); border-radius: var(--r-sm); padding: 9px 16px; cursor: pointer; background: var(--surface-2); color: var(--strong); font-weight: 500; }
 .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
 .thinkbar { height: 2px; overflow: hidden; }
+/* Hors ligne : badge discret dans l'en-tête (moteur local en WebAssembly). */
+.offline-badge { display: none; font-size: 12px; font-weight: 600; color: var(--muted); border: 1px dashed var(--border); border-radius: 999px;
+  padding: 3px 10px; white-space: nowrap; }
+body.offline .offline-badge { display: inline-block; }
 .thinkbar i { display: block; height: 100%; width: 0; background: var(--accent); }
 
 /* ---------- Boîte de dialogue ---------- */
@@ -679,6 +683,7 @@ dialog::backdrop { background: rgba(10, 8, 6, .55); backdrop-filter: blur(2px); 
     <a class="tab-link" href="/labo" title="Entraînement du modèle : en direct, courbes, généalogie des réseaux">Labo</a>
   </nav>
   <div class="spacer"></div>
+  <span class="offline-badge" data-i18n="offline_badge">Hors ligne · moteur local</span>
   <button class="profile-chip" id="profileChip" aria-haspopup="true"><span class="avatar" id="chipAvatar"></span><span class="chip-name" id="chipName"></span>
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="chev"><path d="M6 9l6 6 6-6"/></svg></button>
   <div class="menu hidden" id="profileMenu" role="dialog">
@@ -1379,9 +1384,137 @@ async function commit(m) {
 // =====================================================================================================
 // Déroulement de la partie
 // =====================================================================================================
+// =====================================================================================================
+// Jeu hors ligne : moteur en WebAssembly (tools/gui/engine/, Web Worker). Quand le serveur est injoignable,
+// /api/state, /api/go et /api/eval sont calculés localement, à l'identique du serveur (mêmes réglages de force,
+// lus dans /api/config et gardés en mémoire du navigateur) ; le reste (historique, profils, analyse en continu,
+// livre) attend le retour du serveur.
+// =====================================================================================================
+let localEng = null, localSeq = 0, offline = false;
+const localWait = new Map();
+function localRun(cmds) {
+  if (!localEng) {
+    localEng = new Worker("/engine/worker.js");
+    localEng.onmessage = e => {
+      const w = localWait.get(e.data.id);
+      localWait.delete(e.data.id);
+      if (w) e.data.error ? w.reject(new Error(e.data.error)) : w.resolve(e.data.out);
+    };
+  }
+  return new Promise((resolve, reject) => { const id = ++localSeq; localWait.set(id, { resolve, reject }); localEng.postMessage({ id, cmds }); });
+}
+function setOffline(on) {
+  if (offline === on) return;
+  offline = on;
+  document.body.classList.toggle("offline", on);
+  if (on) flash(t("offline_on"));
+}
+const MATE_LOCAL = 10000;
+function parseInfoLine(line) {
+  const tk = line.split(/\s+/), info = {};
+  for (let i = 1; i < tk.length; i++) {
+    const k = tk[i];
+    if (["depth", "seldepth", "nodes", "nps", "time", "hashfull"].includes(k)) info[k] = +tk[++i];
+    else if (k === "score") { info.score = { type: tk[i + 1], value: +tk[i + 2] }; i += 2; }
+    else if (k === "pv") { info.pv = tk.slice(i + 1); break; }
+  }
+  return info;
+}
+const scoreCpLocal = info => !info.score ? 0 : info.score.type === "mate"
+  ? (info.score.value > 0 ? MATE_LOCAL - Math.abs(info.score.value) : -MATE_LOCAL + Math.abs(info.score.value)) : info.score.value;
+function localPreamble(req, moves) {
+  const game = req.game || "tsivy";
+  const cmds = [`setoption name Variant value ${game}`, "setoption name MultiPV value 1", "setoption name OwnBook value false",
+    `setoption name Vela value ${game === "tsivy" && req.vela ? (req.vela === "W" ? "white" : "black") : "none"}`,
+    `setoption name MandatoryContinuation value ${req.variant === "mandatory" && game !== "telo"}`,
+    `setoption name UseNNUE value ${!!req.net && game === "tsivy"}`];
+  const mv = moves.length ? " moves " + moves.join(" ") : "";
+  cmds.push(req.fen ? `position fen ${req.fen}${mv}` : `position startpos${mv}`);
+  return cmds;
+}
+function localCheck(out) {
+  const bad = out.split("\n").find(l => l.startsWith("info string illegal move") || l.startsWith("info string invalid fen"));
+  if (bad) throw new Error(bad.slice("info string ".length));
+}
+async function localState(req) {
+  const out = await localRun([...localPreamble(req, req.moves || []), "d", "moves", "status"]);
+  localCheck(out);
+  const lines = out.split("\n"), fl = lines.find(l => l.startsWith("Fen: ")), i = lines.findIndex(l => l.startsWith("status "));
+  if (!fl || i < 1) throw new Error("réponse du moteur inattendue");
+  return { fen: fl.slice(5).trim(), legal: lines[i - 1].split(/\s+/).filter(Boolean), status: lines[i].slice(7).trim() };
+}
+async function localGo(cmds) {
+  const out = await localRun(cmds);
+  localCheck(out);
+  const lines = out.split("\n");
+  let info = {};
+  for (const l of lines) if (l.startsWith("info depth")) info = parseInfoLine(l);
+  const bm = lines.find(l => l.startsWith("bestmove"));
+  if (!bm) throw new Error("pas de réponse du moteur");
+  return [bm.split(/\s+/)[1], info];
+}
+async function localSearch(req) {
+  const defs = (localConfig() || {}).engineDefs;
+  if (!defs) throw new Error(t("offline_no_config"));
+  let movetime = Math.max(50, Math.min(+(req.movetime || 1000), 10000)), level;
+  if (req.strength != null) { level = defs.strengths[req.strength]; if (level && level.mode === "full") movetime = level.movetime; }
+  else level = defs.levels[req.level || 6];
+  if (!level) throw new Error("niveau inconnu");
+  const moves = req.moves || [];
+  let legal = null;
+  if (level.mode === "sample") {
+    legal = (await localState(req)).legal;
+    if (legal.length === 1) { level = defs.levels[6]; movetime = 50; }
+  }
+  let best, info;
+  if (level.mode === "sample" && legal && legal.length) {
+    const scored = [];
+    for (const m of legal) {
+      const [b, inf] = await localGo([...localPreamble(req, [...moves, m]), `go depth ${level.depth}`]);
+      scored.push([b === "(none)" ? MATE_LOCAL - 1 : -scoreCpLocal(inf), m, inf]);
+    }
+    const top = Math.max(...scored.map(x => x[0])), w = scored.map(x => Math.exp((x[0] - top) / level.temp));
+    let r = Math.random() * w.reduce((a, b) => a + b, 0), k = 0;
+    while (k < w.length - 1 && (r -= w[k]) > 0) k++;
+    const [sc, m, inf] = scored[k];
+    best = m;
+    info = { ...inf, score: Math.abs(sc) >= MATE_LOCAL - 100 ? { type: "mate", value: (MATE_LOCAL - Math.abs(sc)) * Math.sign(sc) } : { type: "cp", value: sc },
+      pv: [m], candidates: scored.length };
+  } else {
+    [best, info] = await localGo([...localPreamble(req, moves), `go movetime ${movetime}` + (level.mode === "depth" ? ` depth ${level.depth}` : "")]);
+  }
+  return { bestmove: best, info, state: await localState({ ...req, moves: [...moves, best] }), local: true };
+}
+async function localEval(req) {
+  const moves = req.moves || [], depth = Math.max(1, Math.min(+(req.depth || 6), 12)), out = [];
+  for (const k of req.plies || []) {
+    const [best, info] = await localGo([...localPreamble(req, moves.slice(0, k)), "ucinewgame", req.game === "telo" ? "go" : `go depth ${depth}`]);
+    out.push({ ply: k, best: best === "(none)" ? null : best, score: info.score, depth: info.depth, pv: info.pv || [] });
+  }
+  return { evals: out };
+}
+const LOCAL_API = { "/api/state": localState, "/api/go": localSearch, "/api/eval": localEval,
+  "/api/book": async () => ({ available: false, reason: "offline" }) };
+const localConfig = () => { try { return JSON.parse(localStorage.getItem("fanorona-config")); } catch (e) { return null; } };
 async function api(path, body, method) {
-  const r = await fetch(path, { method: method || (body ? "POST" : "GET"), headers: { "Content-Type": "application/json" },
-    body: body ? JSON.stringify(body) : undefined });
+  let r;
+  try {
+    r = await fetch(path, { method: method || (body ? "POST" : "GET"), headers: { "Content-Type": "application/json" },
+      body: body ? JSON.stringify(body) : undefined });
+  } catch (e) {  // serveur injoignable : moteur local si possible
+    const loc = LOCAL_API[path], cfgLocal = path === "/api/config" && localConfig();
+    if (cfgLocal) { setOffline(true); return cfgLocal; }
+    if (!loc) throw new Error(t("offline_unavailable"));
+    setOffline(true);
+    return loc(body || {});
+  }
+  setOffline(false);
+  if (path === "/api/config" && r.ok) {
+    const j = await r.json();
+    try { localStorage.setItem("fanorona-config", JSON.stringify(j)); } catch (e) { /* stockage indisponible */ }
+    return j;
+  }
+
   const j = await r.json().catch(() => ({ error: r.statusText }));
   if (!r.ok) throw new Error(j.error || r.statusText);
   return j;

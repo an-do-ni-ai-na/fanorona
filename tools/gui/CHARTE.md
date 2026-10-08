@@ -121,6 +121,14 @@ Tailscale). Puzzles : filtre par thème (puces, mémorisé), « Puzzle du jour �
 1000-1500, ★ une fois résolu), derniers résultats en pastilles (accent = réussi, cerclé rouge = raté ; clic =
 rejouer).
 
+## Hors ligne
+
+Serveur injoignable (réseau coupé, Tailscale éteint) : l'application installée s'ouvre depuis le cache du service
+worker et joue avec le moteur compilé en WebAssembly (même force que le serveur : niveaux, échelle Elo, analyse
+de partie). Badge discret « Hors ligne · moteur local » (pointillés, couleur discrète) dans l'en-tête, message
+au basculement ; l'historique, les profils, l'analyse en continu et le livre attendent le retour du serveur
+(« Indisponible hors ligne »).
+
 ## Formes et espacements
 
 Rayons 10 px (cartes) et 6 px (contrôles) ; bordures 1 px plutôt que des ombres marquées ; ombres légères

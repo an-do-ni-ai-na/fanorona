@@ -1,10 +1,12 @@
 // Service worker de l'interface Fanorona (PWA).
 // Coquille (page, textes, leçons, puzzles, icônes) : réseau d'abord, cache en secours — une mise à jour déployée
 // est vue au prochain chargement, et l'application s'ouvre encore si le serveur est injoignable.
-// API (/api/…) : jamais mise en cache (le moteur est côté serveur). Polices Google : cache d'abord.
-const CACHE = "fanorona-v1";
+// API (/api/…) : jamais mise en cache. Moteur WebAssembly et réseau (/engine/…) : dans la coquille, pour jouer hors
+// ligne (la page bascule sur le moteur local quand le serveur est injoignable). Polices Google : cache d'abord.
+const CACHE = "fanorona-v2";
 const SHELL = ["/", "/i18n.json", "/lessons.json", "/puzzles.json", "/manifest.webmanifest",
-  "/icons/icon-192.png", "/icons/icon-512.png", "/icons/apple-touch-icon.png", "/icons/favicon-32.png"];
+  "/icons/icon-192.png", "/icons/icon-512.png", "/icons/apple-touch-icon.png", "/icons/favicon-32.png",
+  "/engine/worker.js", "/engine/fanorona.js", "/engine/fanorona.wasm", "/engine/fanorona-simd.wasm", "/engine/net.nnue"];
 
 self.addEventListener("install", e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));

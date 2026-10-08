@@ -9,7 +9,25 @@ fanorona-dev, i7-6700T, 1 thread), justesse par `make test`, `perft` et `tools/n
 
 ---
 
-## 2026-10-07
+## 2026-10-08
+
+### GUI — refonte UX et jeu hors ligne · `a1578d4`, `6470fa1`, `0077e1f`, `b150e4a`, `b24285d`, `{COMMIT}`
+- Audit (captures ordinateur / téléphone, clair / sombre) puis refonte en phases, identité conservée (CHARTE.md) :
+  plateau d'abord sur ordinateur (1022 x 578 au lieu de 740 x 420 en 1440 x 900, colonne de droite à la hauteur
+  du plateau, outils en bandeau dessous ; consigne à droite en tutoriel / puzzles / révision) ; carte de fin de
+  partie (Victoire ! / Défaite / Partie nulle, Revanche, Analyser), pulsation pendant la réflexion du moteur,
+  captures qui s'estompent, vibration ; miniatures de position (accueil, historique : `final_fen` calculée par le
+  serveur), historique cliquable sans bouton d'accent répété ; fenêtre de partie (niveaux avec Elo, choix du camp
+  libellé et collant) ; notation avec tirets ; plateau jouable au clavier et annonces pour lecteurs d'écran ;
+  partage de la position en image (copie exacte du plateau SVG, JPEG) ; puzzles par thème, puzzle du jour,
+  derniers résultats.
+- Jeu hors ligne : `UCI::loop` découpée en `Session::execute` (bench inchangé, tests verts) ; moteur compilé en
+  WebAssembly (Emscripten) : sans SIMD 169 k nœuds/s, avec SIMD (AVX2 traduit) 733 k (natif ~1,7 M), mêmes
+  nœuds au bench donc mêmes résultats ; pile 16 Mo indispensable. Web Worker, `/api/state`, `/api/go`
+  (niveaux par tirage, profondeur, pleine force), `/api/eval` recalculés dans la page quand le serveur est
+  injoignable (définitions de force dans `/api/config`, gardées dans le navigateur). Testé réseau coupé (CDP,
+  HTTPS requis pour le service worker) : page rechargée depuis le cache, niveau 3 en 0,8 s, niveau 6 profondeur 8
+  en 0,9 s, analyse, Dimy à deux ; historique « indisponible hors ligne ».
 
 ### NNUE — cycle gen12 (étiquettes à profondeur 8) : pas de gain · `55009ba`
 - gen12 : 40 M positions à profondeur 8 (au lieu de 6), professeur net_v9 quantifié, c1 + c3 en 3 h 20

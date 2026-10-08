@@ -857,7 +857,14 @@ def stop_analysis(sid):
 # Application installable (PWA) : manifeste, service worker (à la racine pour couvrir tout le site), icônes.
 PWA_FILES = {"/manifest.webmanifest": ("pwa/manifest.webmanifest", "application/manifest+json"),
              "/sw.js": ("pwa/sw.js", "text/javascript; charset=utf-8"),
+             # Moteur en WebAssembly (jeu hors ligne, tools/wasm/build.sh) ; /engine/net.nnue : réseau par défaut.
+             "/engine/worker.js": ("engine/worker.js", "text/javascript; charset=utf-8"),
+             "/engine/fanorona.js": ("engine/fanorona.js", "text/javascript; charset=utf-8"),
+             "/engine/fanorona.wasm": ("engine/fanorona.wasm", "application/wasm"),
+             "/engine/fanorona-simd.wasm": ("engine/fanorona-simd.wasm", "application/wasm"),
              "/favicon.ico": ("pwa/favicon-32.png", "image/png")}
+# Réseau adopté le plus récent d'abord (net_v9 : 192 neurones, gen8-10, 2026-10-05), sinon les précédents.
+DEFAULT_NETS = ("net_v9", "net_v8", "net_v6", "net_v3")
 PWA_ICONS = {"icon-192.png", "icon-512.png", "maskable-512.png", "apple-touch-icon.png", "favicon-32.png"}
 
 
@@ -912,6 +919,10 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json(400, {"error": str(e)})
         static = PWA_FILES.get(path) or (("pwa/" + path[7:], "image/png") if path.startswith("/icons/") and
                                           path[7:] in PWA_ICONS else None)
+        if path == "/engine/net.nnue":
+            nets = available_nets()
+            net = next((n for n in DEFAULT_NETS if n in nets), None)
+            static = (str(nets[net]), "application/octet-stream") if net else None
         if static:
             body = (HERE / static[0]).read_bytes()
             self.send_response(200)
@@ -939,13 +950,17 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/api/config":
             nets = list(available_nets())
             # réseau adopté le plus récent d'abord (net_v9 : 192 neurones, gen8-10, 2026-10-05), sinon les précédents
-            default = next((n for n in ("net_v9", "net_v8", "net_v6", "net_v3") if n in nets), nets[-1] if nets else None)
+            default = next((n for n in DEFAULT_NETS if n in nets), nets[-1] if nets else None)
             self.send_json(200, {"nets": nets, "defaultNet": default, "maxMovetime": MAX_MOVETIME,
                                  "levels": [{"id": k, "name": v["name"], "timed": v["mode"] != "sample",
                                              "strength": v["strength"]} for k, v in LEVELS.items()],
                                  "strengths": [{"id": i, "elo": (strength_elos() or [None] * len(STRENGTHS))[i],
                                                 "mode": v["mode"], "movetime": v.get("movetime")}
-                                               for i, v in enumerate(STRENGTHS)]})
+                                               for i, v in enumerate(STRENGTHS)],
+                                 # Définitions complètes (jeu hors ligne : le moteur WebAssembly joue comme le serveur).
+                                 "engineDefs": {"strengths": STRENGTHS,
+                                                "levels": {k: {kk: vv for kk, vv in v.items() if kk != "name"}
+                                                           for k, v in LEVELS.items()}}})
         else:
             self.send_json(404, {"error": "introuvable"})
 

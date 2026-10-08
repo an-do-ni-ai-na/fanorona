@@ -348,25 +348,30 @@ void print_help() {
 
 }  // namespace
 
-void loop(int argc, char* argv[]) {
+namespace {
+
+// Session de commandes : état de la partie et recherche en cours. execute() traite une commande ; `sync` = attendre
+// la fin d'un « go » (ligne de commande, WebAssembly), sinon la recherche tourne dans un fil (stdin interactif).
+struct Session {
     Game game;
-    Position start;
-    start.set(start_fen());
-    game.reset(start);
     std::thread searchThread;
 
-    auto join = [&]() {
+    Session() {
+        Position start;
+        start.set(start_fen());
+        game.reset(start);
+    }
+    ~Session() {
+        Search::stopSignal = true;
+        join();
+    }
+    void join() {
         if (searchThread.joinable()) searchThread.join();
-    };
-
-    std::string cmd, token;
-    for (int i = 1; i < argc; ++i) cmd += std::string(argv[i]) + " ";
-
-    do {
-        if (argc == 1 && !std::getline(std::cin, cmd)) cmd = "quit";
-
+    }
+    // Renvoie false pour « quit ».
+    bool execute(const std::string& cmd, bool sync) {
         std::istringstream is(cmd);
-        token.clear();
+        std::string token;
         is >> std::skipws >> token;
 
         if (token == "quit" || token == "stop") {
@@ -454,16 +459,18 @@ void loop(int argc, char* argv[]) {
                 if (bm != MOVE_NONE) {
                     std::string s = move_to_string(game.pos, bm);
                     std::cout << "info string book " << s << "\nbestmove " << s << std::endl;
-                    continue;
+                    return true;
                 }
             }
             Search::stopSignal = false;
             Game snapshot = game;
-            searchThread = std::thread([snapshot, limits]() {
+            auto run = [snapshot, limits]() {
                 auto r = Search::think(snapshot.pos, snapshot.history, limits, true);
                 std::cout << "bestmove " << move_to_string(snapshot.pos, r.bestMove) << std::endl;
-            });
-            if (argc > 1) join();
+            };
+            // Synchrone (ligne de commande, WebAssembly sans fils) : la recherche s'exécute sur place.
+            if (sync) run();
+            else searchThread = std::thread(run);
         } else if (token == "d") {
             std::cout << (is_telo() ? Telo::pretty(game.telo) : game.pos.pretty()) << std::endl;
         } else if (token == "moves" && is_telo()) {
@@ -498,10 +505,33 @@ void loop(int argc, char* argv[]) {
         } else if (!token.empty()) {
             std::cout << "Unknown command: '" << cmd << "'. Type help for more information." << std::endl;
         }
-    } while (token != "quit" && argc == 1);
+        return token != "quit";
+    }
+};
 
-    Search::stopSignal = true;
-    join();
+}  // namespace
+
+void loop(int argc, char* argv[]) {
+    Session session;
+    if (argc > 1) {
+        std::string cmd;
+        for (int i = 1; i < argc; ++i) cmd += std::string(argv[i]) + " ";
+        session.execute(cmd, true);
+        return;
+    }
+    std::string cmd;
+    while (std::getline(std::cin, cmd))
+        if (!session.execute(cmd, false)) return;
+    session.execute("quit", false);
+}
+
+std::string execute(const std::string& cmd) {
+    static Session session;
+    std::ostringstream out;
+    auto* old = std::cout.rdbuf(out.rdbuf());
+    session.execute(cmd, true);
+    std::cout.rdbuf(old);
+    return out.str();
 }
 
 }  // namespace fanorona::UCI
