@@ -11,7 +11,7 @@ fanorona-dev, i7-6700T, 1 thread), justesse par `make test`, `perft` et `tools/n
 
 ## 2026-10-09
 
-### GUI — parties à distance (deux appareils) · `{COMMIT}`
+### GUI — parties à distance (deux appareils) · `48d4bf0`
 - Serveur : salles en mémoire (code de 6 caractères sans caractères ambigus, jeton secret par joueur, spectateurs
   sans jeton), interrogation longue (réveil en 0,03 s au coup adverse, ou à la chute du drapeau), coups vérifiés par
   le moteur (tour, légalité, synchronisation), pendule tenue par le serveur (mêmes cadences, incrément après le
