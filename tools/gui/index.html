@@ -170,6 +170,8 @@ body[data-page="home"] .round, body[data-page="games"] .round { display: none; }
 .card .big { font: 600 38px/1 var(--font-brand); color: var(--strong); }
 .card .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .card .spacer { flex: 1; }
+.join-row input { flex: 1; min-width: 0; font: 600 16px var(--font-mono); letter-spacing: .12em; text-transform: uppercase; padding: 8px 10px;
+  border: 1px solid var(--border); border-radius: var(--r-sm); background: var(--surface-2); color: var(--strong); }
 .levels { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
 .levels button { border: 1px solid var(--border); background: var(--surface-2); border-radius: var(--r-sm); padding: 10px 2px 8px; cursor: pointer;
   display: flex; flex-direction: column; align-items: center; gap: 2px; color: var(--strong); }
@@ -392,6 +394,8 @@ body.thinking .ruser.turn .pdot { animation: pulse 1s ease-in-out infinite; }
 .endcard .score { font: 600 13px var(--font-mono); color: var(--muted); letter-spacing: .08em; }
 .endcard h2 { margin: 6px 0 4px; font: 600 28px var(--font-brand); color: var(--strong); text-align: center; }
 .endcard.win h2 { color: var(--accent); }
+.waitcard .room-code { font: 600 40px var(--font-mono); letter-spacing: .12em; color: var(--accent); margin: 2px 0 6px; }
+.waitcard .room-link { font: 500 12.5px var(--font-mono); color: var(--muted); word-break: break-all; margin-top: -8px; }
 .endcard p { margin: 0 0 16px; color: var(--muted); font-size: 13.5px; }
 .endcard .row { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-top: 18px; }
 .endcard .row .btn { flex: 1 1 auto; white-space: nowrap; padding-left: 14px; padding-right: 14px; }
@@ -783,6 +787,7 @@ dialog::backdrop { background: rgba(10, 8, 6, .55); backdrop-filter: blur(2px); 
       <div class="overlay bottom hidden" id="stopBox"><button class="stop" id="stopChain" data-i18n="stop_capture">Arrêter la capture</button></div>
       <div class="flash" id="flash"></div>
       <div class="endcard hidden" id="endCard"></div>
+      <div class="endcard waitcard hidden" id="roomCard"></div>
     </div>
     <button class="fs-exit" id="fsExit" title="Quitter le plein écran (Échap)" data-i18n-title="exit_fullscreen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></svg></button>
   </div>
@@ -813,7 +818,7 @@ dialog::backdrop { background: rgba(10, 8, 6, .55); backdrop-filter: blur(2px); 
       <div class="seg" id="segGame"><button data-v="tsivy">Tsivy 9 × 5</button><button data-v="dimy">Dimy 5 × 5</button><button data-v="telo">Telo 3 × 3</button></div>
       <div class="lvl-name" id="gameNote"></div></div>
     <div class="field"><label data-i18n="opponent">Adversaire</label>
-      <div class="seg" id="segMode"><button data-v="computer" data-i18n="computer">Ordinateur</button><button data-v="friend" data-i18n="two_players">Deux joueurs</button><button data-v="auto" data-i18n="mode_auto">Ordinateur contre ordinateur</button></div></div>
+      <div class="seg" id="segMode"><button data-v="computer" data-i18n="computer">Ordinateur</button><button data-v="friend" data-i18n="two_players">Deux joueurs</button><button data-v="auto" data-i18n="mode_auto">Ordinateur contre ordinateur</button><button data-v="online" data-i18n="mode_online">À distance</button></div></div>
     <div class="field" id="fLevel"><label data-i18n="level">Niveau</label>
       <div class="seg" id="segLevel"></div><div class="lvl-name" id="lvlName"></div>
       <div class="strength hidden" id="strengthRow"><label class="strength-lab"><span data-i18n="strength_label">Force précise (Elo)</span> <b id="strengthVal"></b></label>
@@ -1222,7 +1227,7 @@ function renderBoard() {
 // =====================================================================================================
 // Saisie : clic ou glisser-déposer, chaîne de captures case par case
 // =====================================================================================================
-const humanSide = c => cfg.mode === "friend" || (cfg.mode === "computer" && cfg.color === c);
+const humanSide = c => cfg.mode === "friend" || (cfg.mode === "computer" && cfg.color === c) || (cfg.mode === "online" && roomReady() && room.you === c);
 const canInput = () => live() && !over() && !busy && humanSide(sideAt(game.moves.length)) && !(learn && (learn.status !== "play" || learn.wait))
   && !(retro && retro.st !== "find") && !(puzzle && puzzle.st !== "play" && puzzle.st !== "wrongdone");
 
@@ -1384,6 +1389,118 @@ async function commit(m) {
 // =====================================================================================================
 // Déroulement de la partie
 // =====================================================================================================
+// =====================================================================================================
+// Parties à distance (deux appareils) : salle tenue par le serveur (/api/rooms…), code de 6 caractères et lien
+// d'invitation ?room=CODE. Coups envoyés au serveur (qui les vérifie), coups de l'adversaire reçus par
+// interrogation longue ; pendule, nulle proposée / acceptée, abandon et résultat tenus par le serveur. Jeton de
+// joueur gardé par salle dans le navigateur : la partie reprend après un rechargement.
+// =====================================================================================================
+let room = null;  // { code, token, you: "W" | "B" | null (spectateur), v: version vue, view }
+const roomTokens = () => { try { return JSON.parse(localStorage.getItem("fanorona-rooms")) || {}; } catch (e) { return {}; } };
+const roomLink = code => `${location.origin}/?room=${code}`;
+async function createRoom(color, rematchOf) {
+  if (rematchOf && room) room.nextSeen = true;  // notre propre revanche : ne pas la « rejoindre » depuis l'ancienne salle
+  try {
+    const r = await api("/api/rooms", { game: cfg.game, vela: cfg.vela || "", variant: cfg.variant, clock: cfg.clock,
+      color: color === "W" || color === "B" ? color : null, name: profile ? profile.name : null, rematchOf: rematchOf || null });
+    enterRoom(r);
+  } catch (e) { flash(trErr(e.message)); }
+}
+async function joinRoom(code, quiet) {
+  code = String(code).trim().toUpperCase();
+  try {
+    const r = await api(`/api/rooms/${encodeURIComponent(code)}/join`, { token: roomTokens()[code] || null, name: profile ? profile.name : null });
+    enterRoom(r);
+    return true;
+  } catch (e) { if (!quiet) flash(trErr(e.message)); return false; }
+}
+function enterRoom(r) {
+  const v = r.room;
+  if (r.token) {
+    const tk = roomTokens(); tk[v.code] = r.token;
+    try { localStorage.setItem("fanorona-rooms", JSON.stringify(tk)); } catch (e) { /* stockage indisponible */ }
+  }
+  if (retro) exitRetro();
+  if (learn || puzzle) { parked = null; dropModes(); }
+  Object.assign(cfg, { mode: "online", game: v.game, vela: v.vela || "", velaWho: "", variant: v.variant, clock: v.clock,
+    startFen: "", color: r.color || "W", room: v.code });
+  room = { code: v.code, token: r.token, you: r.color, v: 0, view: v, nextSeen: false };
+  markPage("play");
+  const mine = room;
+  startGame().then(async () => { if (room === mine) { await roomApply(v); roomPoll(mine); } });
+}
+async function roomApply(v) {
+  if (!room || v.code !== room.code) return;
+  room.view = v; room.v = Math.max(room.v, v.version);
+  const same = v.moves.length >= game.moves.length && game.moves.every((m, i) => m === v.moves[i]);
+  if (!same) {  // désynchronisé (coup refusé, autre onglet…) : on repart de la partie du serveur
+    game.moves = v.moves.slice(); game.result = null;
+    rebuildPositions(); viewPly = game.moves.length;
+    try { await refresh(); } catch (e) { flash(trErr(e.message)); }
+  } else for (const m of v.moves.slice(game.moves.length)) {
+    if (!room || room.view !== v) return;
+    await pushMove(m, true);
+  }
+  if (v.times) { clock = { W: v.times.W, B: v.times.B, inc: v.inc }; clockMark = performance.now(); }
+  if (v.result && !game.result) {
+    const st = v.result.status;
+    if (st === "resign" || st === "time") finish(st, v.result.loser); else finish(st);
+  }
+  if (v.next && v.next !== room.code && room.you && !room.nextSeen) {  // revanche proposée par l'autre joueur
+    room.nextSeen = true;
+    flash(t("online_rematch_in"));
+    joinRoom(v.next);
+    return;
+  }
+  save(); render();
+}
+async function roomPoll(mine) {
+  while (room === mine) {
+    try {
+      const v = await api(`/api/rooms/${mine.code}?token=${encodeURIComponent(mine.token || "")}&v=${mine.v}`);
+      if (room !== mine) return;
+      await roomApply(v);
+    } catch (e) { if (room !== mine) return; await new Promise(r => setTimeout(r, 3000)); }
+  }
+}
+async function roomSend(move, ply) {
+  const mine = room;
+  try { const v = await api(`/api/rooms/${mine.code}/move`, { token: mine.token, move, ply }); if (room === mine) await roomApply(v); }
+  catch (e) {
+    flash(trErr(e.message));
+    try { const v = await api(`/api/rooms/${mine.code}?token=${encodeURIComponent(mine.token || "")}&v=0`); if (room === mine) await roomApply(v); }
+    catch (e2) { /* le suivi reprendra */ }
+  }
+}
+async function roomAction(action, extra) {
+  if (!room) return;
+  const mine = room;
+  try { const v = await api(`/api/rooms/${mine.code}/${action}`, { token: mine.token, ...extra }); if (room === mine) await roomApply(v); }
+  catch (e) { flash(trErr(e.message)); }
+}
+const roomReady = () => !!(room && room.view.players.W && room.view.players.B);
+async function shareRoom() {
+  const url = roomLink(room.code);
+  if (navigator.share) { try { await navigator.share({ title: "Fanorona", text: t("online_invite_text", { c: room.code }), url }); return; } catch (e) { if (e.name === "AbortError") return; } }
+  try { await navigator.clipboard.writeText(url); flash(t("online_link_copied")); } catch (e) { prompt(t("online_copy"), url); }
+}
+// Carte d'invitation posée sur le plateau tant que l'adversaire n'a pas rejoint.
+function renderRoomCard() {
+  const box = $("roomCard");
+  const show = cfg.mode === "online" && room && !roomReady() && !over();
+  box.classList.toggle("hidden", !show);
+  if (!show) { box.dataset.html = ""; return; }
+  const html = `<div class="ecard"><div class="score">${t("online_code")}</div><h2 class="room-code">${room.code}</h2>
+    <p>${room.you ? t("online_wait_text") : t("online_spectator")}</p>
+    <div class="room-link">${roomLink(room.code).replace(/^https?:\/\//, "")}</div>
+    <div class="row"><button class="btn primary" id="rShare">${navigator.share ? t("online_share") : t("online_copy")}</button>
+    <button class="btn" id="rLeave">${t("online_leave")}</button></div></div>`;
+  if (box.dataset.html === html) return;
+  box.innerHTML = html; box.dataset.html = html;
+  $("rShare").onclick = shareRoom;
+  $("rLeave").onclick = () => { room = null; cfg.mode = "friend"; cfg.room = ""; startGame(); };
+}
+
 // =====================================================================================================
 // Jeu hors ligne : moteur en WebAssembly (tools/gui/engine/, Web Worker). Quand le serveur est injoignable,
 // /api/state, /api/go et /api/eval sont calculés localement, à l'identique du serveur (mêmes réglages de force,
@@ -1552,6 +1669,7 @@ async function pushMove(str, byEngine) {
   game.moves.push(str);
   positions.push(applyMove(before, str, mover, 100 + game.moves.length - 1));
   announceMove(str, mover, before, liveBoard());
+  if (cfg.mode === "online" && room && !byEngine) roomSend(str, game.moves.length - 1);  // notre coup : au serveur
   if (wasLive) viewPly = game.moves.length;
   if (clock && game.moves.length > 2) clock[mover] += clock.inc;
   clockMark = performance.now();
@@ -1671,6 +1789,7 @@ function finish(status, reason) {
     "draw (no-capture limit)": ["½-½", "res_draw", "why_50"],
     "draw (threefold repetition)": ["½-½", "res_draw", "why_rep"],
     "draw (move limit)": ["½-½", "res_draw", "why_limit"],
+    "draw (agreement)": ["½-½", "res_draw", "why_agreed"],
   };
   if (status === "resign") {
     const w = other(reason);
@@ -1726,7 +1845,7 @@ setInterval(() => {
   if (!clock || over() || game.moves.length < 2) return renderClocks();
   const side = sideAt(game.moves.length);
   clock[side] -= dt;
-  if (clock[side] <= 0) { clock[side] = 0; finish("time", side); render(); return; }
+  if (clock[side] <= 0) { clock[side] = 0; if (cfg.mode === "online") return renderClocks(); finish("time", side); render(); return; }
   renderClocks();
 }, 100);
 function fmtClock(ms) {
@@ -1827,6 +1946,11 @@ function renderGauge() {
 const fmtN = n => (n >= 1e6 ? (n / 1e6).toFixed(1) + "M" : n >= 1e3 ? Math.round(n / 1e3) + "k" : String(n));
 const levelName = id => t("level_" + id);
 function playerName(c) {
+  if (cfg.mode === "online") {
+    const p = room && room.view.players[c], me = room && room.you === c;
+    return { name: p ? p.name : t("online_waiting_name"), sub: me ? t("online_you") : p ? (p.online ? t("online_on") : t("online_off")) : "",
+      short: me ? t("online_you") : p && !p.online ? t("online_off") : "" };
+  }
   if (importedNames && importedNames[c] && cfg.mode === "friend") return { name: importedNames[c], sub: "", short: "" };
   if (cfg.mode === "friend") return { name: colorName(c), sub: "" };
   if (cfg.mode === "auto") return { name: "Fanorona-Engine", sub: t("full_strength"), short: "" };
@@ -1850,12 +1974,12 @@ function renderUsers() {
 }
 function renderMeta() {
   const clk = $("dClock").querySelector(`option[value="${cfg.clock}"]`);
-  $("metaTitle").textContent = t("mode_" + cfg.mode);
+  $("metaTitle").textContent = t("mode_" + cfg.mode) + (cfg.mode === "online" && room ? " · " + room.code : "");
   const evalName = cfg.net ? "NNUE " + cfg.net : "HCE";
   const g = GAMES[cfg.game];
   $("metaSub").textContent = [g.name + " " + g.size, clk ? clk.textContent.replace(/ \(.*\)/, "") : t("unlimited"),
     telo() ? null : cfg.variant === "mandatory" ? t("variant_mandatory") : null,
-    cfg.game === "tsivy" ? evalName : null].filter(Boolean).join(" • ");
+    cfg.game === "tsivy" && cfg.mode !== "online" ? evalName : null].filter(Boolean).join(" • ");
   const vs = velaSide(), vb = $("metaVela");
   vb.classList.toggle("hidden", !vs);
   if (vs) {
@@ -1920,7 +2044,13 @@ const ICON = {
 function renderActions() {
   const a = $("actions");
   let html;
-  if (over()) {
+  if (cfg.mode === "online" && !over()) {
+    const offer = room && room.view.drawOffer, mine = offer && room && offer === room.you, can = room && room.you && roomReady();
+    html = (offer && !mine && can
+      ? `<button id="aDrawYes" class="go">½ ${t("draw_accept")}</button><button id="aDrawNo">${t("draw_decline")}</button>`
+      : `<button id="aDraw" ${can && !mine && game.moves.length >= 2 ? "" : "disabled"}>½ ${mine ? t("draw_offered") : t("draw_offer")}</button>`) +
+      `<button id="aResign" ${can && game.moves.length ? "" : "disabled"} title="${t("resign")}">${ICON.flag}${t("resign")}</button>`;
+  } else if (over()) {
     const n = nextGame();
     html = `<button id="aRematch" class="go" title="${n.title}">${ICON.again}${n.label}</button>` +
       (n.vela2 ? `<button id="aVela" title="${n.vela2.title}">${ICON.again}${t("vela")}</button>` : "") +
@@ -1937,6 +2067,8 @@ function renderActions() {
     const on = (id, f) => { const b = $(id); if (b) b.onclick = f; };
     on("aRematch", () => nextGame().go()); on("aVela", () => nextGame().vela2.go()); on("aNew", openDialog); on("aAnalyse", runAnalysis);
     on("aBack", takeback); on("aHint", hint); on("aResign", resign);
+    on("aDraw", () => roomAction("draw", { what: "offer" })); on("aDrawYes", () => roomAction("draw", { what: "accept" }));
+    on("aDrawNo", () => roomAction("draw", { what: "decline" }));
   }
   const n = game.moves.length;
   $("bFirst").disabled = $("bPrev").disabled = viewPly === 0;
@@ -2047,7 +2179,7 @@ function flash(msg) {
 }
 
 function render() {
-  renderBoard(); renderUsers(); renderClocks(); renderMoves(); renderActions(); renderMeta(); renderEngine(); renderGauge(); renderAnalysis(); renderEndCard();
+  renderBoard(); renderUsers(); renderClocks(); renderMoves(); renderActions(); renderMeta(); renderEngine(); renderGauge(); renderAnalysis(); renderEndCard(); renderRoomCard();
   renderLearn(); renderRetro(); renderPuzzle(); renderCont(); syncCont(); syncBook(); renderBook();
   $("showEval").checked = cfg.showEval;
 }
@@ -2797,6 +2929,7 @@ $("importBtn").onclick = async () => {
 // =====================================================================================================
 async function archiveGame() {
   if (learn || puzzle || retro || game.imported || game.serverId || !game.moves.length) return;
+  if (cfg.mode === "online") return;  // partie à distance : enregistrée par le serveur
   const d = exportData();
   const rec = { game: d.game, vela: d.vela, fen: d.fen, moves: d.moves, result: game.result, mode: cfg.mode, level: cfg.level,
     color: cfg.mode === "computer" ? cfg.color : null, clock: cfg.clock, net: cfg.net, variant: cfg.variant,
@@ -2942,7 +3075,7 @@ for (const id of ["hfProfile", "hfGame", "hfMode", "hfOutcome"]) $(id).onchange 
 // =====================================================================================================
 const cont = { sid: "s" + Math.random().toString(36).slice(2) + Date.now().toString(36), key: null, data: null, gen: 0,
   timer: null, deb: null, running: false };
-const contAvailable = () => !learn && !puzzle && !retro && !((cfg.mode === "computer" || cfg.mode === "auto") && !over());
+const contAvailable = () => !learn && !puzzle && !retro && !((cfg.mode === "computer" || cfg.mode === "auto" || cfg.mode === "online") && !over());
 const contReq = () => ({ sid: cont.sid, moves: game.moves.slice(0, viewPly), ...rulesReq(), net: cfg.net || null, multipv: cfg.contMpv || 3 });
 function contLinesHere() {
   return cfg.contOn && contAvailable() && cont.data && cont.key === JSON.stringify(contReq()) && cont.data.lines.length ? cont.data.lines : null;
@@ -3256,6 +3389,10 @@ async function renderHome() {
       <div class="row"><span class="sub">${t("home_learn_sub", { s: stars, m: maxStars })}</span><span class="spacer"></span><button class="btn primary" id="hLearn">${t("home_continue")}</button></div></div>
     <div class="card"><h2>${HOME_ICON.friend}${t("home_friend")}</h2><p class="sub">${t("home_friend_sub")}</p>
       <div class="row"><button class="btn" id="hFriend">${t("home_start")}</button></div></div>
+    <div class="card"><h2>${HOME_ICON.friend}${t("home_online")}</h2><p class="sub">${t("home_online_sub")}</p>
+      <div class="row"><button class="btn primary" id="hOnline">${t("home_online_create")}</button></div>
+      <form class="row join-row" id="hJoin"><input id="hCode" maxlength="6" autocomplete="off" autocapitalize="characters" spellcheck="false"
+        placeholder="${t("home_online_code")}" aria-label="${t("home_online_code")}"><button class="btn" type="submit">${t("home_online_join")}</button></form></div>
     <div class="card"><h2>${HOME_ICON.games}${t("home_recent")}</h2><div class="mini-list" id="hRecent"><span class="sub">…</span></div>
       <div class="row"><button class="link-btn" id="hAll">${t("home_see_all")}</button></div></div>
     <div class="card"><h2>${HOME_ICON.chart}${t("home_record")}</h2><div id="hRecord"><span class="sub">…</span></div></div>
@@ -3269,6 +3406,8 @@ async function renderHome() {
   $("hPuzzles").onclick = () => showPage("puzzles");
   $("hLearn").onclick = () => showPage("learn");
   $("hFriend").onclick = () => quickStart({ mode: "friend", game: homeGame });
+  $("hOnline").onclick = () => { openDialog(); draft.mode = "online"; draft.game = homeGame; syncDialog(); };
+  $("hJoin").onsubmit = e => { e.preventDefault(); const c = $("hCode").value.trim(); if (c.length === 6) joinRoom(c); else flash(t("home_online_code")); };
   $("hAll").onclick = () => showPage("games");
   const pp = profile ? String(profile.id) : "guest";
   try {
@@ -3315,6 +3454,7 @@ async function takeback() {
 }
 function resign() {
   if (over() || !game.moves.length) return;
+  if (cfg.mode === "online") return roomAction("resign");
   const loser = cfg.mode === "computer" ? cfg.color : sideAt(game.moves.length);
   finish("resign", loser);
   render();
@@ -3339,6 +3479,8 @@ async function hint() {
 function winnerOf() { const r = game.result && game.result.score; return r === "1-0" ? "W" : r === "0-1" ? "B" : null; }
 function velaWhoFor(color) { return cfg.mode === "computer" ? (color === cfg.color ? "me" : "engine") : color; }
 function nextGame() {
+  if (cfg.mode === "online")  // revanche : nouvelle salle, couleurs inversées ; l'autre joueur la rejoint
+    return { label: t("rematch"), title: t("rematch_title"), go: () => room && createRoom(room.you ? other(room.you) : null, room.code) };
   const w = winnerOf(), vs = velaSide();
   const normal = { label: t("rematch"), title: t("rematch_title"),
     go: () => { if (cfg.mode === "computer") cfg.color = other(cfg.color); cfg.vela = ""; cfg.velaWho = ""; startGame(); } };
@@ -3357,7 +3499,8 @@ async function startGame() {
   game = { moves: [], legal: [], status: "ongoing", fen: startFen(), result: null, serverId: null, imported: false };
   analysis = null; liveInfo = null; hintMove = null; chosen = null; pendingAW = null; inputView = null;
   clock = parseClock(cfg.clock); clockMark = performance.now();
-  flipped = cfg.mode === "computer" && cfg.color === "B";
+  flipped = (cfg.mode === "computer" || cfg.mode === "online") && cfg.color === "B";
+  if (cfg.mode !== "online") { room = null; cfg.room = ""; }
   applyGeometry(); rebuildPositions(); viewPly = 0;
   buildBoard();
   try { await refresh(); } catch (e) { flash(t("flash_server", { e: trErr(e.message) })); }
@@ -3398,15 +3541,17 @@ function syncDialog() {
   }
   $("fLevel").classList.toggle("hidden", draft.mode !== "computer");
   $("dClock").value = draft.clock; $("dMovetime").value = String(draft.movetime); $("dNet").value = draft.net; $("dVariant").value = draft.variant;
-  $("colorRow").classList.toggle("hidden", draft.mode !== "computer");
-  $("colorHead").classList.toggle("hidden", draft.mode !== "computer");
-  $("startRow").classList.toggle("hidden", draft.mode === "computer");
+  const pickSide = draft.mode === "computer" || draft.mode === "online";
+  $("colorRow").classList.toggle("hidden", !pickSide);
+  $("colorHead").classList.toggle("hidden", !pickSide);
+  $("startRow").classList.toggle("hidden", pickSide);
+  $("fMovetime").classList.toggle("hidden", draft.mode === "online");
   $("dlgTitle").textContent = t("dlg_" + draft.mode);
   for (const b of $("segGame").children) b.classList.toggle("on", b.dataset.v === draft.game);
   $("gameNote").textContent = t("game_note_" + draft.game);
   const isT = draft.game === "tsivy";
   $("fVela").classList.toggle("hidden", !isT);
-  $("fNet").classList.toggle("hidden", !isT);
+  $("fNet").classList.toggle("hidden", !isT || draft.mode === "online");
   $("fVariant").classList.toggle("hidden", draft.game === "telo");
   const opts = draft.mode === "computer"
     ? [["", t("vela_no")], ["me", t("vela_me")], ["engine", t("vela_engine")]]
@@ -3423,6 +3568,13 @@ $("dMovetime").onchange = e => (draft.movetime = +e.target.value);
 $("dNet").onchange = e => (draft.net = e.target.value);
 $("dVariant").onchange = e => (draft.variant = e.target.value);
 function launch(color) {
+  if (draft.mode === "online") {  // partie à distance : le serveur crée la salle (et tire la couleur au sort)
+    Object.assign(cfg, draft);
+    const who = cfg.game === "tsivy" ? cfg.velaWho : "";
+    cfg.vela = who === "W" || who === "B" ? who : "";
+    $("dlg").close();
+    return createRoom(color);
+  }
   Object.assign(cfg, draft);
   if (color) cfg.color = color === "R" ? (Math.random() < 0.5 ? "W" : "B") : color;
   const who = cfg.game === "tsivy" ? cfg.velaWho : "";
@@ -3573,11 +3725,19 @@ function load() {
   else {
     // Raccourcis de l'application installée : ?page=puzzles, ?page=learn…
     const pg = new URLSearchParams(location.search).get("page");
-    showPage(["play", "puzzles", "learn", "games"].includes(pg) ? pg : "home");
+    const rc = new URLSearchParams(location.search).get("room");
+    if (rc) {  // lien d'invitation : on rejoint la partie (l'URL est nettoyée pour qu'un rechargement reste neutre)
+      history.replaceState(null, "", "/");
+      if (!(await joinRoom(rc))) showPage("home");
+    } else if (cfg.mode === "online" && cfg.room) {  // rechargement pendant une partie à distance
+      if (await joinRoom(cfg.room, true)) markPage(pg && pg !== "play" ? pg : "play");
+      else { cfg.mode = "computer"; cfg.room = ""; await startGame(); showPage("home"); }
+    } else showPage(["play", "puzzles", "learn", "games"].includes(pg) ? pg : "home");
     if (!pid) openProfiles(false);
   }
 })().then(openLinkFromHash);
 async function restoreOrStart(saved) {
+  if (cfg.mode === "online") { await startGame(); return; }  // la salle est reprise plus bas (joinRoom)
   if (saved && Array.isArray(saved.moves) && saved.moves.length) {
     game.moves = saved.moves; game.result = saved.result || null; clock = saved.clock || null;
     game.serverId = saved.serverId || null; game.imported = !!saved.imported; game.rating = saved.rating || null;

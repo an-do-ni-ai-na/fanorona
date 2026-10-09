@@ -11,6 +11,22 @@ fanorona-dev, i7-6700T, 1 thread), justesse par `make test`, `perft` et `tools/n
 
 ## 2026-10-09
 
+### GUI — parties à distance (deux appareils) · `{COMMIT}`
+- Serveur : salles en mémoire (code de 6 caractères sans caractères ambigus, jeton secret par joueur, spectateurs
+  sans jeton), interrogation longue (réveil en 0,03 s au coup adverse, ou à la chute du drapeau), coups vérifiés par
+  le moteur (tour, légalité, synchronisation), pendule tenue par le serveur (mêmes cadences, incrément après le
+  2e coup), nulle proposée / acceptée / refusée, abandon, temps, fin de partie ; enregistrement unique dans
+  l'historique (mode « online », noms des deux joueurs, miniature) ; revanche = nouvelle salle aux couleurs
+  inversées que l'autre joueur rejoint automatiquement.
+- Page : mode « À distance » (fenêtre de partie, carte de l'accueil, lien `?room=CODE`), carte d'invitation sur le
+  plateau, plateau tourné pour les Noirs, actions nulle / abandon, pas d'indice ni d'analyse en continu pendant la
+  partie ; jeton gardé par salle : reprise après rechargement.
+- Testé avec deux navigateurs isolés (CDP) : création, arrivée de l'adversaire, coups croisés, pendule, offre et
+  acceptation de nulle, revanche, rechargement en cours de partie. Corrigé en route : le créateur d'une revanche
+  « rejoignait » sa propre nouvelle salle en spectateur (course avec l'interrogation de l'ancienne salle).
+- Limite : le site n'est joignable que sur le LAN, le Wi-Fi maison et Tailscale ; les salles sont perdues si le
+  service redémarre.
+
 ### Tables de finales : mesure de faisabilité — non retenu (le moteur joue déjà les finales sans faute) · `ee26e23`
 - `tools/endgame/` : `eg_stats.py` (fréquence des finales dans un journal live de SPRT), `eg_deep.py` (recherche
   de 3 s, réseau net_v9, sur les positions d'entrée en finale), `eg_report.py` (verdict contre résultat réel).

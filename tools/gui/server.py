@@ -35,6 +35,7 @@ import os
 import random
 import re
 import subprocess
+import secrets
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -405,7 +406,7 @@ def evaluate_plies(req):
 # statistiques, et l'enregistrement complet (coups, résultat, joueurs, analyse éventuelle) en JSON.
 # ---------------------------------------------------------------------------------------------------------
 RESULTS = {"1-0", "0-1", "½-½", "*"}
-MODES = {"computer", "friend", "auto"}
+MODES = {"computer", "friend", "auto", "online"}
 
 
 def db():
@@ -527,6 +528,270 @@ def save_game(rec):
             (time.time(), r["game"], r["mode"], r["level"], r["color"], r["result"].get("score", "*"), outcome_of(r),
              len(r["moves"]), r["white"], r["black"], int("analysis" in r), json.dumps(r, ensure_ascii=False), pid))
         return {"id": cur.lastrowid, "rating": rated}
+
+
+
+# ---------------------------------------------------------------------------------------------------------
+# Parties à distance (deux appareils) : « salles » en mémoire, identifiées par un code de 6 caractères. Le serveur
+# fait foi : coups vérifiés par le moteur, pendule tenue ici, résultat (fin de partie, abandon, nulle acceptée,
+# temps) ; les pages se synchronisent par interrogation longue (GET bloquant jusqu'à un changement ou 25 s).
+# Chaque joueur reçoit un jeton secret (reprise après rechargement) ; sans jeton, on regarde la partie.
+# Partie terminée : enregistrée une fois dans l'historique (mode « online »). Salles oubliées après 48 h.
+# ---------------------------------------------------------------------------------------------------------
+ROOM_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
+ROOMS = {}
+ROOMS_COND = threading.Condition()
+ROOM_TTL = 48 * 3600
+ONLINE_SEEN = 35  # secondes : joueur considéré comme connecté s'il a interrogé la salle récemment
+CLOCKS = {"0": None, "1+0": (60, 0), "3+2": (180, 2), "5+3": (300, 3), "10+5": (600, 5), "15+10": (900, 10), "30+0": (1800, 0)}
+
+
+def _room_req(room, moves=None):
+    return {"game": room["game"], "vela": room["vela"] or None, "variant": room["variant"],
+            "moves": room["moves"] if moves is None else moves}
+
+
+def _first_side(room):
+    return room["vela"] or "W"  # le bénéficiaire d'une vela commence
+
+
+def _side_to_move(room):
+    first = _first_side(room)
+    return first if len(room["moves"]) % 2 == 0 else ("B" if first == "W" else "W")
+
+
+def _clock_running(room):
+    return room["clock"] is not None and room["result"] is None and len(room["moves"]) >= 2
+
+
+def _times_now(room):
+    """Temps restants (ms), le camp au trait décompté depuis le début de son tour."""
+    t = dict(room["times"]) if room["clock"] else None
+    if t and _clock_running(room):
+        t[_side_to_move(room)] -= int((time.time() - room["turn_t0"]) * 1000)
+    return t
+
+
+def _check_flag(room):
+    t = _times_now(room)
+    if t and _clock_running(room):
+        side = _side_to_move(room)
+        if t[side] <= 0:
+            room["times"][side] = 0
+            _room_finish(room, {"status": "time", "loser": side})
+
+
+def _room_finish(room, res):
+    room["result"] = res
+    room["version"] += 1
+    if room["archived"]:
+        return
+    room["archived"] = True
+    st = res["status"]
+    if st in ("resign", "time"):
+        score = "0-1" if res["loser"] == "W" else "1-0"
+        t_ = "res_" + ("B" if res["loser"] == "W" else "W")
+        w = f"why_{st}_{res['loser']}"
+    elif st == "draw (agreement)":
+        score, t_, w = "½-½", "res_draw", "why_agreed"
+    else:
+        score, t_, w = {"white wins": ("1-0", "res_W", "why_nomove_B"), "black wins": ("0-1", "res_B", "why_nomove_W")}.get(
+            st, ("½-½", "res_draw", {"draw (no-capture limit)": "why_50", "draw (threefold repetition)": "why_rep"}.get(st, "")))
+    room["result_rec"] = {"score": score, "t": t_, "w": w}
+    pl = room["players"]
+    try:
+        save_game({"game": room["game"], "vela": room["vela"], "fen": "", "moves": room["moves"], "result": room["result_rec"],
+                   "mode": "online", "level": None, "color": None, "clock": room["clock_key"], "net": None,
+                   "variant": room["variant"], "white": pl["W"]["name"] if pl["W"] else None,
+                   "black": pl["B"]["name"] if pl["B"] else None, "date": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())})
+    except Exception as e:  # l'historique ne doit pas bloquer la partie
+        print("partie à distance : enregistrement impossible :", e, flush=True)
+
+
+def _room_view(room, token=None):
+    you = next((c for c in ("W", "B") if room["players"][c] and room["players"][c]["token"] == token), None) if token else None
+    now = time.time()
+    return {"code": room["code"], "game": room["game"], "vela": room["vela"], "variant": room["variant"],
+            "clock": room["clock_key"], "inc": room["clock"][1] * 1000 if room["clock"] else 0,
+            "moves": room["moves"], "result": room["result"], "resultRec": room.get("result_rec"), "version": room["version"],
+            "times": _times_now(room), "running": _side_to_move(room) if _clock_running(room) else None,
+            "players": {c: ({"name": room["players"][c]["name"], "online": now - room["players"][c]["seen"] < ONLINE_SEEN}
+                            if room["players"][c] else None) for c in ("W", "B")},
+            "you": you, "drawOffer": room["draw_offer"], "next": room.get("next")}
+
+
+def _room_get(code):
+    room = ROOMS.get(str(code).upper())
+    if not room:
+        raise EngineError("partie à distance introuvable (code inconnu ou expiré)")
+    return room
+
+
+def _room_seat(room, token):
+    you = next((c for c in ("W", "B") if room["players"][c] and room["players"][c]["token"] == token), None)
+    if not you:
+        raise EngineError("vous ne jouez pas dans cette partie")
+    room["players"][you]["seen"] = time.time()
+    return you
+
+
+def _new_token():
+    return secrets.token_urlsafe(18)
+
+
+def room_create(req):
+    game = req.get("game", "tsivy")
+    if game not in GAMES:
+        raise EngineError(f"jeu inconnu : {game}")
+    vela = req.get("vela") if req.get("vela") in ("W", "B") and game == "tsivy" else ""
+    clock_key = req.get("clock") if req.get("clock") in CLOCKS else "0"
+    color = req.get("color") if req.get("color") in ("W", "B") else secrets.choice("WB")
+    name = str(req.get("name") or "")[:30] or None
+    now = time.time()
+    with ROOMS_COND:
+        for c in [c for c, r in ROOMS.items() if now - r["touched"] > ROOM_TTL]:
+            del ROOMS[c]
+        code = "".join(secrets.choice(ROOM_ALPHABET) for _ in range(6))
+        while code in ROOMS:
+            code = "".join(secrets.choice(ROOM_ALPHABET) for _ in range(6))
+        tok = _new_token()
+        clk = CLOCKS[clock_key]
+        room = {"code": code, "game": game, "vela": vela, "variant": "mandatory" if req.get("variant") == "mandatory" else "free",
+                "clock_key": clock_key, "clock": clk, "times": {"W": clk[0] * 1000, "B": clk[0] * 1000} if clk else None,
+                "turn_t0": now, "moves": [], "result": None, "version": 1, "draw_offer": None, "archived": False,
+                "players": {"W": None, "B": None}, "created": now, "touched": now}
+        room["players"][color] = {"token": tok, "name": name or ("Blancs" if color == "W" else "Noirs"), "seen": now}
+        ROOMS[code] = room
+        prev = req.get("rematchOf")  # revanche : l'autre joueur de l'ancienne salle est prévenu
+        if prev and str(prev).upper() in ROOMS:
+            old = ROOMS[str(prev).upper()]
+            old["next"] = code
+            old["version"] += 1
+        ROOMS_COND.notify_all()
+        return {"token": tok, "color": color, "room": _room_view(room, tok)}
+
+
+def room_join(code, req):
+    with ROOMS_COND:
+        room = _room_get(code)
+        tok = req.get("token")
+        you = next((c for c in ("W", "B") if room["players"][c] and tok and room["players"][c]["token"] == tok), None)
+        if not you:
+            free = [c for c in ("W", "B") if room["players"][c] is None]
+            if free:
+                you, tok = free[0], _new_token()
+                name = str(req.get("name") or "")[:30] or ("Blancs" if you == "W" else "Noirs")
+                room["players"][you] = {"token": tok, "name": name, "seen": time.time()}
+                room["turn_t0"] = time.time()
+                room["version"] += 1
+                ROOMS_COND.notify_all()
+            else:
+                tok = None  # spectateur
+        else:
+            room["players"][you]["seen"] = time.time()
+        room["touched"] = time.time()
+        return {"token": tok, "color": you, "room": _room_view(room, tok)}
+
+
+def room_poll(code, token, since, wait=25.0):
+    deadline = time.time() + wait
+    with ROOMS_COND:
+        room = _room_get(code)
+        if token:
+            try:
+                _room_seat(room, token)
+            except EngineError:
+                token = None
+        while room["version"] <= since:  # partie finie comprise : on attend une éventuelle revanche
+            _check_flag(room)
+            if room["version"] > since:
+                break
+            left = deadline - time.time()
+            t = _times_now(room)
+            if t and _clock_running(room):  # se réveiller pile à la chute du drapeau
+                left = min(left, max(0.05, t[_side_to_move(room)] / 1000 + 0.05))
+            if left <= 0:
+                break
+            ROOMS_COND.wait(left)
+            if token and room["players"]["W"] and room["players"]["B"]:
+                for c in ("W", "B"):
+                    if room["players"][c]["token"] == token:
+                        room["players"][c]["seen"] = time.time()
+        _check_flag(room)
+        room["touched"] = time.time()
+        return _room_view(room, token)
+
+
+def room_move(code, req):
+    move = req.get("move")
+    if not isinstance(move, str) or not MOVE_RE.match(move):
+        raise EngineError("coup mal formé")
+    with ROOMS_COND:
+        room = _room_get(code)
+        you = _room_seat(room, req.get("token"))
+        _check_flag(room)
+        if room["result"]:
+            raise EngineError("la partie est terminée")
+        if not (room["players"]["W"] and room["players"]["B"]):
+            raise EngineError("l'adversaire n'a pas encore rejoint la partie")
+        if _side_to_move(room) != you:
+            raise EngineError("ce n'est pas votre tour")
+        if req.get("ply") is not None and int(req["ply"]) != len(room["moves"]):
+            raise EngineError("partie désynchronisée")
+        req_state = _room_req(room)
+    st = get_state(req_state)  # hors du verrou : appel du moteur
+    if move not in st["legal"]:
+        raise EngineError(f"coup illégal : {move}")
+    after = get_state(_room_req(room, room["moves"] + [move]))
+    with ROOMS_COND:
+        if len(room["moves"]) != len(req_state["moves"]) or room["result"]:
+            raise EngineError("partie désynchronisée")
+        now = time.time()
+        if _clock_running(room):
+            room["times"][you] -= int((now - room["turn_t0"]) * 1000)
+            if room["times"][you] <= 0:
+                room["times"][you] = 0
+                _room_finish(room, {"status": "time", "loser": you})
+                ROOMS_COND.notify_all()
+                return _room_view(room, req.get("token"))
+        room["moves"].append(move)
+        if room["clock"] and len(room["moves"]) > 2:
+            room["times"][you] += room["clock"][1] * 1000
+        room["turn_t0"] = now
+        room["draw_offer"] = None
+        room["version"] += 1
+        if after["status"] != "ongoing":
+            _room_finish(room, {"status": after["status"]})
+        room["touched"] = now
+        ROOMS_COND.notify_all()
+        return _room_view(room, req.get("token"))
+
+
+def room_action(code, action, req):
+    with ROOMS_COND:
+        room = _room_get(code)
+        you = _room_seat(room, req.get("token"))
+        if room["result"]:
+            raise EngineError("la partie est terminée")
+        if action == "resign":
+            if not room["moves"]:
+                raise EngineError("rien à abandonner : aucun coup joué")
+            _room_finish(room, {"status": "resign", "loser": you})
+        elif action == "draw":
+            what = req.get("what")
+            if what == "offer" and len(room["moves"]) >= 2:
+                room["draw_offer"] = you
+            elif what == "accept" and room["draw_offer"] and room["draw_offer"] != you:
+                _room_finish(room, {"status": "draw (agreement)"})
+            elif what == "decline" and room["draw_offer"] and room["draw_offer"] != you:
+                room["draw_offer"] = None
+            else:
+                raise EngineError("proposition de nulle impossible")
+            room["version"] += 1
+        else:
+            raise EngineError("action inconnue")
+        ROOMS_COND.notify_all()
+        return _room_view(room, req.get("token"))
 
 
 RATING_START = 1000
@@ -908,6 +1173,12 @@ class Handler(BaseHTTPRequestHandler):
                     return self.send_json(200, profile_row(con, int(path.split("/")[3])))
             except (EngineError, ValueError) as e:
                 return self.send_json(400, {"error": str(e)})
+        if path.startswith("/api/rooms/"):
+            try:
+                q = dict(x.split("=", 1) for x in query.split("&") if "=" in x)
+                return self.send_json(200, room_poll(path.split("/")[3], q.get("token"), int(q.get("v", 0))))
+            except (EngineError, ValueError) as e:
+                return self.send_json(404, {"error": str(e)})
         if path.startswith("/api/games"):
             try:
                 if path == "/api/games":
@@ -1016,6 +1287,19 @@ class Handler(BaseHTTPRequestHandler):
                 if not handler:
                     raise EngineError("action inconnue")
                 self.send_json(200, handler(pid, req))
+            elif self.path == "/api/rooms":
+                self.send_json(200, room_create(req))
+            elif self.path.startswith("/api/rooms/"):
+                parts = self.path.split("/")  # /api/rooms/<code>/<action>
+                code, action = parts[3], parts[4] if len(parts) > 4 else ""
+                if action == "join":
+                    self.send_json(200, room_join(code, req))
+                elif action == "move":
+                    self.send_json(200, room_move(code, req))
+                elif action in ("resign", "draw"):
+                    self.send_json(200, room_action(code, action, req))
+                else:
+                    self.send_json(404, {"error": "introuvable"})
             elif self.path == "/api/go":
                 res = search(req)
                 res["state"] = get_state({**req, "moves": req.get("moves", []) + [res["bestmove"]]})

@@ -121,6 +121,15 @@ Tailscale). Puzzles : filtre par thème (puces, mémorisé), « Puzzle du jour �
 1000-1500, ★ une fois résolu), derniers résultats en pastilles (accent = réussi, cerclé rouge = raté ; clic =
 rejouer).
 
+## Parties à distance
+
+Mode « À distance » (fenêtre de partie, carte de l'accueil avec « Créer une partie » et champ de code) : tant que
+l'adversaire n'a pas rejoint, une carte posée sur le plateau montre le code en grand (mono, accent, espacé), le lien
+`/?room=CODE` et « Inviter… » (feuille de partage, sinon copie du lien). Joueurs : nom + « vous » / « connecté » /
+« déconnecté » ; titre de la carte de partie « À distance · CODE ». Actions : « ½ Proposer nulle » / « Accepter la
+nulle » + « Refuser », « Abandonner » ; pas d'indice, de reprise ni d'analyse en continu pendant la partie. Le plateau
+est tourné pour le joueur des Noirs.
+
 ## Hors ligne
 
 Serveur injoignable (réseau coupé, Tailscale éteint) : l'application installée s'ouvre depuis le cache du service
